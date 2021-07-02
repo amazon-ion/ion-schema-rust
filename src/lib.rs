@@ -7,9 +7,4 @@ pub mod imports;
 pub mod constraints;
 
 #[cfg(test)]
-mod tests {
-    #[test]
-    fn schema_test() {
-        todo!()
-    }
-}
+mod tests {}
