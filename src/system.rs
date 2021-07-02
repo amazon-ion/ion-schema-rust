@@ -56,17 +56,15 @@ impl<'a> SchemaSystem for SchemaSystemImpl<'a> {
         let mut loaded_schema: SchemaImpl = SchemaImpl::new(self.clone(), vec![], id.to_owned());
         // check if the schema authorities has the given schema to be loaded based on id
         for authority in self.authorities.iter() {
-            let absolute_path = fs::canonicalize(authority.get_base_path().join(&id));
+            let absolute_path = authority.get_base_path().join(&id);
             // if absolute_path exists for the given id then load schema with file contents
-            if absolute_path.is_ok() {
-                let ion_data = fs::read_to_string(absolute_path.unwrap()).expect("Unable to read file!");
-                let mut iterator = element_reader().iterate_over(ion_data.as_ref()).unwrap();
-                let mut peekable_iterator = &mut iterator.peekable();
-                if peekable_iterator.peek().is_some() {
-                    loaded_schema = SchemaImpl::new(self.clone(), peekable_iterator.collect(), id.to_owned());
-                    break;
-                };
-            }
+            let ion_data = fs::read_to_string(absolute_path).expect("Unable to read file!");
+            let mut iterator = element_reader().iterate_over(ion_data.as_ref()).unwrap();
+            let mut peekable_iterator = &mut iterator.peekable();
+            if peekable_iterator.peek().is_some() {
+                loaded_schema = SchemaImpl::new(self.clone(), peekable_iterator.collect(), id.to_owned());
+                break;
+            };
         }
         Ok(loaded_schema)
     }
