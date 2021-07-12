@@ -1,8 +1,10 @@
-use ion_rs::value::{Element, Struct};
-use std::fmt::Debug;
+use std::rc::Rc;
+use crate::types::Type;
+use ion_rs::result::IonResult;
+use ion_rs::value::owned::{OwnedElement, OwnedStruct};
+use std::collections::HashMap;
+use crate::import::Import;
 use crate::system::SchemaSystem;
-use std::any::Any;
-use std::iter::Map;
 
 /// A Schema is a collection of zero or more [Type]s.
 ///
@@ -17,74 +19,77 @@ use std::iter::Map;
 /// Instead, any methods that would mutate a Schema are expected
 /// to return a new Schema instance with the mutation applied
 /// (see [plus_type] as an example of this).
+#[derive(Debug, Clone)]
+pub struct Schema {
+    id: String,
+    imports: Vec<Rc<Schema>>, //TODO: Use HashMap for imports and types
+    types: Vec<Type>,
+    content: Vec<OwnedElement>,
+}
 
-pub trait Schema: Debug + Clone + From<String> + From<dyn Iterator<Item = Self::Element>> {
-    type Import: Import;
-    type Type: Type;
-    type SchemaSystem: SchemaSystem;
+impl Schema {
+    pub fn new<A: AsRef<str>>(id: A, content: Vec<OwnedElement>) -> Self {
+        Self {
+            id: id.as_ref().parse().unwrap(),
+            imports: vec![],
+            types: vec![],
+            content
+        }
+    }
+
+    fn validate_type(self, schema_type: Type) {
+        todo!()
+    }
+
+    fn add_type(type_map: HashMap<String, Type>, schema_type: Type) {
+        todo!()
+    }
+
+    /// Returns the id for this Schema
+    pub fn get_id(&self) -> &String {
+        &self.id
+    }
+
+    /// Returns the content of the Schema as a vector of OwnedElement
+    pub fn get_content(&self) -> &Vec<OwnedElement> {
+        &self.content
+    }
 
     /// Returns an Import representing all the types imported from
     /// the specified schema [id].
-    fn get_import(&self, id: String) -> Option<Self::Import>;
+    fn get_import(&self, id: String) -> Option<Import> {
+        todo!()
+    }
 
     /// Returns an iterator over the imports of this Schema.  Note that
     /// multiple ISL imports referencing the same schema id (to import
     /// individual types from the same schema id, for example) are
     /// represented by a single Import object.
-    fn get_imports(&self) -> dyn Iterator<Item = Self::Import>;
+    fn get_imports(&self) -> Box<dyn Iterator<Item=Import>> {
+        todo!()
+    }
 
     /// Returns the requested type, if present in this schema;
     /// otherwise returns null.
-    fn get_type(&self, name: String) -> Option<Self::Type>;
+    fn get_type(&self, name: String) -> Option<Type> {
+        todo!()
+    }
 
     /// Returns an iterator over the types in this schema.
-    fn get_types(&self) -> dyn Iterator<Item = Self::Type>;
+    fn get_types(&self) -> Box<dyn Iterator<Item=Type>> {
+        todo!()
+    }
 
-    /// Returns the IonSchemaSystem this schema was created by.
-    fn get_schema_system(&self) -> Self::SchemaSystem;
+    /// Returns the SchemaSystem this schema was created by.
+    fn get_schema_system(&self) -> SchemaSystem {
+        todo!()
+    }
 
     /// Returns a new Schema instance containing all the types of this
     /// instance plus the provided type.  Note that the added type
     /// in the returned instance will hide a type of the same name
     /// from this instance.
-    fn plus_type(&self, schema_type: Self::Type) -> Self;
-}
-
-/// A Type consists of an optional name and zero or more constraints.
-///
-/// Unless otherwise specified, the constraint `type: any` is automatically applied.
-pub trait Type: Debug + Clone + From<String> + From<Self::Struct> {
-    type Name: str;
-    type Struct: Struct;
-    type Element: Element;
-
-    ///If the specified value violates one or more of this type's constraints,
-    ///returns `false`, otherwise `true`
-    fn is_valid(&self, value: Self::Element) -> Boolean;
-
-    ///Returns a Violations object indicating whether the specified value
-    ///is valid for this type, and if not, provides details as to which
-    ///constraints were violated.
-    fn validate(&self, value: Self::Element) -> Violations;
-}
-
-#[derive(Debug, Clone)]
-pub struct Violations {
-    violations: Vec<Violation>
-}
-
-impl Violations {
-    fn add_violation(violation: Violation) {
-        this.violations.unshift(violation);
+    fn plus_type(&self, schema_type: Type) -> Self {
+        todo!()
     }
 }
-
-// TODO: Fill the struct
-#[derive(Debug, Clone)]
-pub struct Violation {}
-
-// TODO: Fill the trait
-pub trait Authority: Debug + Clone {}
-
-// TODO: Fill the trait
-pub trait Import: Debug + Clone {}
