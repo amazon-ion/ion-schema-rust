@@ -69,3 +69,47 @@ impl SchemaSystem {
         SchemaSystem::new(self.authorities)
     }
 }
+
+#[cfg(test)]
+mod schema_system_tests {
+    use super::*;
+    use std::path::Path;
+    use crate::authority::FileSystemAuthority;
+
+    #[test]
+    fn schema_system_add_authorities_test() {
+        let mut schema_system = SchemaSystem::new(vec![Box::new(FileSystemAuthority::new(Path::new("src")))]);
+        schema_system = schema_system.add_authority(Box::new(FileSystemAuthority::new(Path::new("test"))));
+        let schema_system_authorities = schema_system.get_authorities();
+        assert_eq!(2, schema_system_authorities.len());
+        assert_eq!(Path::new("src").file_name(), schema_system_authorities.get(0).unwrap().get_base_path().file_name());
+        assert_eq!(Path::new("test").file_name(), schema_system_authorities.get(1).unwrap().get_base_path().file_name());
+    }
+
+    #[test]
+    fn schema_system_with_authority_test() {
+        let mut schema_system = SchemaSystem::new(vec![Box::new(FileSystemAuthority::new(Path::new("src")))]);
+        schema_system = schema_system.with_authority(Box::new(FileSystemAuthority::new(Path::new("test"))));
+        let schema_system_authorities = schema_system.get_authorities();
+        assert_eq!(1, schema_system_authorities.len());
+        assert_eq!(Path::new("test").file_name(), schema_system_authorities.get(0).unwrap().get_base_path().file_name());
+    }
+
+    #[test]
+    fn schema_system_with_authorities_test() {
+        let mut schema_system = SchemaSystem::new(vec![Box::new(FileSystemAuthority::new(Path::new("src")))]);
+        schema_system = schema_system.with_authorities(vec![Box::new(FileSystemAuthority::new(Path::new("test"))), Box::new(FileSystemAuthority::new(Path::new("ion")))]);
+        let schema_system_authorities = schema_system.get_authorities();
+        assert_eq!(2, schema_system_authorities.len());
+        assert_eq!(Path::new("test").file_name(), schema_system_authorities.get(0).unwrap().get_base_path().file_name());
+        assert_eq!(Path::new("ion").file_name(),schema_system_authorities.get(1).unwrap().get_base_path().file_name());
+    }
+
+    #[test]
+    fn schema_system_load_schema_test() {
+        let mut schema_system = SchemaSystem::new(vec![Box::new(FileSystemAuthority::new(Path::new("./ion-schema-tests/schema")))]);
+        let schema = schema_system.load_schema("Customer.isl".to_owned()).unwrap();
+        assert_eq!(schema.get_id(), &"Customer.isl".to_owned());
+        assert_eq!(schema.get_content().len(), 5);
+    }
+}
