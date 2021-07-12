@@ -9,7 +9,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v1
-          with:
+        with:
             submodules: recursive
       - name: Build
         run: cargo build --verbose
