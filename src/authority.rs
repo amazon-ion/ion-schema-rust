@@ -35,6 +35,7 @@ impl Authority for FileSystemAuthority {
     /// Returns a resolved [Schema] based on given schema id
     fn resolve(&self, id: String) -> IonSchemaResult<Schema> {
         let absolute_path = self.get_base_path().join(&id);
+        println!("{}", absolute_path.to_str().unwrap()); //TODO: remove after tests for load schema passes
         // if absolute_path exists for the given id then load schema with file contents
         let ion_data = fs::read_to_string(absolute_path).expect("Unable to read file!");
         let mut iterator = element_reader().iterate_over(ion_data.as_ref()).unwrap();

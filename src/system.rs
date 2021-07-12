@@ -107,7 +107,7 @@ mod schema_system_tests {
 
     #[test]
     fn schema_system_load_schema_test() {
-        let mut schema_system = SchemaSystem::new(vec![Box::new(FileSystemAuthority::new(Path::new("./ion-schema-tests/schema")))]);
+        let mut schema_system = SchemaSystem::new(vec![Box::new(FileSystemAuthority::new(Path::new("ion-schema-tests/schema")))]);
         let schema = schema_system.load_schema("Customer.isl".to_owned()).unwrap();
         assert_eq!(schema.get_id(), &"Customer.isl".to_owned());
         assert_eq!(schema.get_content().len(), 5);
