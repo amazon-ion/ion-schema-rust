@@ -3,7 +3,7 @@ use crate::constraint::{Constraints};
 use crate::violation::Violations;
 use ion_rs::value::{Struct, Element, SymbolToken};
 use std::convert::{TryFrom, TryInto};
-use crate::result::{IonSchemaError, unresolvable_schema_error_raw};
+use crate::result::{IonSchemaError, invalid_schema_error_raw};
 
 /// A Type consists of an optional name and zero or more constraints.
 ///
@@ -48,28 +48,27 @@ impl TryFrom<OwnedStruct> for Type {
         let type_name=  match ion_struct.get("name") {
             Some(name_element) => match name_element.as_str() {
                 Some(name) => name.to_owned(),
-                None => { return Err(unresolvable_schema_error_raw("A type name is not string/symbol, if the value is any null, or the text of the symbol is not defined.")) }
+                None => { return Err(invalid_schema_error_raw("A type name is not string/symbol, if the value is any null, or the text of the symbol is not defined.")) }
             },
             None => "".to_owned()
         };
 
-        // TODO: use IntoIterator for ion_struct here
-        // reference issue: https://github.com/amzn/ion-rust/issues/296
         // parses all the constraints inside a Type
         for (field_name, value) in ion_struct.iter() {
             let constraint_name = match field_name.text() {
+                Some("name") => continue, // if the field_name is "name" then it's the type name not a constraint
                 Some(name) => name,
-                None => { return Err(unresolvable_schema_error_raw("A type name symbol token does not have any text")) }
+                None => { return Err(invalid_schema_error_raw("A type name symbol token does not have any text")) }
             };
             // TODO: add more constraints to match below
             let constraint = match constraint_name {
-                "all_of" => { if let Ok(all_of) = value.to_owned().try_into() {
+                "all_of" => { if let Ok(all_of) = value.try_into() {
                         Constraints::AllOf(all_of)
                     } else {
-                        return Err(unresolvable_schema_error_raw("Can not read all_of constraint in Ion"))
+                        return Err(invalid_schema_error_raw("Can not read all_of constraint in Ion"))
                     }
                 },
-                _ => { return Err(unresolvable_schema_error_raw("Type".to_owned() + &type_name + "can not be built as constraint " + constraint_name + " does not exist")) }
+                _ => { return Err(invalid_schema_error_raw("Type".to_owned() + &type_name + "can not be built as constraint " + constraint_name + " does not exist")) }
             };
             constraints.push(constraint);
         }

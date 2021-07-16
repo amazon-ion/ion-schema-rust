@@ -2,7 +2,7 @@ use ion_rs::value::owned::OwnedElement;
 use crate::violation::Violations;
 use crate::types::Type;
 use std::convert::{TryFrom, TryInto};
-use crate::result::{IonSchemaError, unresolvable_schema_error_raw};
+use crate::result::{IonSchemaError, invalid_schema_error_raw};
 use ion_rs::value::{Element, Sequence};
 
 /// Defines a schema Constraint and provides validation for it
@@ -47,22 +47,22 @@ impl Constraint for AllOf {
 }
 
 /// Parse the constraints into an [AllOf] schema constraint
-impl TryFrom<OwnedElement> for AllOf {
+impl TryFrom<&OwnedElement> for AllOf {
     type Error = IonSchemaError;
 
-    fn try_from(ion: OwnedElement) -> Result<Self, Self::Error> {
+    fn try_from(ion: &OwnedElement) -> Result<Self, Self::Error> {
         let mut types = vec![];
         let type_list = match ion.as_sequence() {
             Some(ion) => ion,
-            None => { return Err(unresolvable_schema_error_raw("All Of constraint is not a list")) }
+            None => { return Err(invalid_schema_error_raw("All Of constraint is not a list")) }
         };
         for _type in type_list.iter() {
             match _type.as_struct() {
                 Some(type_struct) => match type_struct.to_owned().try_into() {
                     Ok(type_reference) => types.push(type_reference),
-                    Err(_) => { return Err(unresolvable_schema_error_raw("Type reference is not resolvable for All Of constraint")) }
+                    Err(_) => { return Err(invalid_schema_error_raw("Type reference is not resolvable for All Of constraint")) }
                 },
-                None => { return Err(unresolvable_schema_error_raw("Type reference is not a struct for All Of constraint")) }
+                None => { return Err(invalid_schema_error_raw("Type reference is not a struct for All Of constraint")) }
             }
         }
         Ok(AllOf::new(types))

@@ -16,6 +16,9 @@ pub enum IonSchemaError {
     #[error("{description}")]
     UnresolvableSchemaError { description: String },
 
+    #[error("{description}")]
+    InvalidSchemaError { description: String },
+
     /// Indicates failure due to ion-rust error defined by IonError
     #[error("{source:?}")]
     IonError {
@@ -32,7 +35,23 @@ pub fn unresolvable_schema_error<T, S: AsRef<str>>(description: S) -> IonSchemaR
     })
 }
 
-/// A convenience method for creating an  IonSchemaError::UnresolvableSchemaError with the provided operation
+/// A convenience method for creating an  IonSchemaError::InvalidSchemaError with the provided operation
+/// text.
+pub fn invalid_schema_error_raw<S: AsRef<str>>(description: S) -> IonSchemaError {
+    IonSchemaError::UnresolvableSchemaError {
+        description: description.as_ref().to_string(),
+    }
+}
+
+/// A convenience method for creating an IonSchemaResult containing an IonSchemaError::InvalidSchemaError
+/// with the provided description text.
+pub fn invalid_schema_error<T, S: AsRef<str>>(description: S) -> IonSchemaResult<T> {
+    Err(IonSchemaError::UnresolvableSchemaError {
+        description: description.as_ref().to_string(),
+    })
+}
+
+/// A convenience method for creating an  IonSchemaError::InvalidSchemaError with the provided operation
 /// text.
 pub fn unresolvable_schema_error_raw<S: AsRef<str>>(description: S) -> IonSchemaError {
     IonSchemaError::UnresolvableSchemaError {
