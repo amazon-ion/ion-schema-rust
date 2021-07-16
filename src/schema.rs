@@ -1,9 +1,9 @@
-use std::rc::Rc;
-use crate::types::Type;
-use ion_rs::value::owned::{OwnedElement};
-use std::collections::HashMap;
 use crate::import::Import;
 use crate::system::SchemaSystem;
+use crate::types::Type;
+use ion_rs::value::owned::OwnedElement;
+use std::collections::HashMap;
+use std::rc::Rc;
 
 /// A Schema is a collection of zero or more [Type]s.
 ///
@@ -24,7 +24,7 @@ impl Schema {
             id: id.as_ref().parse().unwrap(),
             imports: vec![],
             types: vec![],
-            content
+            content,
         }
     }
 
@@ -58,7 +58,7 @@ impl Schema {
     /// multiple ISL imports referencing the same schema id (to import
     /// individual types from the same schema id, for example) are
     /// represented by a single Import object.
-    fn imports(&self) -> Box<dyn Iterator<Item=Import>> {
+    fn imports(&self) -> Box<dyn Iterator<Item = Import>> {
         todo!()
     }
 
@@ -70,7 +70,7 @@ impl Schema {
     }
 
     /// Returns an iterator over the types in this schema.
-    fn types(&self) -> Box<dyn Iterator<Item=Type>> {
+    fn types(&self) -> Box<dyn Iterator<Item = Type>> {
         todo!()
     }
 

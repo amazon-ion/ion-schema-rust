@@ -1,9 +1,9 @@
-use std::fmt::Debug;
-use crate::result::{IonSchemaResult, unresolvable_schema_error, IonSchemaError};
+use crate::result::{unresolvable_schema_error, IonSchemaError, IonSchemaResult};
 use crate::schema::Schema;
-use std::path::{Path, PathBuf};
 use ion_rs::value::reader::{element_reader, ElementReader};
-use std::{fs};
+use std::fmt::Debug;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 /// An [Authority] is responsible for resolving a particular class of
 /// schema identifiers.
@@ -24,7 +24,7 @@ pub struct FileSystemAuthority {
 
 impl FileSystemAuthority {
     pub fn new(base_path: &Path) -> Self {
-        Self{
+        Self {
             base_path: base_path.to_path_buf(),
         }
     }
@@ -45,10 +45,10 @@ impl Authority for FileSystemAuthority {
                 let mut peekable_iterator = &mut iterator.peekable();
                 if peekable_iterator.peek().is_some() {
                     if let Ok(schema_content) = peekable_iterator.collect() {
-                        return Ok(Schema::new(id, schema_content))
+                        return Ok(Schema::new(id, schema_content));
                     }
                 }
-            },
+            }
         }
         unresolvable_schema_error("The schema: ".to_owned() + id.as_str() + " is unresolvable")
     }

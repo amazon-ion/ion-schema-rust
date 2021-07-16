@@ -1,13 +1,12 @@
-use ion_rs::value::owned::OwnedElement;
-use crate::violation::Violations;
+use crate::result::{invalid_schema_error_raw, IonSchemaError};
 use crate::types::Type;
-use std::convert::{TryFrom, TryInto};
-use crate::result::{IonSchemaError, invalid_schema_error_raw};
+use crate::violation::Violations;
+use ion_rs::value::owned::OwnedElement;
 use ion_rs::value::{Element, Sequence};
+use std::convert::{TryFrom, TryInto};
 
 /// Defines a schema Constraint and provides validation for it
 pub trait Constraint {
-
     /// Checks this constraint against the provided value,
     /// adding [Violation]s and/or [ViolationChild]ren to issues
     /// if the constraint is violated.
@@ -17,7 +16,7 @@ pub trait Constraint {
 #[derive(Debug, Clone)]
 // TODO: add other constraints
 pub enum Constraints {
-    AllOf(AllOf)
+    AllOf(AllOf),
 }
 
 /// Implements an `all_of` constraint of Ion Schema
@@ -29,9 +28,7 @@ pub struct AllOf {
 
 impl AllOf {
     pub fn new(types: Vec<Type>) -> Self {
-        Self{
-            types
-        }
+        Self { types }
     }
 
     // helper method for validate to validate all the types inside `all_of` constraint
@@ -54,15 +51,23 @@ impl TryFrom<&OwnedElement> for AllOf {
         let mut types = vec![];
         let type_list = match ion.as_sequence() {
             Some(ion) => ion,
-            None => { return Err(invalid_schema_error_raw("All Of constraint is not a list")) }
+            None => return Err(invalid_schema_error_raw("All Of constraint is not a list")),
         };
         for _type in type_list.iter() {
             match _type.as_struct() {
                 Some(type_struct) => match type_struct.to_owned().try_into() {
                     Ok(type_reference) => types.push(type_reference),
-                    Err(_) => { return Err(invalid_schema_error_raw("Type reference is not resolvable for All Of constraint")) }
+                    Err(_) => {
+                        return Err(invalid_schema_error_raw(
+                            "Type reference is not resolvable for All Of constraint",
+                        ))
+                    }
                 },
-                None => { return Err(invalid_schema_error_raw("Type reference is not a struct for All Of constraint")) }
+                None => {
+                    return Err(invalid_schema_error_raw(
+                        "Type reference is not a struct for All Of constraint",
+                    ))
+                }
             }
         }
         Ok(AllOf::new(types))

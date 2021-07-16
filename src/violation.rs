@@ -1,7 +1,7 @@
 // TODO: Implement Violations for constraints
 #[derive(Debug, Clone)]
 pub struct Violations {
-    violations: Vec<Violation>
+    violations: Vec<Violation>,
 }
 
 impl Violations {

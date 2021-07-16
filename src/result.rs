@@ -1,6 +1,6 @@
-use thiserror::Error;
-use std::io;
 use ion_rs::result::IonError;
+use std::io;
+use thiserror::Error;
 
 pub type IonSchemaResult<T> = Result<T, IonSchemaError>;
 
