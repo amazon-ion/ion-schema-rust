@@ -1,5 +1,6 @@
 use thiserror::Error;
 use std::io;
+use ion_rs::result::IonError;
 
 pub type IonSchemaResult<T> = Result<T, IonSchemaError>;
 
@@ -19,30 +20,22 @@ pub enum IonSchemaError {
     #[error("{source:?}")]
     IonError {
         #[from]
-        source: ion_rs::result::IonError,
+        source: IonError,
     },
 }
 
-impl Clone for IonSchemaError {
-    fn clone(&self) -> Self {
-        use IonSchemaError::*;
-        match self {
-            IoError { source } => IoError {
-                // io::Error implements From<ErrorKind>, and ErrorKind is cloneable.
-                source: io::Error::from(source.kind().clone()),
-            },
-            UnresolvableSchemaError { description } => UnresolvableSchemaError {
-                description: description.clone(),
-            },
-            IonError { source } => IonError {
-                source: source.clone(),
-            },
-        }
-    }
-}
-
+/// A convenience method for creating an IonSchemaResult containing an IonSchemaError::UnresolvableSchemaError
+/// with the provided description text.
 pub fn unresolvable_schema_error<T, S: AsRef<str>>(description: S) -> IonSchemaResult<T> {
     Err(IonSchemaError::UnresolvableSchemaError {
         description: description.as_ref().to_string(),
     })
+}
+
+/// A convenience method for creating an  IonSchemaError::UnresolvableSchemaError with the provided operation
+/// text.
+pub fn unresolvable_schema_error_raw<S: AsRef<str>>(description: S) -> IonSchemaError {
+    IonSchemaError::UnresolvableSchemaError {
+        description: description.as_ref().to_string(),
+    }
 }
