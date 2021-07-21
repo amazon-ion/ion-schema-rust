@@ -34,10 +34,10 @@ impl Type {
 }
 
 /// Parse constraints inside an [OwnedStruct] to a schema [Type]
-impl TryFrom<OwnedStruct> for Type {
+impl TryFrom<&OwnedStruct> for Type {
     type Error = IonSchemaError;
 
-    fn try_from(ion_struct: OwnedStruct) -> Result<Self, Self::Error> {
+    fn try_from(ion_struct: &OwnedStruct) -> Result<Self, Self::Error> {
         let mut constraints = vec![];
 
         // parses the name of the type specified by schema

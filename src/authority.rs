@@ -30,7 +30,7 @@ impl FileSystemAuthority {
         }
     }
 
-    /// Returns the base path for this [Authority]
+    /// Returns the base path for this [FileSystemAuthority]
     pub fn base_path(&self) -> &Path {
         self.base_path.as_path()
     }

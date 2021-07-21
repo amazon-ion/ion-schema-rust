@@ -44,25 +44,27 @@ impl TryFrom<&OwnedElement> for AllOf {
     type Error = IonSchemaError;
 
     fn try_from(ion: &OwnedElement) -> Result<Self, Self::Error> {
-        let mut types = vec![];
         if ion.ion_type() != IonType::List {
             return Err(invalid_schema_error_raw(format!(
                 "all_of constraint was a {:?} instead of a list",
                 ion.ion_type()
             )));
         }
-        let type_list = ion.as_sequence().unwrap();
-        for schema_type in type_list.iter() {
-            let type_reference: Type = schema_type
-                .as_struct()
-                .ok_or_else(|| {
-                    invalid_schema_error_raw(
-                        "Type reference is not resolvable for All Of constraint",
-                    )
-                })
-                .and_then(|type_reference| type_reference.to_owned().try_into())?;
-            types.push(type_reference);
-        }
+        let types: Vec<Type> = ion
+            .as_sequence()
+            .unwrap()
+            .iter()
+            .map(|e| {
+                e.as_struct()
+                    .ok_or_else(|| {
+                        invalid_schema_error_raw(
+                            // Do we need a more descriptive error message here?
+                            "Type reference is not resolvable for all_of constraint",
+                        )
+                    })
+                    .and_then(|type_reference| type_reference.try_into())
+            })
+            .collect::<Result<Vec<Type>, IonSchemaError>>()?;
         Ok(AllOf::new(types))
     }
 }
