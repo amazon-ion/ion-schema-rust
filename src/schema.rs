@@ -1,5 +1,4 @@
 use crate::import::Import;
-use crate::system::SchemaSystem;
 use crate::types::Type;
 use ion_rs::value::owned::OwnedElement;
 use std::collections::HashMap;
@@ -21,7 +20,7 @@ pub struct Schema {
 impl Schema {
     pub fn new<A: AsRef<str>>(id: A, content: Vec<OwnedElement>) -> Self {
         Self {
-            id: id.as_ref().parse().unwrap(),
+            id: id.as_ref().to_owned(),
             imports: vec![],
             types: vec![],
             content,
@@ -71,11 +70,6 @@ impl Schema {
 
     /// Returns an iterator over the types in this schema.
     fn types(&self) -> Box<dyn Iterator<Item = Type>> {
-        todo!()
-    }
-
-    /// Returns the [SchemaSystem] this schema was created by.
-    fn schema_system(&self) -> SchemaSystem {
         todo!()
     }
 

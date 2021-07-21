@@ -33,7 +33,6 @@ impl Type {
     }
 }
 
-// TODO: Are all unresolvable_schema_error here required?
 /// Parse constraints inside an [OwnedStruct] to a schema [Type]
 impl TryFrom<OwnedStruct> for Type {
     type Error = IonSchemaError;

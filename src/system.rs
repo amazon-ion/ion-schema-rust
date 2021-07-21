@@ -22,18 +22,18 @@ impl SchemaSystem {
     /// until one successfully resolves it.
     /// If an Authority throws an exception, resolution silently proceeds to the next Authority.
     fn load_schema<A: AsRef<str>>(&mut self, id: A) -> IonSchemaResult<Rc<Schema>> {
-        let id = id.as_ref();
-        for authority in self.authorities.iter() {
+        let id: &str = id.as_ref();
+        for authority in &self.authorities {
             if let Some(schema) = self.resolved_schema_cache.get(id) {
                 return Ok(Rc::clone(schema));
             }
-            return match authority.resolve(id.parse().unwrap()) {
+            return match authority.resolve(id) {
                 Err(error) => Err(error),
                 Ok(schema) => {
                     // If schema is resolved then add it to the schema cache
                     let schema_rc = Rc::new(schema);
                     self.resolved_schema_cache
-                        .insert(id.parse().unwrap(), Rc::clone(&schema_rc));
+                        .insert(id.to_owned(), Rc::clone(&schema_rc));
                     Ok(schema_rc)
                 }
             };
@@ -62,6 +62,7 @@ impl SchemaSystem {
         self.authorities = authorities;
     }
 
+    // TODO: Use IntoIterator here instead of a Vec
     /// Replaces the list of [Authority]s with the specified list of [Authority]s.
     fn with_authorities(&mut self, authorities: Vec<Box<dyn Authority>>) {
         self.authorities = authorities;
@@ -81,22 +82,6 @@ mod schema_system_tests {
         schema_system.add_authority(Box::new(FileSystemAuthority::new(Path::new("test"))));
         let schema_system_authorities = schema_system.authorities();
         assert_eq!(2, schema_system_authorities.len());
-        assert_eq!(
-            Path::new("src").file_name(),
-            schema_system_authorities
-                .get(0)
-                .unwrap()
-                .base_path()
-                .file_name()
-        );
-        assert_eq!(
-            Path::new("test").file_name(),
-            schema_system_authorities
-                .get(1)
-                .unwrap()
-                .base_path()
-                .file_name()
-        );
     }
 
     #[test]
@@ -106,14 +91,6 @@ mod schema_system_tests {
         schema_system.with_authority(Box::new(FileSystemAuthority::new(Path::new("test"))));
         let schema_system_authorities = schema_system.authorities();
         assert_eq!(1, schema_system_authorities.len());
-        assert_eq!(
-            Path::new("test").file_name(),
-            schema_system_authorities
-                .get(0)
-                .unwrap()
-                .base_path()
-                .file_name()
-        );
     }
 
     #[test]
@@ -126,22 +103,6 @@ mod schema_system_tests {
         ]);
         let schema_system_authorities = schema_system.authorities();
         assert_eq!(2, schema_system_authorities.len());
-        assert_eq!(
-            Path::new("test").file_name(),
-            schema_system_authorities
-                .get(0)
-                .unwrap()
-                .base_path()
-                .file_name()
-        );
-        assert_eq!(
-            Path::new("ion").file_name(),
-            schema_system_authorities
-                .get(1)
-                .unwrap()
-                .base_path()
-                .file_name()
-        );
     }
 
     #[test]
