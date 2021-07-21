@@ -58,8 +58,7 @@ impl TryFrom<&OwnedElement> for AllOf {
                 e.as_struct()
                     .ok_or_else(|| {
                         invalid_schema_error_raw(
-                            // Do we need a more descriptive error message here?
-                            "Type reference is not resolvable for all_of constraint",
+                            "all_of constraint must be a struct with type references inside it",
                         )
                     })
                     .and_then(|type_reference| type_reference.try_into())
