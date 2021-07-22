@@ -58,7 +58,7 @@ impl SchemaSystem {
 
     /// Replaces the list of [Authority]s with a list containing only the specified authority.
     fn with_authority(&mut self, authority: Box<dyn Authority>) {
-        let mut authorities: Vec<Box<dyn Authority>> = vec![authority];
+        let authorities: Vec<Box<dyn Authority>> = vec![authority];
         self.authorities = authorities;
     }
 
@@ -107,7 +107,7 @@ mod schema_system_tests {
 
     #[test]
     fn schema_system_load_schema_test() {
-        let mut root_path = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let root_path = Path::new(env!("CARGO_MANIFEST_DIR"));
         let mut schema_system = SchemaSystem::new(vec![Box::new(FileSystemAuthority::new(
             &root_path.join(Path::new("ion-schema-tests/schema")),
         ))]);

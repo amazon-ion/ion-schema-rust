@@ -42,7 +42,7 @@ impl Authority for FileSystemAuthority {
         let absolute_path = self.base_path().join(id);
         // if absolute_path exists for the given id then load schema with file contents
         let ion_content = fs::read(absolute_path)?;
-        let mut iterator = element_reader().iterate_over(&ion_content)?;
+        let iterator = element_reader().iterate_over(&ion_content)?;
         let schema_content = iterator.collect::<Result<Vec<OwnedElement>, IonError>>()?;
         Ok(Schema::new(id, schema_content))
     }
