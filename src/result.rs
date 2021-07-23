@@ -2,8 +2,10 @@ use ion_rs::result::IonError;
 use std::io;
 use thiserror::Error;
 
+/// Represents a result based on IonSchemaErrors
 pub type IonSchemaResult<T> = Result<T, IonSchemaError>;
 
+/// Represents all errors based on IonSchemaError to simplify IonSchemaResult usage
 #[derive(Debug, Error)]
 pub enum IonSchemaError {
     /// Indicates that an io error occurred while loading a schema
@@ -13,9 +15,11 @@ pub enum IonSchemaError {
         source: io::Error,
     },
 
+    /// Indicates failure for schema which has unresolvable imports/types
     #[error("{description}")]
     UnresolvableSchemaError { description: String },
 
+    /// Indicates failure due to invalid schema syntax
     #[error("{description}")]
     InvalidSchemaError { description: String },
 

@@ -14,7 +14,7 @@ pub struct Schema {
     id: String,
     imports: Vec<Rc<Schema>>, //TODO: Use HashMap for imports and types
     types: Vec<Type>,
-    content: Vec<OwnedElement>,
+    content: Vec<OwnedElement>, //TODO: remove this and instead pass a Vec<Type> directly to Schema constructor
 }
 
 impl Schema {
@@ -28,23 +28,18 @@ impl Schema {
     }
 
     // helper function to validate a type before it gets added to the types vector
-    fn validate_type(self, schema_type: Type) {
+    fn validate_type(&self, schema_type: Type) {
         todo!()
     }
 
     // helper function to add a new type to the types vector after validating the type
-    fn add_type(type_map: HashMap<String, Type>, schema_type: Type) {
+    fn add_type(&self, schema_type: Type) {
         todo!()
     }
 
     /// Returns the id for this Schema
-    pub fn id(&self) -> &String {
+    pub fn id(&self) -> &str {
         &self.id
-    }
-
-    /// Returns the content of the Schema as a vector of [OwnedElement]
-    pub fn content(&self) -> &[OwnedElement] {
-        &self.content
     }
 
     /// Returns an [Import] representing all the types imported from
@@ -69,7 +64,8 @@ impl Schema {
     }
 
     /// Returns an iterator over the types in this schema.
-    fn types(&self) -> Box<dyn Iterator<Item = Type>> {
+    // TODO: can be changed to return &impl Iterator<Item=Type> based on what is decided for implementation of the method
+    fn types(&self) -> &[Type] {
         todo!()
     }
 

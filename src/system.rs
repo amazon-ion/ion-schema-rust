@@ -10,6 +10,7 @@ pub struct SchemaSystem {
     resolved_schema_cache: HashMap<String, Rc<Schema>>,
 }
 
+// TODO: make methods public based on the requirements
 impl SchemaSystem {
     pub fn new(authorities: Vec<Box<dyn Authority>>) -> Self {
         Self {
@@ -47,7 +48,7 @@ impl SchemaSystem {
     }
 
     /// Returns authorities associated with this [SchemaSystem]
-    fn authorities(&self) -> &Vec<Box<dyn Authority>> {
+    fn authorities(&self) -> &[Box<dyn Authority>] {
         &self.authorities
     }
 
@@ -115,6 +116,5 @@ mod schema_system_tests {
             .load_schema("Customer.isl".to_owned())
             .unwrap();
         assert_eq!(schema.id(), &"Customer.isl".to_owned());
-        assert_eq!(schema.content().len(), 5);
     }
 }

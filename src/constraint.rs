@@ -7,7 +7,7 @@ use ion_rs::IonType;
 use std::convert::{TryFrom, TryInto};
 
 /// Defines a schema Constraint and provides validation for it
-pub trait Constraint {
+pub trait ConstraintBase {
     /// Checks this constraint against the provided value,
     /// adding [Violation]s and/or [ViolationChild]ren to issues
     /// if the constraint is violated.
@@ -16,7 +16,7 @@ pub trait Constraint {
 
 #[derive(Debug, Clone)]
 // TODO: add other constraints
-pub enum Constraints {
+pub enum Constraint {
     AllOf(AllOf),
 }
 
@@ -33,7 +33,7 @@ impl AllOf {
     }
 }
 
-impl Constraint for AllOf {
+impl ConstraintBase for AllOf {
     fn validate(&self, value: OwnedElement, issues: &mut Violations) {
         todo!()
     }

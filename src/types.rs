@@ -1,4 +1,4 @@
-use crate::constraint::Constraints;
+use crate::constraint::Constraint;
 use crate::result::{invalid_schema_error_raw, IonSchemaError};
 use crate::violation::Violations;
 use ion_rs::value::owned::{OwnedElement, OwnedStruct};
@@ -11,11 +11,11 @@ use std::convert::{TryFrom, TryInto};
 #[derive(Debug, Clone)]
 pub struct Type {
     name: String,
-    constraints: Vec<Constraints>,
+    constraints: Vec<Constraint>,
 }
 
 impl Type {
-    pub fn new(name: String, constraints: Vec<Constraints>) -> Self {
+    pub fn new(name: String, constraints: Vec<Constraint>) -> Self {
         Self { name, constraints }
     }
 
@@ -64,7 +64,7 @@ impl TryFrom<&OwnedStruct> for Type {
             let constraint = match constraint_name {
                 "all_of" => {
                     if let Ok(all_of) = value.try_into() {
-                        Constraints::AllOf(all_of)
+                        Constraint::AllOf(all_of)
                     } else {
                         return Err(invalid_schema_error_raw(
                             "Can not read all_of constraint in Ion",
