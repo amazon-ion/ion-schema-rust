@@ -6,14 +6,16 @@ use ion_rs::value::{Element, Sequence};
 use ion_rs::IonType;
 use std::convert::{TryFrom, TryInto};
 
-/// Defines a schema Constraint and provides validation for it
-pub trait ConstraintBase {
+/// Provides validation for schema Constraint
+pub trait ConstraintValidator {
     /// Checks this constraint against the provided value,
     /// adding [Violation]s and/or [ViolationChild]ren to issues
     /// if the constraint is violated.
+    // TODO: Return type can be Option<Violations> instead of passing Violations
     fn validate(&self, value: OwnedElement, issues: &mut Violations);
 }
 
+/// Defines schema Constraints
 #[derive(Debug, Clone)]
 // TODO: add other constraints
 pub enum Constraint {
@@ -33,7 +35,7 @@ impl AllOf {
     }
 }
 
-impl ConstraintBase for AllOf {
+impl ConstraintValidator for AllOf {
     fn validate(&self, value: OwnedElement, issues: &mut Violations) {
         todo!()
     }
@@ -50,6 +52,7 @@ impl TryFrom<&OwnedElement> for AllOf {
                 ion.ion_type()
             )));
         }
+        // TODO: Implement a struct TypeReference or TryFrom<...> to build a type reference according to the Ion Schema Spec https://amzn.github.io/ion-schema/docs/spec.html#grammar
         let types: Vec<Type> = ion
             .as_sequence()
             .unwrap()

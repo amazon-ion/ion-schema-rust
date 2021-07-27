@@ -5,6 +5,18 @@ use ion_rs::value::owned::{OwnedElement, OwnedStruct};
 use ion_rs::value::{Element, Struct, SymbolToken};
 use std::convert::{TryFrom, TryInto};
 
+/// Provides validation for Type
+pub trait TypeValidator {
+    /// If the specified value violates one or more of this type's constraints,
+    /// returns `false`, otherwise `true`
+    fn is_valid(&self, value: OwnedElement) -> bool;
+
+    /// Returns a Violations object indicating whether the specified value
+    /// is valid for this type, and if not, provides details as to which
+    /// constraints were violated.
+    fn validate(&self, value: OwnedElement) -> Violations;
+}
+
 /// A Type consists of an optional name and zero or more constraints.
 ///
 /// Unless otherwise specified, the constraint `type: any` is automatically applied.
@@ -18,16 +30,13 @@ impl Type {
     pub fn new(name: String, constraints: Vec<Constraint>) -> Self {
         Self { name, constraints }
     }
+}
 
-    /// If the specified value violates one or more of this type's constraints,
-    /// returns `false`, otherwise `true`
+impl TypeValidator for Type {
     fn is_valid(&self, value: OwnedElement) -> bool {
         todo!()
     }
 
-    /// Returns a Violations object indicating whether the specified value
-    /// is valid for this type, and if not, provides details as to which
-    /// constraints were violated.
     fn validate(&self, value: OwnedElement) -> Violations {
         todo!()
     }

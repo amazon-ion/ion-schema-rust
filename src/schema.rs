@@ -1,7 +1,6 @@
 use crate::import::Import;
 use crate::types::Type;
 use ion_rs::value::owned::OwnedElement;
-use std::collections::HashMap;
 use std::rc::Rc;
 
 /// A Schema is a collection of zero or more [Type]s.
@@ -27,16 +26,6 @@ impl Schema {
         }
     }
 
-    // helper function to validate a type before it gets added to the types vector
-    fn validate_type(&self, schema_type: Type) {
-        todo!()
-    }
-
-    // helper function to add a new type to the types vector after validating the type
-    fn add_type(&self, schema_type: Type) {
-        todo!()
-    }
-
     /// Returns the id for this Schema
     pub fn id(&self) -> &str {
         &self.id
@@ -57,7 +46,7 @@ impl Schema {
     }
 
     /// Returns the requested type, if present in this schema;
-    /// otherwise returns null.
+    /// otherwise returns None.
     // TODO: could not name the method as type because its a rust keyword
     fn schema_type(&self, name: String) -> Option<Type> {
         todo!()
