@@ -2,10 +2,10 @@ use ion_rs::result::IonError;
 use std::io;
 use thiserror::Error;
 
-/// Represents a result based on IonSchemaErrors
+/// A unified Result type representing the outcome of method calls that may fail.
 pub type IonSchemaResult<T> = Result<T, IonSchemaError>;
 
-/// Represents all errors based on IonSchemaError to simplify IonSchemaResult usage
+/// Represents the different types of high-level failures that might occur when reading Ion Schema.
 #[derive(Debug, Error)]
 pub enum IonSchemaError {
     /// Indicates that an io error occurred while loading a schema

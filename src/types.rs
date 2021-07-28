@@ -9,12 +9,12 @@ use std::convert::{TryFrom, TryInto};
 pub trait TypeValidator {
     /// If the specified value violates one or more of this type's constraints,
     /// returns `false`, otherwise `true`
-    fn is_valid(&self, value: OwnedElement) -> bool;
+    fn is_valid(&self, value: &OwnedElement) -> bool;
 
     /// Returns a Violations object indicating whether the specified value
     /// is valid for this type, and if not, provides details as to which
     /// constraints were violated.
-    fn validate(&self, value: OwnedElement) -> Violations;
+    fn validate(&self, value: &OwnedElement, issues: &mut Violations);
 }
 
 /// A Type consists of an optional name and zero or more constraints.
@@ -33,11 +33,11 @@ impl Type {
 }
 
 impl TypeValidator for Type {
-    fn is_valid(&self, value: OwnedElement) -> bool {
+    fn is_valid(&self, value: &OwnedElement) -> bool {
         todo!()
     }
 
-    fn validate(&self, value: OwnedElement) -> Violations {
+    fn validate(&self, value: &OwnedElement, issues: &mut Violations) {
         todo!()
     }
 }

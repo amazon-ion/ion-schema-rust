@@ -11,7 +11,6 @@ pub trait ConstraintValidator {
     /// Checks this constraint against the provided value,
     /// adding [Violation]s and/or [ViolationChild]ren to issues
     /// if the constraint is violated.
-    // TODO: Return type can be Option<Violations> instead of passing Violations
     fn validate(&self, value: OwnedElement, issues: &mut Violations);
 }
 
