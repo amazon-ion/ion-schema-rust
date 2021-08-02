@@ -1,5 +1,5 @@
 use crate::result::{invalid_schema_error_raw, IonSchemaError};
-use crate::types::Type;
+use crate::types::TypeRef;
 use crate::violation::Violations;
 use ion_rs::value::owned::OwnedElement;
 use ion_rs::value::{Element, Sequence};
@@ -19,18 +19,32 @@ pub trait ConstraintValidator {
 // TODO: add other constraints
 pub enum Constraint {
     AllOf(AllOf),
+    TypeConstraint(TypeConstraint),
 }
 
 /// Implements an `all_of` constraint of Ion Schema
 /// [all_of]: https://amzn.github.io/ion-schema/docs/spec.html#all_of
 #[derive(Debug, Clone)]
 pub struct AllOf {
-    types: Vec<Type>,
+    type_references: Vec<TypeRef>,
 }
 
 impl AllOf {
-    pub fn new(types: Vec<Type>) -> Self {
-        Self { types }
+    pub fn new(types: Vec<TypeRef>) -> Self {
+        Self {
+            type_references: types,
+        }
+    }
+
+    pub fn deferred_type_references(&self) -> Vec<TypeRef> {
+        self.type_references
+            .iter()
+            .filter(|t| match t {
+                TypeRef::BaseType(_) => false,
+                _ => true,
+            })
+            .map(|t| t.to_owned())
+            .collect()
     }
 }
 
@@ -51,21 +65,54 @@ impl TryFrom<&OwnedElement> for AllOf {
                 ion.ion_type()
             )));
         }
-        // TODO: Implement a struct TypeReference or TryFrom<...> to build a type reference according to the Ion Schema Spec https://amzn.github.io/ion-schema/docs/spec.html#grammar
-        let types: Vec<Type> = ion
+        let types: Vec<TypeRef> = ion
             .as_sequence()
             .unwrap()
             .iter()
-            .map(|e| {
-                e.as_struct()
-                    .ok_or_else(|| {
-                        invalid_schema_error_raw(
-                            "all_of constraint must be a struct with type references inside it",
-                        )
-                    })
-                    .and_then(|type_reference| type_reference.try_into())
-            })
-            .collect::<Result<Vec<Type>, IonSchemaError>>()?;
+            .map(|e| e.try_into())
+            .collect::<Result<Vec<TypeRef>, IonSchemaError>>()?;
         Ok(AllOf::new(types))
+    }
+}
+
+/// Implements an `type` constraint of Ion Schema
+/// [type]: https://amzn.github.io/ion-schema/docs/spec.html#type
+#[derive(Debug, Clone)]
+pub struct TypeConstraint {
+    type_reference: TypeRef,
+}
+
+impl TypeConstraint {
+    pub fn new(type_reference: TypeRef) -> Self {
+        Self { type_reference }
+    }
+
+    pub fn deferred_type_reference(&self) -> Option<&TypeRef> {
+        match self.type_reference {
+            TypeRef::BaseType(_) => Some(&self.type_reference),
+            _ => None,
+        }
+    }
+}
+
+impl ConstraintValidator for TypeConstraint {
+    fn validate(&self, value: OwnedElement, issues: &mut Violations) {
+        todo!()
+    }
+}
+
+/// Tries to create a [Type] constraint from the given OwnedElement
+impl TryFrom<&OwnedElement> for TypeConstraint {
+    type Error = IonSchemaError;
+
+    fn try_from(ion: &OwnedElement) -> Result<Self, Self::Error> {
+        if ion.ion_type() != IonType::Symbol && ion.ion_type() != IonType::Struct {
+            return Err(invalid_schema_error_raw(format!(
+                "type constraint was a {:?} instead of a symbol/struct",
+                ion.ion_type()
+            )));
+        }
+        let type_reference: TypeRef = ion.try_into()?;
+        Ok(TypeConstraint::new(type_reference.to_owned()))
     }
 }
