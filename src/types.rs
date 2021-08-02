@@ -49,6 +49,7 @@ impl Type {
         &self.constraints
     }
 
+    /// Returns type references that are not yet resolved (alias type reference or anonymous type reference)
     pub fn deferred_type_references(&self) -> &[TypeRef] {
         &self.deferred_type_references
     }
@@ -154,13 +155,13 @@ impl TryFrom<&OwnedElement> for TypeRef {
                 value.as_sym()
                     .ok_or_else(|| {
                         invalid_schema_error_raw(
-                            "a base or import type reference must be a symbol",
+                            "a base or alias type reference must be a symbol",
                         )
                     })?
                     .text()
                     .ok_or_else(|| {
                         invalid_schema_error_raw(
-                            "a base or import type reference symbol doesn't have text",
+                            "a base or alias type reference symbol doesn't have text",
                         )
                     })
                     .and_then(|type_reference| {
@@ -191,7 +192,7 @@ impl TryFrom<&OwnedElement> for TypeRef {
                 })
                 .and_then(|type_reference| Ok(TypeRef::AnonymousType(type_reference.try_into()?))),
             _ => Err(invalid_schema_error_raw(
-                "type reference can either be a symbol(For base/import type reference) or a struct (for anonymous type reference)",
+                "type reference can either be a symbol(For base/alias type reference) or a struct (for anonymous type reference)",
             )),
         }
     }

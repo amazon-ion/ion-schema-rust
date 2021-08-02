@@ -36,6 +36,7 @@ impl AllOf {
         }
     }
 
+    /// Returns type references that are not yet resolved (alias type reference or anonymous type reference)
     pub fn deferred_type_references(&self) -> Vec<TypeRef> {
         self.type_references
             .iter()
@@ -87,6 +88,7 @@ impl TypeConstraint {
         Self { type_reference }
     }
 
+    /// Returns type references that are not yet resolved (alias type reference or anonymous type reference)
     pub fn deferred_type_reference(&self) -> Option<&TypeRef> {
         match self.type_reference {
             TypeRef::BaseType(_) => Some(&self.type_reference),

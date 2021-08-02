@@ -27,7 +27,7 @@ impl SchemaSystem {
         }
     }
 
-    /// Resolves all the deferred types based on types collected while loading a schema
+    /// Resolves all the deferred type references using types collected while loading a schema
     fn resolve_deferred_type_references(
         &self,
         types: HashMap<String, Type>,
