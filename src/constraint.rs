@@ -1,4 +1,4 @@
-use crate::result::{invalid_schema_error_raw, IonSchemaError};
+use crate::result::{invalid_schema_error_raw, IonSchemaError, IonSchemaResult};
 use crate::types::TypeRef;
 use crate::violation::Violations;
 use ion_rs::value::owned::OwnedElement;
@@ -18,18 +18,18 @@ pub trait ConstraintValidator {
 #[derive(Debug, Clone)]
 // TODO: add other constraints
 pub enum Constraint {
-    AllOf(AllOf),
-    TypeConstraint(TypeConstraint),
+    AllOf(AllOfConstraint),
+    Type(TypeConstraint),
 }
 
 /// Implements an `all_of` constraint of Ion Schema
 /// [all_of]: https://amzn.github.io/ion-schema/docs/spec.html#all_of
 #[derive(Debug, Clone)]
-pub struct AllOf {
+pub struct AllOfConstraint {
     type_references: Vec<TypeRef>,
 }
 
-impl AllOf {
+impl AllOfConstraint {
     pub fn new(types: Vec<TypeRef>) -> Self {
         Self {
             type_references: types,
@@ -41,7 +41,7 @@ impl AllOf {
         self.type_references
             .iter()
             .filter(|t| match t {
-                TypeRef::BaseType(_) => false,
+                TypeRef::ISLCoreType(_) => false,
                 _ => true,
             })
             .map(|t| t.to_owned())
@@ -49,14 +49,14 @@ impl AllOf {
     }
 }
 
-impl ConstraintValidator for AllOf {
+impl ConstraintValidator for AllOfConstraint {
     fn validate(&self, value: OwnedElement, issues: &mut Violations) {
         todo!()
     }
 }
 
 /// Tries to create an [AllOf] constraint from the given OwnedElement
-impl TryFrom<&OwnedElement> for AllOf {
+impl TryFrom<&OwnedElement> for AllOfConstraint {
     type Error = IonSchemaError;
 
     fn try_from(ion: &OwnedElement) -> Result<Self, Self::Error> {
@@ -71,12 +71,12 @@ impl TryFrom<&OwnedElement> for AllOf {
             .unwrap()
             .iter()
             .map(|e| e.try_into())
-            .collect::<Result<Vec<TypeRef>, IonSchemaError>>()?;
-        Ok(AllOf::new(types))
+            .collect::<IonSchemaResult<Vec<TypeRef>>>()?;
+        Ok(AllOfConstraint::new(types))
     }
 }
 
-/// Implements an `type` constraint of Ion Schema
+/// Implements a `type` constraint
 /// [type]: https://amzn.github.io/ion-schema/docs/spec.html#type
 #[derive(Debug, Clone)]
 pub struct TypeConstraint {
@@ -91,7 +91,7 @@ impl TypeConstraint {
     /// Returns type references that are not yet resolved (alias type reference or anonymous type reference)
     pub fn deferred_type_reference(&self) -> Option<&TypeRef> {
         match self.type_reference {
-            TypeRef::BaseType(_) => Some(&self.type_reference),
+            TypeRef::ISLCoreType(_) => Some(&self.type_reference),
             _ => None,
         }
     }

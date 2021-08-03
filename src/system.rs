@@ -107,7 +107,7 @@ impl SchemaSystem {
                         return invalid_schema_error("For any schema while a header and footer are both optional, a footer is required if a header is present (and vice-versa).");
                     }
                     types = self.resolve_deferred_type_references(types, id)?;
-                    let schema = Schema::new(id, types);
+                    let schema = Schema::new(id, types.into_iter());
                     // If schema is resolved then add it to the schema cache
                     let schema_rc = Rc::new(schema);
                     self.resolved_schema_cache
@@ -193,9 +193,6 @@ mod schema_system_tests {
         let schema = schema_system
             .load_schema("constraints/type/validation_int.isl".to_owned())
             .unwrap();
-        assert_eq!(
-            schema.id(),
-            &"constraints/type/validation_int.isl".to_owned()
-        );
+        assert_eq!(schema.id(), "constraints/type/validation_int.isl");
     }
 }

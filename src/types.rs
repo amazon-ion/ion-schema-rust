@@ -1,4 +1,4 @@
-use crate::constraint::{AllOf, Constraint, TypeConstraint};
+use crate::constraint::{AllOfConstraint, Constraint, TypeConstraint};
 use crate::result::{invalid_schema_error_raw, IonSchemaError};
 use crate::violation::Violations;
 use ion_rs::value::owned::{OwnedElement, OwnedStruct};
@@ -96,7 +96,7 @@ impl TryFrom<&OwnedStruct> for Type {
             // TODO: add more constraints to match below
             let constraint = match constraint_name {
                 "all_of" => {
-                    let all_of: AllOf = value.try_into()?;
+                    let all_of: AllOfConstraint = value.try_into()?;
                     deferred_type_references
                         .append(all_of.deferred_type_references().to_vec().as_mut());
                     Constraint::AllOf(all_of)
@@ -111,7 +111,7 @@ impl TryFrom<&OwnedStruct> for Type {
                                 .to_owned(),
                         );
                     }
-                    Constraint::TypeConstraint(type_constraint)
+                    Constraint::Type(type_constraint)
                 }
                 _ => {
                     return Err(invalid_schema_error_raw(
@@ -135,7 +135,7 @@ impl TryFrom<&OwnedStruct> for Type {
 #[derive(Debug, Clone)]
 pub enum TypeRef {
     /// represents core ion type reference
-    BaseType(IonType),
+    ISLCoreType(IonType),
     /// represents a type reference which represents a type imported from another schema
     AliasType(String),
     /// represents a type reference defined as an inlined import type from another schema
@@ -152,12 +152,7 @@ impl TryFrom<&OwnedElement> for TypeRef {
     fn try_from(value: &OwnedElement) -> Result<Self, Self::Error> {
         match value.ion_type() {
             IonType::Symbol => {
-                value.as_sym()
-                    .ok_or_else(|| {
-                        invalid_schema_error_raw(
-                            "a base or alias type reference must be a symbol",
-                        )
-                    })?
+                value.as_sym().unwrap()
                     .text()
                     .ok_or_else(|| {
                         invalid_schema_error_raw(
@@ -166,31 +161,28 @@ impl TryFrom<&OwnedElement> for TypeRef {
                     })
                     .and_then(|type_reference| {
                         let ion_type = match type_reference {
-                            "null" => TypeRef::BaseType(IonType::Null),
-                            "int" => TypeRef::BaseType(IonType::Integer),
-                            "float" => TypeRef::BaseType(IonType::Float),
-                            "decimal" => TypeRef::BaseType(IonType::Decimal),
-                            "timestamp" => TypeRef::BaseType(IonType::Timestamp),
-                            "string" => TypeRef::BaseType(IonType::String),
-                            "symbol" => TypeRef::BaseType(IonType::Symbol),
-                            "bool" => TypeRef::BaseType(IonType::Boolean),
-                            "blob" => TypeRef::BaseType(IonType::Blob),
-                            "clob" => TypeRef::BaseType(IonType::Clob),
-                            "sexp" => TypeRef::BaseType(IonType::SExpression),
-                            "list" => TypeRef::BaseType(IonType::List),
-                            "struct" => TypeRef::BaseType(IonType::Struct),
+                            "int" => TypeRef::ISLCoreType(IonType::Integer),
+                            "float" => TypeRef::ISLCoreType(IonType::Float),
+                            "decimal" => TypeRef::ISLCoreType(IonType::Decimal),
+                            "timestamp" => TypeRef::ISLCoreType(IonType::Timestamp),
+                            "string" => TypeRef::ISLCoreType(IonType::String),
+                            "symbol" => TypeRef::ISLCoreType(IonType::Symbol),
+                            "bool" => TypeRef::ISLCoreType(IonType::Boolean),
+                            "blob" => TypeRef::ISLCoreType(IonType::Blob),
+                            "clob" => TypeRef::ISLCoreType(IonType::Clob),
+                            "sexp" => TypeRef::ISLCoreType(IonType::SExpression),
+                            "list" => TypeRef::ISLCoreType(IonType::List),
+                            "struct" => TypeRef::ISLCoreType(IonType::Struct),
                             // TODO: add a match for other core types like: lob, text, number, document, any
                             _ => TypeRef::AliasType(type_reference.to_owned()),
                         };
                         Ok(ion_type)
                     })
             }
-            IonType::Struct => value
-                .as_struct()
-                .ok_or_else(|| {
-                    invalid_schema_error_raw("anonymous type reference must be a struct")
-                })
-                .and_then(|type_reference| Ok(TypeRef::AnonymousType(type_reference.try_into()?))),
+            IonType::Struct =>
+                Ok(TypeRef::AnonymousType(value
+                                           .as_struct()
+                                           .unwrap().try_into()?)),
             _ => Err(invalid_schema_error_raw(
                 "type reference can either be a symbol(For base/alias type reference) or a struct (for anonymous type reference)",
             )),
