@@ -1,6 +1,7 @@
 use crate::authority::Authority;
 use crate::result::{
-    invalid_schema_error, invalid_schema_error_raw, unresolvable_schema_error, IonSchemaResult,
+    invalid_schema_error, invalid_schema_error_raw, unresolvable_schema_error, IonSchemaError,
+    IonSchemaResult,
 };
 use crate::schema::Schema;
 use crate::types::TypeRef::{AliasType, AnonymousType};
@@ -9,6 +10,7 @@ use ion_rs::value::owned::{text_token, OwnedSymbolToken};
 use ion_rs::value::{Element, Sequence, Struct};
 use std::collections::HashMap;
 use std::convert::TryInto;
+use std::io::ErrorKind;
 use std::rc::Rc;
 
 /// Provides functions for instantiating instances of [Schema].
@@ -67,7 +69,13 @@ impl SchemaSystem {
                 return Ok(Rc::clone(schema));
             }
             return match authority.elements(id) {
-                Err(error) => Err(error),
+                Err(error) => match error {
+                    IonSchemaError::IoError { source } => match source.kind() {
+                        ErrorKind::NotFound => continue,
+                        _ => Err(IonSchemaError::IoError { source }),
+                    },
+                    _ => Err(error),
+                },
                 Ok(schema_content) => {
                     let mut types: HashMap<String, Type> = HashMap::new();
                     let mut found_header = false;
@@ -86,7 +94,8 @@ impl SchemaSystem {
                                     let import_id = try_to!(try_to!(import.as_struct()).get("id"));
                                     let imported_schema =
                                         self.load_schema(try_to!(import_id.as_str()))?;
-                                    types.extend(imported_schema.types().to_owned().into_iter());
+                                    types
+                                        .extend(imported_schema.get_types().to_owned().into_iter());
                                 }
                             }
                         }
@@ -99,7 +108,6 @@ impl SchemaSystem {
                         else if annotations.contains(&&text_token("schema_footer")) {
                             found_footer = true;
                         } else {
-                            //TODO: this should throw an error for anything other than schema_header, type and schema_footer is written inside schema
                             continue;
                         }
                     }
