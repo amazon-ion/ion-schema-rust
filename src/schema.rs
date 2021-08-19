@@ -12,7 +12,7 @@ use std::rc::Rc;
 #[derive(Debug, Clone)]
 pub struct Schema {
     id: String,
-    imports: Vec<Rc<Schema>>, //TODO: Use HashMap for imports and types
+    imports: Vec<Rc<Schema>>, //TODO: Use HashMap for imports
     types: HashMap<String, Type>,
 }
 

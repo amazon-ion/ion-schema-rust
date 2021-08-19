@@ -1,10 +1,11 @@
-use crate::result::{invalid_schema_error_raw, IonSchemaError, IonSchemaResult};
-use crate::types::TypeRef;
+use crate::result::{invalid_schema_error_raw, IonSchemaResult};
+use crate::system::SharedTypeCache;
+use crate::types::{Type, TypeRef};
 use crate::violation::Violations;
 use ion_rs::value::owned::OwnedElement;
 use ion_rs::value::{Element, Sequence};
 use ion_rs::IonType;
-use std::convert::{TryFrom, TryInto};
+use std::rc::Rc;
 
 /// Provides validation for schema Constraint
 pub trait ConstraintValidator {
@@ -26,40 +27,21 @@ pub enum Constraint {
 /// [all_of]: https://amzn.github.io/ion-schema/docs/spec.html#all_of
 #[derive(Debug, Clone)]
 pub struct AllOfConstraint {
-    type_references: Vec<TypeRef>,
+    type_references: Vec<Type>,
 }
 
 impl AllOfConstraint {
-    pub fn new(types: Vec<TypeRef>) -> Self {
+    pub fn new(types: Vec<Type>) -> Self {
         Self {
             type_references: types,
         }
     }
 
-    /// Returns type references that are not yet resolved (alias type reference or anonymous type reference)
-    pub fn deferred_type_references(&self) -> Vec<TypeRef> {
-        self.type_references
-            .iter()
-            .filter(|t| match t {
-                TypeRef::ISLCoreType(_) => false,
-                _ => true,
-            })
-            .map(|t| t.to_owned())
-            .collect()
-    }
-}
-
-impl ConstraintValidator for AllOfConstraint {
-    fn validate(&self, value: OwnedElement, issues: &mut Violations) {
-        todo!()
-    }
-}
-
-/// Tries to create an [AllOf] constraint from the given OwnedElement
-impl TryFrom<&OwnedElement> for AllOfConstraint {
-    type Error = IonSchemaError;
-
-    fn try_from(ion: &OwnedElement) -> Result<Self, Self::Error> {
+    /// Tries to create an [AllOf] constraint from the given OwnedElement
+    pub fn parse_from_ion_element(
+        ion: &OwnedElement,
+        type_cache: SharedTypeCache,
+    ) -> IonSchemaResult<Self> {
         if ion.ion_type() != IonType::List {
             return Err(invalid_schema_error_raw(format!(
                 "all_of constraint was a {:?} instead of a list",
@@ -70,9 +52,20 @@ impl TryFrom<&OwnedElement> for AllOfConstraint {
             .as_sequence()
             .unwrap()
             .iter()
-            .map(|e| e.try_into())
+            .map(|e| TypeRef::parse_from_ion_element(e, Rc::clone(&type_cache)))
             .collect::<IonSchemaResult<Vec<TypeRef>>>()?;
-        Ok(AllOfConstraint::new(types))
+
+        let resolved_types: Vec<Type> = types
+            .iter()
+            .map(|t| TypeRef::resolve_type_reference(t, Rc::clone(&type_cache)))
+            .collect::<IonSchemaResult<Vec<Type>>>()?;
+        Ok(AllOfConstraint::new(resolved_types.to_owned()))
+    }
+}
+
+impl ConstraintValidator for AllOfConstraint {
+    fn validate(&self, value: OwnedElement, issues: &mut Violations) {
+        todo!()
     }
 }
 
@@ -80,41 +73,33 @@ impl TryFrom<&OwnedElement> for AllOfConstraint {
 /// [type]: https://amzn.github.io/ion-schema/docs/spec.html#type
 #[derive(Debug, Clone)]
 pub struct TypeConstraint {
-    type_reference: TypeRef,
+    type_reference: Type,
 }
 
 impl TypeConstraint {
-    pub fn new(type_reference: TypeRef) -> Self {
+    pub fn new(type_reference: Type) -> Self {
         Self { type_reference }
     }
 
-    /// Returns type references that are not yet resolved (alias type reference or anonymous type reference)
-    pub fn deferred_type_reference(&self) -> Option<&TypeRef> {
-        match self.type_reference {
-            TypeRef::ISLCoreType(_) => Some(&self.type_reference),
-            _ => None,
-        }
-    }
-}
-
-impl ConstraintValidator for TypeConstraint {
-    fn validate(&self, value: OwnedElement, issues: &mut Violations) {
-        todo!()
-    }
-}
-
-/// Tries to create a [Type] constraint from the given OwnedElement
-impl TryFrom<&OwnedElement> for TypeConstraint {
-    type Error = IonSchemaError;
-
-    fn try_from(ion: &OwnedElement) -> Result<Self, Self::Error> {
+    /// Tries to create a [Type] constraint from the given OwnedElement
+    pub fn parse_from_ion_element(
+        ion: &OwnedElement,
+        type_cache: SharedTypeCache,
+    ) -> IonSchemaResult<Self> {
         if ion.ion_type() != IonType::Symbol && ion.ion_type() != IonType::Struct {
             return Err(invalid_schema_error_raw(format!(
                 "type constraint was a {:?} instead of a symbol/struct",
                 ion.ion_type()
             )));
         }
-        let type_reference: TypeRef = ion.try_into()?;
-        Ok(TypeConstraint::new(type_reference.to_owned()))
+        let type_reference: TypeRef = TypeRef::parse_from_ion_element(ion, Rc::clone(&type_cache))?;
+        let type_def = TypeRef::resolve_type_reference(&type_reference, Rc::clone(&type_cache))?;
+        Ok(TypeConstraint::new(type_def))
+    }
+}
+
+impl ConstraintValidator for TypeConstraint {
+    fn validate(&self, value: OwnedElement, issues: &mut Violations) {
+        todo!()
     }
 }

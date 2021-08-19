@@ -1,27 +1,26 @@
 use crate::authority::Authority;
 use crate::result::{
-    invalid_schema_error, invalid_schema_error_raw, unresolvable_schema_error, IonSchemaError,
-    IonSchemaResult,
+    invalid_schema_error, unresolvable_schema_error, IonSchemaError, IonSchemaResult,
 };
 use crate::schema::Schema;
-use crate::types::TypeRef::{AliasType, AnonymousType};
-use crate::types::{Type, TypeRef};
-use ion_rs::value::owned::{text_token, OwnedSymbolToken};
+use crate::types::Type;
+use ion_rs::value::owned::{text_token, OwnedElement, OwnedSymbolToken};
 use ion_rs::value::{Element, Sequence, Struct};
+use std::cell::RefCell;
 use std::collections::HashMap;
-use std::convert::TryInto;
 use std::io::ErrorKind;
 use std::rc::Rc;
 
-/// Provides functions for instantiating instances of [Schema].
-pub struct SchemaSystem {
+/// Provides a type cache reference which will be shared to resolve types during load_schema
+pub type SharedTypeCache = Rc<RefCell<HashMap<String, Type>>>;
+
+/// Provides functions to load [Schema] with [Type]s using authorities for [System]
+pub struct Resolver {
     authorities: Vec<Box<dyn Authority>>,
     resolved_schema_cache: HashMap<String, Rc<Schema>>,
 }
 
-// TODO: make methods public based on the requirements
-// TODO: need for a schema resolver based on the load_schema implementation
-impl SchemaSystem {
+impl Resolver {
     pub fn new(authorities: Vec<Box<dyn Authority>>) -> Self {
         Self {
             authorities,
@@ -29,45 +28,66 @@ impl SchemaSystem {
         }
     }
 
-    /// Resolves all the deferred type references using types collected while loading a schema
-    fn resolve_deferred_type_references(
-        &self,
-        types: HashMap<String, Type>,
+    pub fn schema_from_elements<I: Iterator<Item = OwnedElement>>(
+        &mut self,
+        elements: I,
         id: &str,
-    ) -> IonSchemaResult<HashMap<String, Type>> {
-        let mut resolved_types: HashMap<String, Type> = types.clone();
-        for (type_name, type_value) in types {
-            let type_references: &[TypeRef] = type_value.deferred_type_references();
-            for type_reference in type_references {
-                match type_reference {
-                    AliasType(name) => {
-                        if !resolved_types.contains_key(name) {
-                            return Err(invalid_schema_error_raw(format!(
-                                "type reference {:} does not exists for schema: {:}",
-                                name, id
-                            )));
-                        }
+        type_cache: SharedTypeCache,
+    ) -> IonSchemaResult<Rc<Schema>> {
+        let mut types: HashMap<String, Type> = HashMap::new();
+        let mut found_header = false;
+        let mut found_footer = false;
+        for value in elements {
+            let annotations: Vec<&OwnedSymbolToken> = value.annotations().collect();
+            // load header for schema
+            if annotations.contains(&&text_token("schema_header")) {
+                found_header = true;
+                let imports = try_to!(value.as_struct())
+                    .get("imports")
+                    .and_then(|it| it.as_sequence());
+
+                if imports.is_some() {
+                    for import in imports.unwrap().iter() {
+                        let import_id = try_to!(try_to!(import.as_struct()).get("id"));
+                        let imported_schema =
+                            self.load_schema(try_to!(import_id.as_str()), Rc::clone(&type_cache))?;
+                        types.extend(imported_schema.get_types().to_owned().into_iter());
                     }
-                    AnonymousType(anonymous_type) => {
-                        resolved_types
-                            .insert(anonymous_type.name().to_owned(), anonymous_type.to_owned());
-                    }
-                    _ => {}
                 }
             }
+            // load types for schema
+            else if annotations.contains(&&text_token("type")) {
+                let type_def: Type = Type::parse_from_ion_element(
+                    try_to!(value.as_struct()),
+                    Rc::clone(&type_cache),
+                )?;
+                types.insert(type_def.name().to_owned(), type_def);
+            }
+            // load footer for schema
+            else if annotations.contains(&&text_token("schema_footer")) {
+                found_footer = true;
+            } else {
+                continue;
+            }
         }
-        Ok(resolved_types)
+        if found_footer ^ found_header {
+            return invalid_schema_error("For any schema while a header and footer are both optional, a footer is required if a header is present (and vice-versa).");
+        }
+        Ok(Rc::new(Schema::new(id, types.into_iter())))
     }
 
-    /// Requests each of the provided [Authority]s, in order, to resolve the requested schema id
-    /// until one successfully resolves it.
-    /// If an Authority throws an exception, resolution silently proceeds to the next Authority.
-    fn load_schema<A: AsRef<str>>(&mut self, id: A) -> IonSchemaResult<Rc<Schema>> {
+    /// Loads a [Schema] with resolved [Type]s using authorities and type_cache
+    fn load_schema<A: AsRef<str>>(
+        &mut self,
+        id: A,
+        type_cache: SharedTypeCache,
+    ) -> IonSchemaResult<Rc<Schema>> {
         let id: &str = id.as_ref();
+        if let Some(schema) = self.resolved_schema_cache.get(id) {
+            return Ok(Rc::clone(schema));
+        }
+
         for authority in &self.authorities {
-            if let Some(schema) = self.resolved_schema_cache.get(id) {
-                return Ok(Rc::clone(schema));
-            }
             return match authority.elements(id) {
                 Err(error) => match error {
                     IonSchemaError::IoError { source } => match source.kind() {
@@ -77,81 +97,55 @@ impl SchemaSystem {
                     _ => Err(error),
                 },
                 Ok(schema_content) => {
-                    let mut types: HashMap<String, Type> = HashMap::new();
-                    let mut found_header = false;
-                    let mut found_footer = false;
-                    for value in schema_content {
-                        let annotations: Vec<&OwnedSymbolToken> = value.annotations().collect();
-                        // load header for schema
-                        if annotations.contains(&&text_token("schema_header")) {
-                            found_header = true;
-                            let imports = try_to!(value.as_struct())
-                                .get("imports")
-                                .and_then(|it| it.as_sequence());
-
-                            if imports.is_some() {
-                                for import in imports.unwrap().iter() {
-                                    let import_id = try_to!(try_to!(import.as_struct()).get("id"));
-                                    let imported_schema =
-                                        self.load_schema(try_to!(import_id.as_str()))?;
-                                    types
-                                        .extend(imported_schema.get_types().to_owned().into_iter());
-                                }
-                            }
-                        }
-                        // load types for schema
-                        else if annotations.contains(&&text_token("type")) {
-                            let inline_type: Type = try_to!(value.as_struct()).try_into()?;
-                            types.insert(inline_type.name().to_owned(), inline_type);
-                        }
-                        // load footer for schema
-                        else if annotations.contains(&&text_token("schema_footer")) {
-                            found_footer = true;
-                        } else {
-                            continue;
-                        }
-                    }
-                    if found_footer ^ found_header {
-                        return invalid_schema_error("For any schema while a header and footer are both optional, a footer is required if a header is present (and vice-versa).");
-                    }
-                    types = self.resolve_deferred_type_references(types, id)?;
-                    let schema = Schema::new(id, types.into_iter());
-                    // If schema is resolved then add it to the schema cache
-                    let schema_rc = Rc::new(schema);
-                    self.resolved_schema_cache
-                        .insert(id.to_owned(), Rc::clone(&schema_rc));
-                    Ok(schema_rc)
+                    self.schema_from_elements(schema_content.into_iter(), id, type_cache)
                 }
             };
         }
         unresolvable_schema_error("Unable to load schema: ".to_owned() + id)
     }
+}
 
-    /// Returns the cache for this [SchemaSystem] which has cached loaded [Schema]s
-    fn schema_cache(&self) -> &HashMap<String, Rc<Schema>> {
-        &self.resolved_schema_cache
+/// Provides functions for instantiating instances of [Schema].
+pub struct SchemaSystem {
+    resolver: Resolver,
+}
+
+// TODO: make methods public based on the requirements
+impl SchemaSystem {
+    pub fn new(authorities: Vec<Box<dyn Authority>>) -> Self {
+        Self {
+            resolver: Resolver::new(authorities),
+        }
+    }
+
+    /// Requests each of the provided [Authority]s, in order, to resolve the requested schema id
+    /// until one successfully resolves it.
+    /// If an Authority throws an exception, resolution silently proceeds to the next Authority.
+    fn load_schema<A: AsRef<str>>(&mut self, id: A) -> IonSchemaResult<Rc<Schema>> {
+        self.resolver
+            .load_schema(id, Rc::new(RefCell::new(HashMap::new())))
     }
 
     /// Returns authorities associated with this [SchemaSystem]
-    fn authorities(&self) -> &[Box<dyn Authority>] {
-        &self.authorities
+    fn authorities(&mut self) -> &[Box<dyn Authority>] {
+        &self.resolver.authorities
     }
 
     /// Adds the provided authority to the list of [Authority]s.
     fn add_authority(&mut self, authority: Box<dyn Authority>) {
-        self.authorities.push(authority);
+        self.resolver.authorities.push(authority);
     }
 
     /// Replaces the list of [Authority]s with a list containing only the specified authority.
     fn with_authority(&mut self, authority: Box<dyn Authority>) {
         let authorities: Vec<Box<dyn Authority>> = vec![authority];
-        self.authorities = authorities;
+        self.resolver.authorities = authorities;
     }
 
     // TODO: Use IntoIterator here instead of a Vec
     /// Replaces the list of [Authority]s with the specified list of [Authority]s.
     fn with_authorities(&mut self, authorities: Vec<Box<dyn Authority>>) {
-        self.authorities = authorities;
+        self.resolver.authorities = authorities;
     }
 }
 
@@ -197,10 +191,12 @@ mod schema_system_tests {
         let mut schema_system = SchemaSystem::new(vec![Box::new(FileSystemAuthority::new(
             &root_path.join(Path::new("ion-schema-tests/")),
         ))]);
-        // load schema for core types (BaseType TypeRef)
+        // load schema for core types
         let schema = schema_system
             .load_schema("constraints/type/validation_int.isl".to_owned())
             .unwrap();
         assert_eq!(schema.id(), "constraints/type/validation_int.isl");
+
+        assert_eq!(schema.get_types().len(), 1);
     }
 }

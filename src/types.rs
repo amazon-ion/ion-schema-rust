@@ -1,10 +1,11 @@
 use crate::constraint::{AllOfConstraint, Constraint, TypeConstraint};
-use crate::result::{invalid_schema_error_raw, IonSchemaError};
+use crate::result::{invalid_schema_error_raw, unresolvable_schema_error, IonSchemaResult};
+use crate::system::SharedTypeCache;
 use crate::violation::Violations;
 use ion_rs::value::owned::{OwnedElement, OwnedStruct};
 use ion_rs::value::{Element, Struct, SymbolToken};
 use ion_rs::IonType;
-use std::convert::{TryFrom, TryInto};
+use std::rc::Rc;
 
 /// Provides validation for Type
 pub trait TypeValidator {
@@ -25,20 +26,11 @@ pub trait TypeValidator {
 pub struct Type {
     name: String,
     constraints: Vec<Constraint>,
-    deferred_type_references: Vec<TypeRef>,
 }
 
 impl Type {
-    pub fn new(
-        name: String,
-        constraints: Vec<Constraint>,
-        deferred_type_references: Vec<TypeRef>,
-    ) -> Self {
-        Self {
-            name,
-            constraints,
-            deferred_type_references,
-        }
+    pub fn new(name: String, constraints: Vec<Constraint>) -> Self {
+        Self { name, constraints }
     }
 
     pub fn name(&self) -> &str {
@@ -49,27 +41,11 @@ impl Type {
         &self.constraints
     }
 
-    /// Returns type references that are not yet resolved (alias type reference or anonymous type reference)
-    pub fn deferred_type_references(&self) -> &[TypeRef] {
-        &self.deferred_type_references
-    }
-}
-
-impl TypeValidator for Type {
-    fn is_valid(&self, value: &OwnedElement) -> bool {
-        todo!()
-    }
-
-    fn validate(&self, value: &OwnedElement, issues: &mut Violations) {
-        todo!()
-    }
-}
-
-/// Parse constraints inside an [OwnedStruct] to a schema [Type]
-impl TryFrom<&OwnedStruct> for Type {
-    type Error = IonSchemaError;
-
-    fn try_from(ion_struct: &OwnedStruct) -> Result<Self, Self::Error> {
+    /// Parse constraints inside an [OwnedStruct] to a schema [Type]
+    pub fn parse_from_ion_element(
+        ion_struct: &OwnedStruct,
+        type_cache: SharedTypeCache,
+    ) -> IonSchemaResult<Self> {
         let mut constraints = vec![];
 
         // parses the name of the type specified by schema
@@ -81,7 +57,6 @@ impl TryFrom<&OwnedStruct> for Type {
             None => format!("{:?}", ion_struct) // If the type is UNNAMED_TYPE_DEFINITION/ AnonymousType then add the entire struct as the name of type
         };
 
-        let mut deferred_type_references: Vec<TypeRef> = vec![];
         // parses all the constraints inside a Type
         for (field_name, value) in ion_struct.iter() {
             let constraint_name = match field_name.text() {
@@ -96,21 +71,13 @@ impl TryFrom<&OwnedStruct> for Type {
             // TODO: add more constraints to match below
             let constraint = match constraint_name {
                 "all_of" => {
-                    let all_of: AllOfConstraint = value.try_into()?;
-                    deferred_type_references
-                        .append(all_of.deferred_type_references().to_vec().as_mut());
+                    let all_of: AllOfConstraint =
+                        AllOfConstraint::parse_from_ion_element(value, Rc::clone(&type_cache))?;
                     Constraint::AllOf(all_of)
                 }
                 "type" => {
-                    let type_constraint: TypeConstraint = value.try_into()?;
-                    if type_constraint.deferred_type_reference().is_some() {
-                        deferred_type_references.push(
-                            type_constraint
-                                .deferred_type_reference()
-                                .unwrap()
-                                .to_owned(),
-                        );
-                    }
+                    let type_constraint: TypeConstraint =
+                        TypeConstraint::parse_from_ion_element(value, Rc::clone(&type_cache))?;
                     Constraint::Type(type_constraint)
                 }
                 _ => {
@@ -125,7 +92,21 @@ impl TryFrom<&OwnedStruct> for Type {
             };
             constraints.push(constraint);
         }
-        Ok(Type::new(type_name, constraints, deferred_type_references))
+        let type_def = Type::new(type_name.to_owned(), constraints);
+        type_cache
+            .borrow_mut()
+            .insert(type_name, type_def.to_owned());
+        Ok(type_def.to_owned())
+    }
+}
+
+impl TypeValidator for Type {
+    fn is_valid(&self, value: &OwnedElement) -> bool {
+        todo!()
+    }
+
+    fn validate(&self, value: &OwnedElement, issues: &mut Violations) {
+        todo!()
     }
 }
 
@@ -144,12 +125,13 @@ pub enum TypeRef {
     AnonymousType(Type),
 }
 
-/// Tries to create a schema type reference from the given OwnedElement
 // TODO: add a check for nullable type reference
-impl TryFrom<&OwnedElement> for TypeRef {
-    type Error = IonSchemaError;
-
-    fn try_from(value: &OwnedElement) -> Result<Self, Self::Error> {
+impl TypeRef {
+    /// Tries to create a schema type reference from the given OwnedElement
+    pub fn parse_from_ion_element(
+        value: &OwnedElement,
+        type_cache: SharedTypeCache,
+    ) -> IonSchemaResult<Self> {
         match value.ion_type() {
             IonType::Symbol => {
                 value.as_sym().unwrap()
@@ -180,12 +162,47 @@ impl TryFrom<&OwnedElement> for TypeRef {
                     })
             }
             IonType::Struct =>
-                Ok(TypeRef::AnonymousType(value
+                Ok(TypeRef::AnonymousType(Type::parse_from_ion_element(value
                                            .as_struct()
-                                           .unwrap().try_into()?)),
+                                           .unwrap(), type_cache)?)),
             _ => Err(invalid_schema_error_raw(
                 "type reference can either be a symbol(For base/alias type reference) or a struct (for anonymous type reference)",
             )),
+        }
+    }
+
+    /// Resolves a type_reference into a [Type] that can be using the type_cache
+    pub fn resolve_type_reference(
+        type_reference: &TypeRef,
+        type_cache: SharedTypeCache,
+    ) -> IonSchemaResult<Type> {
+        match type_reference {
+            TypeRef::ISLCoreType(ion_type) => {
+                // TODO: create CoreType struct for storing ISLCoreType type definition instead of Type
+                // inserts ISLCoreType as a Type into type_cache
+                type_cache.borrow_mut().insert(
+                    format!("{:?}", ion_type),
+                    Type::new(format!("{:?}", ion_type), vec![]),
+                );
+                Ok(type_cache
+                    .borrow_mut()
+                    .get(&format!("{:?}", ion_type))
+                    .unwrap()
+                    .to_owned())
+            }
+            TypeRef::AliasType(alias) => {
+                // verify if the AliasType actually exists in the type_cache or throw an error
+                if type_cache.borrow_mut().get(alias).is_none() {
+                    unresolvable_schema_error(format!(
+                        "Schema type reference: {:?} does not exists",
+                        alias
+                    ))
+                } else {
+                    Ok(type_cache.borrow_mut().get(alias).unwrap().to_owned())
+                }
+            }
+            TypeRef::AnonymousType(type_def) => Ok(type_def.to_owned()),
+            //TODO: add a check for ImportType type reference here
         }
     }
 }
