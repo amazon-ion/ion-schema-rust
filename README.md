@@ -1,10 +1,10 @@
 # Amazon Ion Schema Rust
+[![License](https://img.shields.io/hexpm/l/plug.svg)](https://github.com/amzn/ion-schema-rust/blob/main/LICENSE)
+[![Rust](https://github.com/amzn/ion-schema-rust/workflows/Rust/badge.svg)](https://github.com/amzn/ion-schema-rust/actions?query=workflow%3A%22Rust%22)
 
 An implementation of [Amazon Ion Schema](http://amzn.github.io/ion-schema) in Rust.
 
-## Getting Started
-
-Example usage TBD
+**This package is considered experimental, under active/early development, and the API is subject to change.**
 
 ## Development
 
@@ -25,6 +25,16 @@ by running the following commands:
 ```bash
 $ git submodule init
 $ git submodule update
+```
+
+Building the project,
+```bash
+$ cargo build --workspace --all-targets
+```
+
+Running all tests for `ion-schema-rust`,
+```bash
+$ cargo test --workspace
 ```
 
 ## License
