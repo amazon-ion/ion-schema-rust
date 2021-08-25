@@ -32,7 +32,7 @@ impl Resolver {
         &mut self,
         elements: I,
         id: &str,
-        type_cache: SharedTypeCache,
+        type_cache: &SharedTypeCache,
     ) -> IonSchemaResult<Rc<Schema>> {
         let mut types: HashMap<String, Type> = HashMap::new();
         let mut found_header = false;
@@ -42,25 +42,22 @@ impl Resolver {
             // load header for schema
             if annotations.contains(&&text_token("schema_header")) {
                 found_header = true;
-                let imports = try_to!(value.as_struct())
+                if let Some(imports) = try_to!(value.as_struct())
                     .get("imports")
-                    .and_then(|it| it.as_sequence());
-
-                if imports.is_some() {
-                    for import in imports.unwrap().iter() {
+                    .and_then(|it| it.as_sequence())
+                {
+                    for import in imports.iter() {
                         let import_id = try_to!(try_to!(import.as_struct()).get("id"));
                         let imported_schema =
-                            self.load_schema(try_to!(import_id.as_str()), Rc::clone(&type_cache))?;
+                            self.load_schema(try_to!(import_id.as_str()), type_cache)?;
                         types.extend(imported_schema.get_types().to_owned().into_iter());
                     }
                 }
             }
             // load types for schema
             else if annotations.contains(&&text_token("type")) {
-                let type_def: Type = Type::parse_from_ion_element(
-                    try_to!(value.as_struct()),
-                    Rc::clone(&type_cache),
-                )?;
+                let type_def: Type =
+                    Type::parse_from_ion_element(try_to!(value.as_struct()), type_cache)?;
                 types.insert(type_def.name().to_owned(), type_def);
             }
             // load footer for schema
@@ -80,7 +77,7 @@ impl Resolver {
     fn load_schema<A: AsRef<str>>(
         &mut self,
         id: A,
-        type_cache: SharedTypeCache,
+        type_cache: &SharedTypeCache,
     ) -> IonSchemaResult<Rc<Schema>> {
         let id: &str = id.as_ref();
         if let Some(schema) = self.resolved_schema_cache.get(id) {
@@ -123,7 +120,7 @@ impl SchemaSystem {
     /// If an Authority throws an exception, resolution silently proceeds to the next Authority.
     fn load_schema<A: AsRef<str>>(&mut self, id: A) -> IonSchemaResult<Rc<Schema>> {
         self.resolver
-            .load_schema(id, Rc::new(RefCell::new(HashMap::new())))
+            .load_schema(id, &Rc::new(RefCell::new(HashMap::new())))
     }
 
     /// Returns authorities associated with this [SchemaSystem]

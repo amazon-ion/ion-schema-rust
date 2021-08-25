@@ -5,7 +5,6 @@ use crate::violation::Violations;
 use ion_rs::value::owned::{OwnedElement, OwnedStruct};
 use ion_rs::value::{Element, Struct, SymbolToken};
 use ion_rs::IonType;
-use std::rc::Rc;
 
 /// Provides validation for Type
 pub trait TypeValidator {
@@ -44,7 +43,7 @@ impl Type {
     /// Parse constraints inside an [OwnedStruct] to a schema [Type]
     pub fn parse_from_ion_element(
         ion_struct: &OwnedStruct,
-        type_cache: SharedTypeCache,
+        type_cache: &SharedTypeCache,
     ) -> IonSchemaResult<Self> {
         let mut constraints = vec![];
 
@@ -72,12 +71,12 @@ impl Type {
             let constraint = match constraint_name {
                 "all_of" => {
                     let all_of: AllOfConstraint =
-                        AllOfConstraint::parse_from_ion_element(value, Rc::clone(&type_cache))?;
+                        AllOfConstraint::parse_from_ion_element(value, type_cache)?;
                     Constraint::AllOf(all_of)
                 }
                 "type" => {
                     let type_constraint: TypeConstraint =
-                        TypeConstraint::parse_from_ion_element(value, Rc::clone(&type_cache))?;
+                        TypeConstraint::parse_from_ion_element(value, type_cache)?;
                     Constraint::Type(type_constraint)
                 }
                 _ => {
@@ -116,7 +115,7 @@ impl TypeValidator for Type {
 #[derive(Debug, Clone)]
 pub enum TypeRef {
     /// represents core ion type reference
-    ISLCoreType(IonType),
+    IslCoreType(IonType),
     /// represents a type reference which represents a type imported from another schema
     AliasType(String),
     /// represents a type reference defined as an inlined import type from another schema
@@ -130,7 +129,7 @@ impl TypeRef {
     /// Tries to create a schema type reference from the given OwnedElement
     pub fn parse_from_ion_element(
         value: &OwnedElement,
-        type_cache: SharedTypeCache,
+        type_cache: &SharedTypeCache,
     ) -> IonSchemaResult<Self> {
         match value.ion_type() {
             IonType::Symbol => {
@@ -143,18 +142,18 @@ impl TypeRef {
                     })
                     .and_then(|type_reference| {
                         let ion_type = match type_reference {
-                            "int" => TypeRef::ISLCoreType(IonType::Integer),
-                            "float" => TypeRef::ISLCoreType(IonType::Float),
-                            "decimal" => TypeRef::ISLCoreType(IonType::Decimal),
-                            "timestamp" => TypeRef::ISLCoreType(IonType::Timestamp),
-                            "string" => TypeRef::ISLCoreType(IonType::String),
-                            "symbol" => TypeRef::ISLCoreType(IonType::Symbol),
-                            "bool" => TypeRef::ISLCoreType(IonType::Boolean),
-                            "blob" => TypeRef::ISLCoreType(IonType::Blob),
-                            "clob" => TypeRef::ISLCoreType(IonType::Clob),
-                            "sexp" => TypeRef::ISLCoreType(IonType::SExpression),
-                            "list" => TypeRef::ISLCoreType(IonType::List),
-                            "struct" => TypeRef::ISLCoreType(IonType::Struct),
+                            "int" => TypeRef::IslCoreType(IonType::Integer),
+                            "float" => TypeRef::IslCoreType(IonType::Float),
+                            "decimal" => TypeRef::IslCoreType(IonType::Decimal),
+                            "timestamp" => TypeRef::IslCoreType(IonType::Timestamp),
+                            "string" => TypeRef::IslCoreType(IonType::String),
+                            "symbol" => TypeRef::IslCoreType(IonType::Symbol),
+                            "bool" => TypeRef::IslCoreType(IonType::Boolean),
+                            "blob" => TypeRef::IslCoreType(IonType::Blob),
+                            "clob" => TypeRef::IslCoreType(IonType::Clob),
+                            "sexp" => TypeRef::IslCoreType(IonType::SExpression),
+                            "list" => TypeRef::IslCoreType(IonType::List),
+                            "struct" => TypeRef::IslCoreType(IonType::Struct),
                             // TODO: add a match for other core types like: lob, text, number, document, any
                             _ => TypeRef::AliasType(type_reference.to_owned()),
                         };
@@ -174,10 +173,10 @@ impl TypeRef {
     /// Resolves a type_reference into a [Type] that can be using the type_cache
     pub fn resolve_type_reference(
         type_reference: &TypeRef,
-        type_cache: SharedTypeCache,
+        type_cache: &SharedTypeCache,
     ) -> IonSchemaResult<Type> {
         match type_reference {
-            TypeRef::ISLCoreType(ion_type) => {
+            TypeRef::IslCoreType(ion_type) => {
                 // TODO: create CoreType struct for storing ISLCoreType type definition instead of Type
                 // inserts ISLCoreType as a Type into type_cache
                 type_cache.borrow_mut().insert(
@@ -192,13 +191,12 @@ impl TypeRef {
             }
             TypeRef::AliasType(alias) => {
                 // verify if the AliasType actually exists in the type_cache or throw an error
-                if type_cache.borrow_mut().get(alias).is_none() {
-                    unresolvable_schema_error(format!(
-                        "Schema type reference: {:?} does not exists",
+                match type_cache.borrow_mut().get(alias) {
+                    Some(type_def) => Ok(type_def.to_owned()),
+                    None => unresolvable_schema_error(format!(
+                        "Could not resolve type reference: {:?} does not exist",
                         alias
-                    ))
-                } else {
-                    Ok(type_cache.borrow_mut().get(alias).unwrap().to_owned())
+                    )),
                 }
             }
             TypeRef::AnonymousType(type_def) => Ok(type_def.to_owned()),

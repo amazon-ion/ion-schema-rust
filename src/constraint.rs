@@ -5,7 +5,6 @@ use crate::violation::Violations;
 use ion_rs::value::owned::OwnedElement;
 use ion_rs::value::{Element, Sequence};
 use ion_rs::IonType;
-use std::rc::Rc;
 
 /// Provides validation for schema Constraint
 pub trait ConstraintValidator {
@@ -40,7 +39,7 @@ impl AllOfConstraint {
     /// Tries to create an [AllOf] constraint from the given OwnedElement
     pub fn parse_from_ion_element(
         ion: &OwnedElement,
-        type_cache: SharedTypeCache,
+        type_cache: &SharedTypeCache,
     ) -> IonSchemaResult<Self> {
         if ion.ion_type() != IonType::List {
             return Err(invalid_schema_error_raw(format!(
@@ -52,12 +51,12 @@ impl AllOfConstraint {
             .as_sequence()
             .unwrap()
             .iter()
-            .map(|e| TypeRef::parse_from_ion_element(e, Rc::clone(&type_cache)))
+            .map(|e| TypeRef::parse_from_ion_element(e, type_cache))
             .collect::<IonSchemaResult<Vec<TypeRef>>>()?;
 
         let resolved_types: Vec<Type> = types
             .iter()
-            .map(|t| TypeRef::resolve_type_reference(t, Rc::clone(&type_cache)))
+            .map(|t| TypeRef::resolve_type_reference(t, type_cache))
             .collect::<IonSchemaResult<Vec<Type>>>()?;
         Ok(AllOfConstraint::new(resolved_types.to_owned()))
     }
@@ -84,7 +83,7 @@ impl TypeConstraint {
     /// Tries to create a [Type] constraint from the given OwnedElement
     pub fn parse_from_ion_element(
         ion: &OwnedElement,
-        type_cache: SharedTypeCache,
+        type_cache: &SharedTypeCache,
     ) -> IonSchemaResult<Self> {
         if ion.ion_type() != IonType::Symbol && ion.ion_type() != IonType::Struct {
             return Err(invalid_schema_error_raw(format!(
@@ -92,8 +91,8 @@ impl TypeConstraint {
                 ion.ion_type()
             )));
         }
-        let type_reference: TypeRef = TypeRef::parse_from_ion_element(ion, Rc::clone(&type_cache))?;
-        let type_def = TypeRef::resolve_type_reference(&type_reference, Rc::clone(&type_cache))?;
+        let type_reference: TypeRef = TypeRef::parse_from_ion_element(ion, type_cache)?;
+        let type_def = TypeRef::resolve_type_reference(&type_reference, type_cache)?;
         Ok(TypeConstraint::new(type_def))
     }
 }
