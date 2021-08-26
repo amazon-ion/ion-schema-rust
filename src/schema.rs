@@ -1,6 +1,7 @@
 use crate::import::Import;
 use crate::types::Type;
-use ion_rs::value::owned::OwnedElement;
+use std::collections::hash_map::IntoIter;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 /// A Schema is a collection of zero or more [Type]s.
@@ -11,18 +12,16 @@ use std::rc::Rc;
 #[derive(Debug, Clone)]
 pub struct Schema {
     id: String,
-    imports: Vec<Rc<Schema>>, //TODO: Use HashMap for imports and types
-    types: Vec<Type>,
-    content: Vec<OwnedElement>, //TODO: remove this and instead pass a Vec<Type> directly to Schema constructor
+    imports: Vec<Rc<Schema>>, //TODO: Use HashMap for imports
+    types: HashMap<String, Type>,
 }
 
 impl Schema {
-    pub fn new<A: AsRef<str>>(id: A, content: Vec<OwnedElement>) -> Self {
+    pub fn new<A: AsRef<str>>(id: A, types: IntoIter<String, Type>) -> Self {
         Self {
             id: id.as_ref().to_owned(),
             imports: vec![],
-            types: vec![],
-            content,
+            types: types.collect(),
         }
     }
 
@@ -47,15 +46,14 @@ impl Schema {
 
     /// Returns the requested type, if present in this schema;
     /// otherwise returns None.
-    // TODO: could not name the method as type because its a rust keyword
-    fn schema_type(&self, name: String) -> Option<Type> {
-        todo!()
+    fn get_type(&self, name: String) -> Option<&Type> {
+        self.types.get(&name)
     }
 
+    //TODO: change get_types() return type to SchemaTypeIterator and define SchemaTypeIterator
     /// Returns an iterator over the types in this schema.
-    // TODO: can be changed to return &impl Iterator<Item=Type> based on what is decided for implementation of the method
-    fn types(&self) -> &[Type] {
-        todo!()
+    pub(crate) fn get_types(&self) -> &HashMap<String, Type> {
+        &self.types
     }
 
     /// Returns a new [Schema] instance containing all the types of this
