@@ -1,5 +1,5 @@
 use crate::import::Import;
-use crate::system::TypeCache;
+use crate::system::TypeStore;
 use crate::types::Type;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -13,11 +13,11 @@ use std::rc::Rc;
 pub struct Schema {
     id: String,
     imports: Vec<Rc<Schema>>, //TODO: Use HashMap for imports
-    types: TypeCache,
+    types: Rc<TypeStore>,
 }
 
 impl Schema {
-    pub fn new<A: AsRef<str>>(id: A, types: TypeCache) -> Self {
+    pub(crate) fn new<A: AsRef<str>>(id: A, types: Rc<TypeStore>) -> Self {
         Self {
             id: id.as_ref().to_owned(),
             imports: vec![],
@@ -46,8 +46,8 @@ impl Schema {
 
     /// Returns the requested type, if present in this schema;
     /// otherwise returns None.
-    fn get_type(&self, name: String) -> Option<&Type> {
-        self.types.get_type_by_name(&name)
+    fn get_type<A: AsRef<str>>(&self, name: A) -> Option<&Type> {
+        self.types.get_type_by_name(name.as_ref())
     }
 
     //TODO: change get_types() return type to SchemaTypeIterator and define SchemaTypeIterator
