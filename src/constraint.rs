@@ -1,6 +1,6 @@
 use crate::result::{invalid_schema_error_raw, IonSchemaResult};
-use crate::system::SharedTypeCache;
-use crate::types::{Type, TypeRef};
+use crate::system::{SharedTypeCache, TypeId};
+use crate::types::TypeRef;
 use crate::violation::Violations;
 use ion_rs::value::owned::OwnedElement;
 use ion_rs::value::{Element, Sequence};
@@ -26,11 +26,11 @@ pub enum Constraint {
 /// [all_of]: https://amzn.github.io/ion-schema/docs/spec.html#all_of
 #[derive(Debug, Clone)]
 pub struct AllOfConstraint {
-    type_references: Vec<Type>,
+    type_references: Vec<TypeId>,
 }
 
 impl AllOfConstraint {
-    pub fn new(types: Vec<Type>) -> Self {
+    pub fn new(types: Vec<TypeId>) -> Self {
         Self {
             type_references: types,
         }
@@ -54,10 +54,10 @@ impl AllOfConstraint {
             .map(|e| TypeRef::parse_from_ion_element(e, type_cache))
             .collect::<IonSchemaResult<Vec<TypeRef>>>()?;
 
-        let resolved_types: Vec<Type> = types
+        let resolved_types: Vec<TypeId> = types
             .iter()
             .map(|t| TypeRef::resolve_type_reference(t, type_cache))
-            .collect::<IonSchemaResult<Vec<Type>>>()?;
+            .collect::<IonSchemaResult<Vec<TypeId>>>()?;
         Ok(AllOfConstraint::new(resolved_types.to_owned()))
     }
 }
@@ -72,11 +72,11 @@ impl ConstraintValidator for AllOfConstraint {
 /// [type]: https://amzn.github.io/ion-schema/docs/spec.html#type
 #[derive(Debug, Clone)]
 pub struct TypeConstraint {
-    type_reference: Type,
+    type_reference: TypeId,
 }
 
 impl TypeConstraint {
-    pub fn new(type_reference: Type) -> Self {
+    pub fn new(type_reference: TypeId) -> Self {
         Self { type_reference }
     }
 
@@ -92,8 +92,8 @@ impl TypeConstraint {
             )));
         }
         let type_reference: TypeRef = TypeRef::parse_from_ion_element(ion, type_cache)?;
-        let type_def = TypeRef::resolve_type_reference(&type_reference, type_cache)?;
-        Ok(TypeConstraint::new(type_def))
+        let type_id = TypeRef::resolve_type_reference(&type_reference, type_cache)?;
+        Ok(TypeConstraint::new(type_id))
     }
 }
 

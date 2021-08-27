@@ -1,6 +1,6 @@
 use crate::constraint::{AllOfConstraint, Constraint, TypeConstraint};
 use crate::result::{invalid_schema_error_raw, unresolvable_schema_error, IonSchemaResult};
-use crate::system::SharedTypeCache;
+use crate::system::{SharedTypeCache, TypeId};
 use crate::violation::Violations;
 use ion_rs::value::owned::{OwnedElement, OwnedStruct};
 use ion_rs::value::{Element, Struct, SymbolToken};
@@ -94,7 +94,7 @@ impl Type {
         let type_def = Type::new(type_name.to_owned(), constraints);
         type_cache
             .borrow_mut()
-            .insert(type_name, type_def.to_owned());
+            .add_named_type(&type_name, type_def.to_owned());
         Ok(type_def.to_owned())
     }
 }
@@ -174,32 +174,29 @@ impl TypeRef {
     pub fn resolve_type_reference(
         type_reference: &TypeRef,
         type_cache: &SharedTypeCache,
-    ) -> IonSchemaResult<Type> {
+    ) -> IonSchemaResult<TypeId> {
         match type_reference {
             TypeRef::IslCoreType(ion_type) => {
                 // TODO: create CoreType struct for storing ISLCoreType type definition instead of Type
                 // inserts ISLCoreType as a Type into type_cache
-                type_cache.borrow_mut().insert(
-                    format!("{:?}", ion_type),
+                Ok(type_cache.borrow_mut().add_named_type(
+                    &format!("{:?}", ion_type),
                     Type::new(format!("{:?}", ion_type), vec![]),
-                );
-                Ok(type_cache
-                    .borrow_mut()
-                    .get(&format!("{:?}", ion_type))
-                    .unwrap()
-                    .to_owned())
+                ))
             }
             TypeRef::AliasType(alias) => {
                 // verify if the AliasType actually exists in the type_cache or throw an error
-                match type_cache.borrow_mut().get(alias) {
-                    Some(type_def) => Ok(type_def.to_owned()),
+                match type_cache.borrow_mut().get_type_id_by_name(alias) {
+                    Some(type_id) => Ok(type_id.to_owned()),
                     None => unresolvable_schema_error(format!(
                         "Could not resolve type reference: {:?} does not exist",
                         alias
                     )),
                 }
             }
-            TypeRef::AnonymousType(type_def) => Ok(type_def.to_owned()),
+            TypeRef::AnonymousType(type_def) => Ok(type_cache
+                .borrow_mut()
+                .add_anonymous_type(type_def.to_owned())),
             //TODO: add a check for ImportType type reference here
         }
     }
