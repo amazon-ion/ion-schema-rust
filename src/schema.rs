@@ -1,8 +1,8 @@
 use crate::import::Import;
 use crate::system::TypeStore;
 use crate::types::Type;
-use std::collections::HashMap;
 use std::rc::Rc;
+use std::slice::Iter;
 
 /// A Schema is a collection of zero or more [Type]s.
 ///
@@ -50,10 +50,11 @@ impl Schema {
         self.types.get_type_by_name(name.as_ref())
     }
 
-    //TODO: change get_types() return type to SchemaTypeIterator and define SchemaTypeIterator
     /// Returns an iterator over the types in this schema.
-    pub(crate) fn get_types(&self) -> &HashMap<String, Type> {
-        todo!()
+    pub(crate) fn get_types(&self) -> SchemaTypeIterator {
+        SchemaTypeIterator {
+            types: self.types.get_types().iter(),
+        }
     }
 
     /// Returns a new [Schema] instance containing all the types of this
@@ -62,5 +63,18 @@ impl Schema {
     /// from this instance.
     fn plus_type(&self, schema_type: Type) -> Self {
         todo!()
+    }
+}
+
+/// Provides an Iterator which returns [Type]s inside a [Schema]
+pub struct SchemaTypeIterator<'a> {
+    types: Iter<'a, Type>,
+}
+
+impl<'a> Iterator for SchemaTypeIterator<'a> {
+    type Item = &'a Type;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.types.next()
     }
 }

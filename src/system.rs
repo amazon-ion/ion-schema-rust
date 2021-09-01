@@ -31,6 +31,11 @@ impl TypeStore {
         }
     }
 
+    /// Returns [Type]s stored in the [TypeStore] to be used by [SchemaTypeIterator]
+    pub fn get_types(&self) -> &[Type] {
+        &self.types_by_id
+    }
+
     /// Provides the [Type] associated with given name if it exists in the [TypeStore]  
     /// Otherwise returns None
     pub fn get_type_by_name(&self, name: &str) -> Option<&Type> {
