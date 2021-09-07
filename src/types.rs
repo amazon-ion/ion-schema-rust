@@ -48,7 +48,7 @@ impl TypeDefinition {
     }
 
     /// Parse constraints inside an [OwnedStruct] to a schema [Type]
-    pub fn parse_from_isl_type(
+    pub fn parse_from_isl_type_and_update_type_store(
         isl_type: &IslType,
         type_store: &SharedTypeStore,
     ) -> IonSchemaResult<Self> {
@@ -80,7 +80,17 @@ impl TypeDefinition {
             };
             constraints.push(constraint);
         }
-        Ok(TypeDefinition::new(type_name.to_owned(), constraints))
+        // add the resolved type_def into type_store
+        let type_def = TypeDefinition::new(type_name.to_owned(), constraints);
+        match type_name {
+            Some(name) => type_store
+                .borrow_mut()
+                .add_named_type(name, type_def.to_owned()),
+            None => type_store
+                .borrow_mut()
+                .add_anonymous_type(type_def.to_owned()),
+        };
+        Ok(type_def)
     }
 }
 

@@ -201,7 +201,9 @@ impl IslTypeRef {
                 }
             }
             IslTypeRef::AnonymousType(isl_type) => {
-                let type_def = TypeDefinition::parse_from_isl_type(isl_type, type_store)?;
+                let type_def = TypeDefinition::parse_from_isl_type_and_update_type_store(
+                    isl_type, type_store,
+                )?;
                 Ok(type_store.borrow_mut().add_anonymous_type(type_def))
             } //TODO: add a check for ImportType type reference here
         }

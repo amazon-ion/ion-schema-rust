@@ -135,11 +135,10 @@ impl Resolver {
                 // convert OwnedElement to IslType and then IslType to TypeDefinition
                 let isl_type: IslType = try_to!(value.as_struct()).try_into()?;
                 let type_def: TypeDefinition =
-                    TypeDefinition::parse_from_isl_type(&isl_type, type_store)?;
-                // add the resolved type_def into type_store
-                type_store
-                    .borrow_mut()
-                    .add_named_type(type_def.to_owned().name().as_ref().unwrap(), type_def);
+                    TypeDefinition::parse_from_isl_type_and_update_type_store(
+                        &isl_type, type_store,
+                    )?;
+
                 // clear parent information from type_store as the type is already added in the type_store now
                 type_store.borrow_mut().clear_parent();
             }
