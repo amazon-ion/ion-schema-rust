@@ -1,10 +1,8 @@
-use crate::result::{invalid_schema_error_raw, IonSchemaResult};
+use crate::isl::IslTypeRef;
+use crate::result::IonSchemaResult;
 use crate::system::{SharedTypeStore, TypeId};
-use crate::types::TypeRef;
 use crate::violation::Violations;
 use ion_rs::value::owned::OwnedElement;
-use ion_rs::value::{Element, Sequence};
-use ion_rs::IonType;
 
 /// Provides validation for schema Constraint
 pub trait ConstraintValidator {
@@ -35,26 +33,13 @@ impl AllOfConstraint {
     }
 
     /// Tries to create an [AllOf] constraint from the given OwnedElement
-    pub fn parse_from_ion_element(
-        ion: &OwnedElement,
+    pub fn parse_from_isl_constraint(
+        type_references: &[IslTypeRef],
         type_store: &SharedTypeStore,
     ) -> IonSchemaResult<Self> {
-        if ion.ion_type() != IonType::List {
-            return Err(invalid_schema_error_raw(format!(
-                "all_of constraint was a {:?} instead of a list",
-                ion.ion_type()
-            )));
-        }
-        let types: Vec<TypeRef> = ion
-            .as_sequence()
-            .unwrap()
+        let resolved_types: Vec<TypeId> = type_references
             .iter()
-            .map(|e| TypeRef::parse_from_ion_element(e, type_store))
-            .collect::<IonSchemaResult<Vec<TypeRef>>>()?;
-
-        let resolved_types: Vec<TypeId> = types
-            .iter()
-            .map(|t| TypeRef::resolve_type_reference(t, type_store))
+            .map(|t| IslTypeRef::resolve_type_reference(t, type_store))
             .collect::<IonSchemaResult<Vec<TypeId>>>()?;
         Ok(AllOfConstraint::new(resolved_types.to_owned()))
     }
@@ -79,18 +64,11 @@ impl TypeConstraint {
     }
 
     /// Tries to create a [Type] constraint from the given OwnedElement
-    pub fn parse_from_ion_element(
-        ion: &OwnedElement,
+    pub fn parse_from_isl_constraint(
+        type_reference: &IslTypeRef,
         type_store: &SharedTypeStore,
     ) -> IonSchemaResult<Self> {
-        if ion.ion_type() != IonType::Symbol && ion.ion_type() != IonType::Struct {
-            return Err(invalid_schema_error_raw(format!(
-                "type constraint was a {:?} instead of a symbol/struct",
-                ion.ion_type()
-            )));
-        }
-        let type_reference: TypeRef = TypeRef::parse_from_ion_element(ion, type_store)?;
-        let type_id = TypeRef::resolve_type_reference(&type_reference, type_store)?;
+        let type_id = IslTypeRef::resolve_type_reference(type_reference, type_store)?;
         Ok(TypeConstraint::new(type_id))
     }
 }

@@ -1,13 +1,15 @@
 use crate::authority::Authority;
+use crate::isl::IslType;
 use crate::result::{
     invalid_schema_error, unresolvable_schema_error, IonSchemaError, IonSchemaResult,
 };
 use crate::schema::Schema;
-use crate::types::Type;
+use crate::types::TypeDefinition;
 use ion_rs::value::owned::{text_token, OwnedElement, OwnedSymbolToken};
 use ion_rs::value::{Element, Sequence, Struct};
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::io::ErrorKind;
 use std::rc::Rc;
 
@@ -20,7 +22,8 @@ pub type TypeId = usize;
 #[derive(Debug, Clone)]
 pub struct TypeStore {
     ids_by_name: HashMap<String, TypeId>,
-    types_by_id: Vec<Type>,
+    types_by_id: Vec<TypeDefinition>,
+    parent: Option<(String, TypeId)>,
 }
 
 impl TypeStore {
@@ -28,17 +31,18 @@ impl TypeStore {
         Self {
             ids_by_name: HashMap::new(),
             types_by_id: Vec::new(),
+            parent: None,
         }
     }
 
     /// Returns [Type]s stored in the [TypeStore] to be used by [SchemaTypeIterator]
-    pub fn get_types(&self) -> &[Type] {
+    pub fn get_types(&self) -> &[TypeDefinition] {
         &self.types_by_id
     }
 
     /// Provides the [Type] associated with given name if it exists in the [TypeStore]  
     /// Otherwise returns None
-    pub fn get_type_by_name(&self, name: &str) -> Option<&Type> {
+    pub fn get_type_by_name(&self, name: &str) -> Option<&TypeDefinition> {
         self.ids_by_name
             .get(name)
             .and_then(|id| self.types_by_id.get(*id))
@@ -52,13 +56,13 @@ impl TypeStore {
 
     /// Provides the [Type] associated with given [TypeId] if it exists in the [TypeStore]  
     /// Otherwise returns None
-    pub fn get_type_by_id(&self, id: TypeId) -> Option<&Type> {
+    pub fn get_type_by_id(&self, id: TypeId) -> Option<&TypeDefinition> {
         self.types_by_id.get(id)
     }
 
     /// Adds the [Type] and the associated name in the [TypeStore] and returns the [TypeId] for it
     /// If the name already exists in the [TypeStore] it returns the associated [TypeId]
-    pub fn add_named_type(&mut self, name: &str, type_def: Type) -> TypeId {
+    pub fn add_named_type(&mut self, name: &str, type_def: TypeDefinition) -> TypeId {
         if let Some(exists) = self.ids_by_name.get(name) {
             return exists.to_owned();
         }
@@ -69,10 +73,22 @@ impl TypeStore {
     }
 
     /// Adds the [Type] in the [TypeStore] and returns the [TypeId] for it
-    pub fn add_anonymous_type(&mut self, type_def: Type) -> TypeId {
+    pub fn add_anonymous_type(&mut self, type_def: TypeDefinition) -> TypeId {
         let type_id = self.types_by_id.len();
         self.types_by_id.push(type_def);
         type_id
+    }
+
+    pub fn add_parent(&mut self, name: String) {
+        self.parent = Some((name, self.types_by_id.len()))
+    }
+
+    pub fn get_parent(&self) -> &Option<(String, TypeId)> {
+        &self.parent
+    }
+
+    pub fn clear_parent(&mut self) {
+        self.parent = None
     }
 }
 
@@ -116,12 +132,16 @@ impl Resolver {
             }
             // load types for schema
             else if annotations.contains(&&text_token("type")) {
-                let type_def: Type =
-                    Type::parse_from_ion_element(try_to!(value.as_struct()), type_store)?;
+                // convert OwnedElement to IslType and then IslType to TypeDefinition
+                let isl_type: IslType = try_to!(value.as_struct()).try_into()?;
+                let type_def: TypeDefinition =
+                    TypeDefinition::parse_from_isl_type(&isl_type, type_store)?;
                 // add the resolved type_def into type_store
                 type_store
                     .borrow_mut()
-                    .add_named_type(type_def.to_owned().name(), type_def);
+                    .add_named_type(type_def.to_owned().name().as_ref().unwrap(), type_def);
+                // clear parent information from type_store as the type is already added in the type_store now
+                type_store.borrow_mut().clear_parent();
             }
             // load footer for schema
             else if annotations.contains(&&text_token("schema_footer")) {

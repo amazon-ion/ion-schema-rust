@@ -1,6 +1,6 @@
 use crate::import::Import;
 use crate::system::TypeStore;
-use crate::types::Type;
+use crate::types::TypeDefinition;
 use std::rc::Rc;
 use std::slice::Iter;
 
@@ -46,7 +46,7 @@ impl Schema {
 
     /// Returns the requested type, if present in this schema;
     /// otherwise returns None.
-    fn get_type<A: AsRef<str>>(&self, name: A) -> Option<&Type> {
+    fn get_type<A: AsRef<str>>(&self, name: A) -> Option<&TypeDefinition> {
         self.types.get_type_by_name(name.as_ref())
     }
 
@@ -61,18 +61,18 @@ impl Schema {
     /// instance plus the provided type.  Note that the added type
     /// in the returned instance will hide a type of the same name
     /// from this instance.
-    fn plus_type(&self, schema_type: Type) -> Self {
+    fn plus_type(&self, schema_type: TypeDefinition) -> Self {
         todo!()
     }
 }
 
 /// Provides an Iterator which returns [Type]s inside a [Schema]
 pub struct SchemaTypeIterator<'a> {
-    types: Iter<'a, Type>,
+    types: Iter<'a, TypeDefinition>,
 }
 
 impl<'a> Iterator for SchemaTypeIterator<'a> {
-    type Item = &'a Type;
+    type Item = &'a TypeDefinition;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.types.next()
