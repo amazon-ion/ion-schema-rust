@@ -8,6 +8,8 @@ use ion_rs::value::{Element, Sequence, Struct, SymbolToken};
 use ion_rs::IonType;
 use std::convert::{TryFrom, TryInto};
 
+// TODO: create a module for isl file and modularize different isl* structs defined below
+// TODO: add a module level documentation for isl module
 /// Represents a public facing API for schema constraints [IslConstraint] which stores IslTypeRef
 #[derive(Debug, Clone)]
 pub enum IslConstraint {
@@ -44,12 +46,16 @@ impl TryFrom<&OwnedStruct> for IslType {
         let mut constraints = vec![];
 
         // parses the name of the type specified by schema
-        let type_name: Option<String>=  match ion_struct.get("name") {
+        let type_name: Option<String> = match ion_struct.get("name") {
             Some(name_element) => match name_element.as_str() {
                 Some(name) => Some(name.to_owned()),
-                None => { return Err(invalid_schema_error_raw("A type name is not string/symbol, if the value is any null, or the text of the symbol is not defined.")) }
+                None => {
+                    return Err(invalid_schema_error_raw(
+                        "type names must be a string or a symbol with defined text",
+                    ))
+                }
             },
-            None => None // If the type is UNNAMED_TYPE_DEFINITION/ AnonymousType then set name as None
+            None => None, // If the type is UNNAMED_TYPE_DEFINITION/ AnonymousType then set name as None
         };
 
         // parses all the constraints inside a Type
@@ -102,20 +108,20 @@ impl TryFrom<&OwnedStruct> for IslType {
             };
             constraints.push(constraint);
         }
-        Ok(IslType::new(type_name.to_owned(), constraints))
+        Ok(IslType::new(type_name, constraints))
     }
 }
 
-/// Provides an internal representation of schema type reference.
-/// Type reference grammar is defined in [Ion Schema Spec]
+/// Provides an internal representation of a schema type reference.
+/// The type reference grammar is defined in the [Ion Schema Spec]
 /// [Ion Schema spec]: https://amzn.github.io/ion-schema/docs/spec.html#grammar
 #[derive(Debug, Clone)]
 pub enum IslTypeRef {
-    /// represents core ion type reference
+    /// Represents a reference to one of ISL's built-in core types:
     IslCoreType(IonType),
-    /// represents a type reference which represents a type imported from another schema
-    AliasType(String),
-    /// represents a type reference defined as an inlined import type from another schema
+    /// Represents a reference to a named type (including aliases)
+    NamedType(String),
+    /// Represents a type reference defined as an inlined import type from another schema
     // TODO: add ImportType(Import) where ImportType could either point to a schema represented by an id with all the types or a single type from inside it
     /// represents an unnamed type definition reference
     AnonymousType(IslType),
@@ -134,8 +140,8 @@ impl IslTypeRef {
                             "a base or alias type reference symbol doesn't have text",
                         )
                     })
-                    .and_then(|type_reference| {
-                        let ion_type = match type_reference {
+                    .and_then(|type_name| {
+                        let ion_type = match type_name {
                             "int" => IslTypeRef::IslCoreType(IonType::Integer),
                             "float" => IslTypeRef::IslCoreType(IonType::Float),
                             "decimal" => IslTypeRef::IslCoreType(IonType::Decimal),
@@ -149,7 +155,7 @@ impl IslTypeRef {
                             "list" => IslTypeRef::IslCoreType(IonType::List),
                             "struct" => IslTypeRef::IslCoreType(IonType::Struct),
                             // TODO: add a match for other core types like: lob, text, number, document, any
-                            _ => IslTypeRef::AliasType(type_reference.to_owned()),
+                            _ => IslTypeRef::NamedType(type_name.to_owned()),
                         };
                         Ok(ion_type)
                     })
@@ -162,6 +168,7 @@ impl IslTypeRef {
         }
     }
 
+    // TODO: break match arms into helper methods as we add more constraints
     /// Resolves a type_reference into a [TypeId] using the type_store
     pub fn resolve_type_reference(
         type_reference: &IslTypeRef,
@@ -176,7 +183,7 @@ impl IslTypeRef {
                     TypeDefinition::new(Some(format!("{:?}", ion_type)), vec![]),
                 ))
             }
-            IslTypeRef::AliasType(alias) => {
+            IslTypeRef::NamedType(alias) => {
                 let borrow_type_store = type_store.borrow_mut();
                 // verify if the AliasType actually exists in the type_store or throw an error
                 match borrow_type_store.get_type_id_by_name(alias) {

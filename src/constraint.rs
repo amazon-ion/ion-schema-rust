@@ -33,7 +33,7 @@ impl AllOfConstraint {
     }
 
     /// Tries to create an [AllOf] constraint from the given OwnedElement
-    pub fn parse_from_isl_constraint(
+    pub fn resolve_from_isl_constraint(
         type_references: &[IslTypeRef],
         type_store: &SharedTypeStore,
     ) -> IonSchemaResult<Self> {
@@ -41,7 +41,7 @@ impl AllOfConstraint {
             .iter()
             .map(|t| IslTypeRef::resolve_type_reference(t, type_store))
             .collect::<IonSchemaResult<Vec<TypeId>>>()?;
-        Ok(AllOfConstraint::new(resolved_types.to_owned()))
+        Ok(AllOfConstraint::new(resolved_types))
     }
 }
 
@@ -64,7 +64,7 @@ impl TypeConstraint {
     }
 
     /// Tries to create a [Type] constraint from the given OwnedElement
-    pub fn parse_from_isl_constraint(
+    pub fn resolve_from_isl_constraint(
         type_reference: &IslTypeRef,
         type_store: &SharedTypeStore,
     ) -> IonSchemaResult<Self> {

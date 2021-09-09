@@ -18,9 +18,9 @@ pub trait TypeValidator {
     fn validate(&self, value: &OwnedElement, issues: &mut Violations);
 }
 
-/// Provides a public facing schema type which has a reference to TypeStore
-/// to get the underlying TypeDefinition from TypeStore
-struct TypeRef {
+// Provides a public facing schema type which has a reference to TypeStore
+// to get the underlying TypeDefinition from TypeStore
+pub struct TypeRef {
     id: TypeId,
     type_store: Rc<TypeStore>,
 }
@@ -69,12 +69,12 @@ impl TypeDefinition {
             let constraint = match isl_constraint {
                 IslConstraint::AllOf(type_references) => {
                     let all_of: AllOfConstraint =
-                        AllOfConstraint::parse_from_isl_constraint(type_references, type_store)?;
+                        AllOfConstraint::resolve_from_isl_constraint(type_references, type_store)?;
                     Constraint::AllOf(all_of)
                 }
                 IslConstraint::Type(type_reference) => {
                     let type_constraint: TypeConstraint =
-                        TypeConstraint::parse_from_isl_constraint(type_reference, type_store)?;
+                        TypeConstraint::resolve_from_isl_constraint(type_reference, type_store)?;
                     Constraint::Type(type_constraint)
                 }
             };
