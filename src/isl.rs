@@ -1,7 +1,7 @@
 use crate::result::{
     invalid_schema_error_raw, unresolvable_schema_error, IonSchemaError, IonSchemaResult,
 };
-use crate::system::{SharedTypeStore, TypeId};
+use crate::system::{SharedContext, SharedTypeStore, TypeId};
 use crate::types::TypeDefinition;
 use ion_rs::value::owned::{OwnedElement, OwnedStruct};
 use ion_rs::value::{Element, Sequence, Struct, SymbolToken};
@@ -11,7 +11,7 @@ use std::convert::{TryFrom, TryInto};
 // TODO: create a module for isl file and modularize different isl* structs defined below
 // TODO: add a module level documentation for isl module
 /// Represents a public facing API for schema constraints [IslConstraint] which stores IslTypeRef
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum IslConstraint {
     AllOf(Vec<IslTypeRef>),
     Type(IslTypeRef),
@@ -35,6 +35,13 @@ impl IslType {
 
     pub fn constraints(&self) -> &[IslConstraint] {
         &self.constraints
+    }
+}
+
+/// Provides an implementation of PartialEq to compare two IslTypes
+impl PartialEq for IslType {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.constraints.eq(&other.constraints)
     }
 }
 
@@ -72,6 +79,7 @@ impl TryFrom<&OwnedStruct> for IslType {
             // TODO: add more constraints to match below
             let constraint = match constraint_name {
                 "all_of" => {
+                    //TODO: create a method/macro for this ion type check which can be reused
                     if value.ion_type() != IonType::List {
                         return Err(invalid_schema_error_raw(format!(
                             "all_of constraint was a {:?} instead of a list",
@@ -115,10 +123,10 @@ impl TryFrom<&OwnedStruct> for IslType {
 /// Provides an internal representation of a schema type reference.
 /// The type reference grammar is defined in the [Ion Schema Spec]
 /// [Ion Schema spec]: https://amzn.github.io/ion-schema/docs/spec.html#grammar
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum IslTypeRef {
     /// Represents a reference to one of ISL's built-in core types:
-    IslCoreType(IonType),
+    CoreIslType(IonType),
     /// Represents a reference to a named type (including aliases)
     NamedType(String),
     /// Represents a type reference defined as an inlined import type from another schema
@@ -142,18 +150,18 @@ impl IslTypeRef {
                     })
                     .and_then(|type_name| {
                         let ion_type = match type_name {
-                            "int" => IslTypeRef::IslCoreType(IonType::Integer),
-                            "float" => IslTypeRef::IslCoreType(IonType::Float),
-                            "decimal" => IslTypeRef::IslCoreType(IonType::Decimal),
-                            "timestamp" => IslTypeRef::IslCoreType(IonType::Timestamp),
-                            "string" => IslTypeRef::IslCoreType(IonType::String),
-                            "symbol" => IslTypeRef::IslCoreType(IonType::Symbol),
-                            "bool" => IslTypeRef::IslCoreType(IonType::Boolean),
-                            "blob" => IslTypeRef::IslCoreType(IonType::Blob),
-                            "clob" => IslTypeRef::IslCoreType(IonType::Clob),
-                            "sexp" => IslTypeRef::IslCoreType(IonType::SExpression),
-                            "list" => IslTypeRef::IslCoreType(IonType::List),
-                            "struct" => IslTypeRef::IslCoreType(IonType::Struct),
+                            "int" => IslTypeRef::CoreIslType(IonType::Integer),
+                            "float" => IslTypeRef::CoreIslType(IonType::Float),
+                            "decimal" => IslTypeRef::CoreIslType(IonType::Decimal),
+                            "timestamp" => IslTypeRef::CoreIslType(IonType::Timestamp),
+                            "string" => IslTypeRef::CoreIslType(IonType::String),
+                            "symbol" => IslTypeRef::CoreIslType(IonType::Symbol),
+                            "bool" => IslTypeRef::CoreIslType(IonType::Boolean),
+                            "blob" => IslTypeRef::CoreIslType(IonType::Blob),
+                            "clob" => IslTypeRef::CoreIslType(IonType::Clob),
+                            "sexp" => IslTypeRef::CoreIslType(IonType::SExpression),
+                            "list" => IslTypeRef::CoreIslType(IonType::List),
+                            "struct" => IslTypeRef::CoreIslType(IonType::Struct),
                             // TODO: add a match for other core types like: lob, text, number, document, any
                             _ => IslTypeRef::NamedType(type_name.to_owned()),
                         };
@@ -173,22 +181,24 @@ impl IslTypeRef {
     pub fn resolve_type_reference(
         type_reference: &IslTypeRef,
         type_store: &SharedTypeStore,
+        context: &SharedContext,
     ) -> IonSchemaResult<TypeId> {
         match type_reference {
-            IslTypeRef::IslCoreType(ion_type) => {
+            IslTypeRef::CoreIslType(ion_type) => {
                 // TODO: create CoreType struct for storing ISLCoreType type definition instead of Type
                 // inserts ISLCoreType as a Type into type_store
-                Ok(type_store.borrow_mut().add_named_type(
+                Ok(context.borrow_mut().add_named_type(
                     &format!("{:?}", ion_type),
                     TypeDefinition::new(Some(format!("{:?}", ion_type)), vec![]),
+                    type_store,
                 ))
             }
             IslTypeRef::NamedType(alias) => {
-                let borrow_type_store = type_store.borrow_mut();
+                let borrow_context = context.borrow_mut();
                 // verify if the AliasType actually exists in the type_store or throw an error
-                match borrow_type_store.get_type_id_by_name(alias) {
+                match borrow_context.get_type_id_by_name(alias, type_store) {
                     Some(type_id) => Ok(type_id.to_owned()),
-                    None => match borrow_type_store.get_parent() {
+                    None => match borrow_context.get_parent() {
                         Some(parent) => {
                             // if it is a self referencing type resolve it using parent information from type_store
                             if parent.0.eq(alias) {
@@ -208,11 +218,79 @@ impl IslTypeRef {
                 }
             }
             IslTypeRef::AnonymousType(isl_type) => {
+                let type_id = context.borrow().get_total_types();
                 let type_def = TypeDefinition::parse_from_isl_type_and_update_type_store(
-                    isl_type, type_store,
+                    isl_type, type_store, context,
                 )?;
-                Ok(type_store.borrow_mut().add_anonymous_type(type_def))
+                // get the last added anonymous type's type_id for given anonymous type
+                Ok(type_id)
             } //TODO: add a check for ImportType type reference here
         }
+    }
+}
+
+#[cfg(test)]
+mod isl_tests {
+    use super::*;
+    use ion_rs::value::owned::{text_token, OwnedElement, OwnedStruct};
+    use ion_rs::value::Builder;
+    use rstest::*;
+    use std::iter::FromIterator;
+
+    #[rstest(
+    isl_type1,isl_type2,
+    case::type_constraint_with_anonymous_type(
+        /* For a schema with single anonymous type as below: 
+            { type: int }
+         */
+        (&OwnedStruct::from_iter(vec![("type", OwnedElement::from(text_token("int")))].into_iter())).try_into().unwrap(),
+        IslType::new(None, vec![IslConstraint::Type(IslTypeRef::CoreIslType(IonType::Integer))])
+    ),
+    case::type_constraint_with_named_type(
+        /* For a schema with named type as below: 
+            { name: my_int, type: int }
+         */
+        (&OwnedStruct::from_iter(vec![("name", OwnedElement::from(text_token("my_int"))), ("type", OwnedElement::from(text_token("int")))].into_iter())).try_into().unwrap(),
+        IslType::new(Some("my_int".to_owned()), vec![IslConstraint::Type(IslTypeRef::CoreIslType(IonType::Integer))])
+    ),
+    case::type_constraint_with_self_reference_type(
+        /* For a schema with self reference type as below: 
+            { name: my_int, type: my_int }
+         */
+        (&OwnedStruct::from_iter(vec![("name", OwnedElement::from(text_token("my_int"))), ("type", OwnedElement::from(text_token("my_int")))].into_iter())).try_into().unwrap(),
+        IslType::new(Some("my_int".to_owned()), vec![IslConstraint::Type(IslTypeRef::NamedType("my_int".to_owned()))])
+    ),
+    case::type_constraint_with_nested_self_reference_type(
+        /* For a schema with nested self reference type as below: 
+            { name: my_int, type: { type: my_int } }
+         */
+        (&OwnedStruct::from_iter(vec![("name", OwnedElement::from(text_token("my_int"))), ("type", OwnedElement::new_struct(vec![("type", OwnedElement::from(text_token("my_int")))].into_iter()))].into_iter())).try_into().unwrap(),
+        IslType::new(Some("my_int".to_owned()), vec![IslConstraint::Type(IslTypeRef::AnonymousType(IslType::new(None, vec![IslConstraint::Type(IslTypeRef::NamedType("my_int".to_owned()))])))])
+    ),
+    case::type_constraint_with_nested_type(
+        /* For a schema with nested types as below: 
+            { name: my_int, type: { type: int } }
+         */
+        (&OwnedStruct::from_iter(vec![("name", OwnedElement::from(text_token("my_int"))), ("type", OwnedElement::new_struct(vec![("type", OwnedElement::from(text_token("int")))].into_iter()))].into_iter())).try_into().unwrap(),
+        IslType::new(Some("my_int".to_owned()), vec![IslConstraint::Type(IslTypeRef::AnonymousType(IslType::new(None, vec![IslConstraint::Type(IslTypeRef::CoreIslType(IonType::Integer))])))])
+    ),
+    case::type_constraint_with_nested_multiple_types(
+        /* For a schema with nested multiple types as below: 
+            { name: my_int, type: { type: int }, type: { type: my_int } }
+         */
+        (&OwnedStruct::from_iter(vec![("name", OwnedElement::from(text_token("my_int"))), ("type", OwnedElement::new_struct(vec![("type", OwnedElement::from(text_token("int")))].into_iter())), ("type", OwnedElement::new_struct(vec![("type", OwnedElement::from(text_token("my_int")))].into_iter()))].into_iter())).try_into().unwrap(),
+        IslType::new(Some("my_int".to_owned()), vec![IslConstraint::Type(IslTypeRef::AnonymousType(IslType::new(None, vec![IslConstraint::Type(IslTypeRef::CoreIslType(IonType::Integer))]))), IslConstraint::Type(IslTypeRef::AnonymousType(IslType::new(None, vec![IslConstraint::Type(IslTypeRef::NamedType("my_int".to_owned()))])))])
+    ),
+    case::all_of_constraint(
+        /* For a schema with all_of type as below: 
+            { all_of: [{ type: int }] }
+        */
+        (&OwnedStruct::from_iter(vec![("all_of", OwnedElement::new_list(vec![OwnedElement::new_struct(vec![("type", OwnedElement::from(text_token("int")))].into_iter())]))].into_iter())).try_into().unwrap(),
+        IslType::new(None, vec![IslConstraint::AllOf(vec![IslTypeRef::AnonymousType(IslType::new(None, vec![IslConstraint::Type(IslTypeRef::CoreIslType(IonType::Integer))]))])])
+    ),
+    )]
+    fn owned_struct_to_isl_type(isl_type1: IslType, isl_type2: IslType) {
+        // assert if both the IslType are same in terms of constraints and name
+        assert_eq!(isl_type1, isl_type2);
     }
 }

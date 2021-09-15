@@ -1,6 +1,6 @@
 use crate::isl::IslTypeRef;
 use crate::result::IonSchemaResult;
-use crate::system::{SharedTypeStore, TypeId};
+use crate::system::{SharedContext, SharedTypeStore, TypeId};
 use crate::violation::Violations;
 use ion_rs::value::owned::OwnedElement;
 
@@ -13,7 +13,7 @@ pub trait ConstraintValidator {
 }
 
 /// Defines schema Constraints
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 // TODO: add other constraints
 pub enum Constraint {
     AllOf(AllOfConstraint),
@@ -36,10 +36,11 @@ impl AllOfConstraint {
     pub fn resolve_from_isl_constraint(
         type_references: &[IslTypeRef],
         type_store: &SharedTypeStore,
+        context: &SharedContext,
     ) -> IonSchemaResult<Self> {
         let resolved_types: Vec<TypeId> = type_references
             .iter()
-            .map(|t| IslTypeRef::resolve_type_reference(t, type_store))
+            .map(|t| IslTypeRef::resolve_type_reference(t, type_store, context))
             .collect::<IonSchemaResult<Vec<TypeId>>>()?;
         Ok(AllOfConstraint::new(resolved_types))
     }
@@ -48,6 +49,12 @@ impl AllOfConstraint {
 impl ConstraintValidator for AllOfConstraint {
     fn validate(&self, value: OwnedElement, issues: &mut Violations) {
         todo!()
+    }
+}
+
+impl PartialEq for AllOfConstraint {
+    fn eq(&self, other: &Self) -> bool {
+        self.type_ids == other.type_ids
     }
 }
 
@@ -67,8 +74,9 @@ impl TypeConstraint {
     pub fn resolve_from_isl_constraint(
         type_reference: &IslTypeRef,
         type_store: &SharedTypeStore,
+        context: &SharedContext,
     ) -> IonSchemaResult<Self> {
-        let type_id = IslTypeRef::resolve_type_reference(type_reference, type_store)?;
+        let type_id = IslTypeRef::resolve_type_reference(type_reference, type_store, context)?;
         Ok(TypeConstraint::new(type_id))
     }
 }
@@ -76,5 +84,11 @@ impl TypeConstraint {
 impl ConstraintValidator for TypeConstraint {
     fn validate(&self, value: OwnedElement, issues: &mut Violations) {
         todo!()
+    }
+}
+
+impl PartialEq for TypeConstraint {
+    fn eq(&self, other: &Self) -> bool {
+        self.type_id == other.type_id
     }
 }
