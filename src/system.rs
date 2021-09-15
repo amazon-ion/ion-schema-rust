@@ -14,18 +14,19 @@ use std::convert::TryInto;
 use std::io::ErrorKind;
 use std::rc::Rc;
 
-pub type SharedContext = Rc<RefCell<Context>>;
+// TODO: this could be replaced with &mut Context
+pub type SharedPendingTypes = Rc<RefCell<PendingTypes>>;
 
-/// Defines a [Context] struct which stores information on parent types
+/// Defines a [Context] struct which stores information on parent types/ not-yet-resolved types
 /// while loading a [Schema] with types which is used to resolve self referencing schema types
 #[derive(Debug, Clone)]
-pub struct Context {
+pub struct PendingTypes {
     ids_by_name: HashMap<String, TypeId>,
     parent: Option<(String, TypeId)>,
-    types_by_id: Vec<Option<TypeDefinition>>, // a None in this vector represents unresolved type
+    types_by_id: Vec<Option<TypeDefinition>>, // a None in this vector represents a not-yet-resolved type
 }
 
-impl Context {
+impl PendingTypes {
     pub fn new() -> Self {
         Self {
             parent: None,
@@ -59,47 +60,13 @@ impl Context {
         self.types_by_id.len()
     }
 
-    /// Provides the [TypeDefinition] associated with given name if it exists in the [TypeStore]  
-    /// Otherwise returns None
-    pub fn get_type_by_name(
-        &self,
-        name: &str,
-        type_store: &SharedTypeStore,
-    ) -> Option<TypeDefinition> {
-        self.ids_by_name
-            .get(name)
-            .and_then(|id| match self.types_by_id.get(*id) {
-                Some(t) => Some(t.to_owned().unwrap()),
-                None => match type_store.borrow().get_type_by_id(id.to_owned()) {
-                    Some(t) => Some(t.to_owned()),
-                    None => None,
-                },
-            })
-    }
-
     /// Provides the [TypeId] associated with given name if it exists in the [TypeStore] or [Context]  
     /// Otherwise returns None
     pub fn get_type_id_by_name(&self, name: &str, type_store: &SharedTypeStore) -> Option<TypeId> {
         match self.ids_by_name.get(name) {
-            Some(id) => Some(id.to_owned()),
+            Some(id) => Some(*id),
             None => match type_store.borrow().get_type_id_by_name(name) {
-                Some(id) => Some(id.to_owned()),
-                None => None,
-            },
-        }
-    }
-
-    /// Provides the [TypeDefinition] associated with given [TypeId] if it exists in the [TypeStore]  
-    /// or in the [Context] Otherwise returns None
-    pub fn get_type_by_id(
-        &self,
-        id: TypeId,
-        type_store: &SharedTypeStore,
-    ) -> Option<TypeDefinition> {
-        match self.types_by_id.get(id) {
-            Some(t) => Some(t.to_owned().unwrap()),
-            None => match type_store.borrow().get_type_by_id(id) {
-                Some(t) => Some(t.to_owned()),
+                Some(id) => Some(*id),
                 None => None,
             },
         }
@@ -288,9 +255,9 @@ impl Resolver {
             // load types for schema
             else if annotations.contains(&&text_token("type")) {
                 // convert OwnedElement to IslType
-                let isl_type: IslType = try_to!(value.as_struct()).try_into()?;
+                let isl_type: IslType = (&value).try_into()?;
 
-                let context = &Rc::new(RefCell::new(Context::new()));
+                let context = &Rc::new(RefCell::new(PendingTypes::new()));
 
                 // convert IslType to TypeDefinition
                 let type_def: TypeDefinition =

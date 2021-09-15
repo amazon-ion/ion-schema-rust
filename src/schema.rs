@@ -51,14 +51,7 @@ impl Schema {
 
     /// Returns an iterator over the types in this schema.
     pub(crate) fn get_types(&self) -> SchemaTypeIterator {
-        SchemaTypeIterator::new(
-            self.types
-                .get_types()
-                .iter()
-                .enumerate()
-                .map(|(i, t)| TypeRef::new(i, Rc::clone(&self.types)))
-                .collect(),
-        )
+        SchemaTypeIterator::new(Rc::clone(&self.types))
     }
 
     /// Returns a new [Schema] instance containing all the types of this
@@ -72,12 +65,12 @@ impl Schema {
 
 /// Provides an Iterator which returns [Type]s inside a [Schema]
 pub struct SchemaTypeIterator {
-    types: Vec<TypeRef>,
+    types: Rc<TypeStore>,
     index: usize,
 }
 
 impl SchemaTypeIterator {
-    fn new(types: Vec<TypeRef>) -> Self {
+    fn new(types: Rc<TypeStore>) -> Self {
         Self { types, index: 0 }
     }
 }
@@ -86,11 +79,11 @@ impl Iterator for SchemaTypeIterator {
     type Item = TypeRef;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.index >= self.types.len() {
+        if self.index >= self.types.get_types().len() {
             return None;
         }
         self.index = self.index + 1;
-        Some(self.types[self.index - 1].to_owned())
+        Some(TypeRef::new(self.index - 1, Rc::clone(&self.types)))
     }
 }
 
@@ -98,10 +91,18 @@ impl Iterator for SchemaTypeIterator {
 mod schema_tests {
     use super::*;
     use crate::system::Resolver;
-    use ion_rs::value::owned::{text_token, OwnedElement};
-    use ion_rs::value::{Builder, Element};
+    use ion_rs::value::owned::OwnedElement;
+    use ion_rs::value::reader::element_reader;
+    use ion_rs::value::reader::ElementReader;
     use rstest::*;
     use std::cell::RefCell;
+
+    // helper function to be used by isl tests
+    fn load(text: &str) -> Vec<OwnedElement> {
+        element_reader()
+            .read_all(text.as_bytes())
+            .expect("parsing failed unexpectedly")
+    }
 
     #[rstest(
     owned_elements, total_types,
@@ -109,60 +110,53 @@ mod schema_tests {
         /* For a schema with single anonymous type as below: 
             type:: { type: int }
          */
-        vec![OwnedElement::new_struct(vec![("type", OwnedElement::from(text_token("int")))].into_iter()).with_annotations(vec![text_token("type")])].into_iter(),
+        load(r#" // For a schema with single anonymous type
+            type:: {type: int}
+        "#).into_iter(),
         2 // this includes the core type int and the anonymous type
     ),
     case::type_constraint_with_named_type(
-        /* For a schema with named type as below: 
+        load(r#" For a schema with named type as below: 
             type:: { name: my_int, type: int }
-         */
-        vec![OwnedElement::new_struct(vec![("name", OwnedElement::from(text_token("my_int"))),("type", OwnedElement::from(text_token("int")))].into_iter()).with_annotations(vec![text_token("type")])].into_iter(),
+        "#).into_iter(),
         2 // this includes the core type int and the anonymous type
     ),
     case::type_constraint_with_self_reference_type(
-        /* For a schema with self reference type as below: 
+        load(r#" For a schema with self reference type as below: 
             type:: { name: my_int, type: my_int }
-         */
-        vec![OwnedElement::new_struct(vec![("name", OwnedElement::from(text_token("my_int"))),("type", OwnedElement::from(text_token("my_int")))].into_iter()).with_annotations(vec![text_token("type")])].into_iter(),
+        "#).into_iter(),
         1 // this includes only my_int type
     ),
     case::type_constraint_with_nested_self_reference_type(
-        /* For a schema with nested self reference type as below:
+        load(r#" For a schema with nested self reference type as below:
             type:: { name: my_int, type: { type: my_int } }
-         */
-        vec![OwnedElement::new_struct(vec![("name", OwnedElement::from(text_token("my_int"))), ("type", OwnedElement::new_struct(vec![("type", OwnedElement::from(text_token("my_int")))].into_iter()))].into_iter()).with_annotations(vec![text_token("type")])].into_iter(),
+        "#).into_iter(),
         2 // this includes my_int type and the anonymous type that uses my_int
     ),
     case::type_constraint_with_nested_type(
-        /* For a schema with nested types as below:
+        load(r#" For a schema with nested types as below:
             type:: { name: my_int, type: { type: int } }
-         */
-        vec![OwnedElement::new_struct(vec![("name", OwnedElement::from(text_token("my_int"))), ("type", OwnedElement::new_struct(vec![("type", OwnedElement::from(text_token("int")))].into_iter()))].into_iter()).with_annotations(vec![text_token("type")])].into_iter(),
+        "#).into_iter(),
         3 // this includes my_int type, the anonymous type that uses int and core type int
     ),
     case::type_constraint_with_nested_multiple_types(
-        /* For a schema with nested multiple types as below: 
-            { name: my_int, type: { type: int }, type: { type: my_int } }
-         */
-        vec![OwnedElement::new_struct(vec![("name", OwnedElement::from(text_token("my_int"))), ("type", OwnedElement::new_struct(vec![("type", OwnedElement::from(text_token("int")))].into_iter())), ("type", OwnedElement::new_struct(vec![("type", OwnedElement::from(text_token("my_int")))].into_iter()))].into_iter()).with_annotations(vec![text_token("type")])].into_iter(),
+        load(r#"  For a schema with nested multiple types as below: 
+            type:: { name: my_int, type: { type: int }, type: { type: my_int } }
+        "#).into_iter(),
         4 //  this includes my_int type, the anonymous type that uses int, core type int and the anonymous type that uses my_int type
     ),
     case::type_constraint_wiht_multiple_types(
-        /* For a schema with multiple type as below:
+        load(r#" For a schema with multiple type as below:
              type:: { name: my_int, type: int }
              type:: { name: my_bool, type: bool }
              type:: { type: string }
-         */
-        vec![OwnedElement::new_struct(vec![("name", OwnedElement::from(text_token("my_int"))),("type", OwnedElement::from(text_token("int")))].into_iter()).with_annotations(vec![text_token("type")]),
-        OwnedElement::new_struct(vec![("name", OwnedElement::from(text_token("my_bool"))),("type", OwnedElement::from(text_token("bool")))].into_iter()).with_annotations(vec![text_token("type")]),
-        OwnedElement::new_struct(vec![("type", OwnedElement::from(text_token("string")))].into_iter()).with_annotations(vec![text_token("type")])].into_iter(),
+        "#).into_iter(),
         6
     ),
     case::all_of_constraint(
-        /* For a schema with all_of type as below: 
+        load(r#" For a schema with all_of type as below: 
             type:: { all_of: [{ type: int }] }
-        */
-        vec![OwnedElement::new_struct(vec![("all_of", OwnedElement::new_list(vec![OwnedElement::new_struct(vec![("type", OwnedElement::from(text_token("int")))].into_iter())]))].into_iter()).with_annotations(vec![text_token("type")])].into_iter(),
+        "#).into_iter(),
         3
     ),
     )]

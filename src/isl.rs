@@ -1,9 +1,10 @@
 use crate::result::{
-    invalid_schema_error_raw, unresolvable_schema_error, IonSchemaError, IonSchemaResult,
+    invalid_schema_error, invalid_schema_error_raw, unresolvable_schema_error, IonSchemaError,
+    IonSchemaResult,
 };
-use crate::system::{SharedContext, SharedTypeStore, TypeId};
+use crate::system::{SharedPendingTypes, SharedTypeStore, TypeId};
 use crate::types::TypeDefinition;
-use ion_rs::value::owned::{OwnedElement, OwnedStruct};
+use ion_rs::value::owned::OwnedElement;
 use ion_rs::value::{Element, Sequence, Struct, SymbolToken};
 use ion_rs::IonType;
 use std::convert::{TryFrom, TryInto};
@@ -46,11 +47,13 @@ impl PartialEq for IslType {
 }
 
 /// Parse constraints inside an [OwnedStruct] to an [IslType]
-impl TryFrom<&OwnedStruct> for IslType {
+impl TryFrom<&OwnedElement> for IslType {
     type Error = IonSchemaError;
 
-    fn try_from(ion_struct: &OwnedStruct) -> Result<Self, Self::Error> {
+    fn try_from(ion: &OwnedElement) -> Result<Self, Self::Error> {
         let mut constraints = vec![];
+
+        let ion_struct = try_to!(ion.as_struct());
 
         // parses the name of the type specified by schema
         let type_name: Option<String> = match ion_struct.get("name") {
@@ -169,7 +172,7 @@ impl IslTypeRef {
                     })
             }
             IonType::Struct =>
-                Ok(IslTypeRef::AnonymousType(value.as_struct().unwrap().try_into()?)),
+                Ok(IslTypeRef::AnonymousType(value.try_into()?)),
             _ => Err(invalid_schema_error_raw(
                 "type reference can either be a symbol(For base/alias type reference) or a struct (for anonymous type reference)",
             )),
@@ -181,7 +184,7 @@ impl IslTypeRef {
     pub fn resolve_type_reference(
         type_reference: &IslTypeRef,
         type_store: &SharedTypeStore,
-        context: &SharedContext,
+        context: &SharedPendingTypes,
     ) -> IonSchemaResult<TypeId> {
         match type_reference {
             IslTypeRef::CoreIslType(ion_type) => {
@@ -232,61 +235,61 @@ impl IslTypeRef {
 #[cfg(test)]
 mod isl_tests {
     use super::*;
-    use ion_rs::value::owned::{text_token, OwnedElement, OwnedStruct};
-    use ion_rs::value::Builder;
+    use ion_rs::value::owned::OwnedElement;
+    use ion_rs::value::reader::element_reader;
+    use ion_rs::value::reader::ElementReader;
     use rstest::*;
-    use std::iter::FromIterator;
+
+    // helper function to be used by isl tests
+    fn load(text: &str) -> OwnedElement {
+        element_reader()
+            .read_one(text.as_bytes())
+            .expect("parsing failed unexpectedly")
+    }
 
     #[rstest(
     isl_type1,isl_type2,
     case::type_constraint_with_anonymous_type(
-        /* For a schema with single anonymous type as below: 
-            { type: int }
-         */
-        (&OwnedStruct::from_iter(vec![("type", OwnedElement::from(text_token("int")))].into_iter())).try_into().unwrap(),
+        (&load(r#" // For a schema with single anonymous type
+            {type: int}
+        "#)).try_into().unwrap(),
         IslType::new(None, vec![IslConstraint::Type(IslTypeRef::CoreIslType(IonType::Integer))])
     ),
     case::type_constraint_with_named_type(
-        /* For a schema with named type as below: 
+        (&load(r#" // For a schema with named type 
             { name: my_int, type: int }
-         */
-        (&OwnedStruct::from_iter(vec![("name", OwnedElement::from(text_token("my_int"))), ("type", OwnedElement::from(text_token("int")))].into_iter())).try_into().unwrap(),
+        "#)).try_into().unwrap(),
         IslType::new(Some("my_int".to_owned()), vec![IslConstraint::Type(IslTypeRef::CoreIslType(IonType::Integer))])
     ),
     case::type_constraint_with_self_reference_type(
-        /* For a schema with self reference type as below: 
+        (&load(r#" // For a schema with self reference type
             { name: my_int, type: my_int }
-         */
-        (&OwnedStruct::from_iter(vec![("name", OwnedElement::from(text_token("my_int"))), ("type", OwnedElement::from(text_token("my_int")))].into_iter())).try_into().unwrap(),
+        "#)).try_into().unwrap(),
         IslType::new(Some("my_int".to_owned()), vec![IslConstraint::Type(IslTypeRef::NamedType("my_int".to_owned()))])
     ),
     case::type_constraint_with_nested_self_reference_type(
-        /* For a schema with nested self reference type as below: 
+        (&load(r#" // For a schema with nested self reference type
             { name: my_int, type: { type: my_int } }
-         */
-        (&OwnedStruct::from_iter(vec![("name", OwnedElement::from(text_token("my_int"))), ("type", OwnedElement::new_struct(vec![("type", OwnedElement::from(text_token("my_int")))].into_iter()))].into_iter())).try_into().unwrap(),
+        "#)).try_into().unwrap(),
         IslType::new(Some("my_int".to_owned()), vec![IslConstraint::Type(IslTypeRef::AnonymousType(IslType::new(None, vec![IslConstraint::Type(IslTypeRef::NamedType("my_int".to_owned()))])))])
     ),
     case::type_constraint_with_nested_type(
-        /* For a schema with nested types as below: 
+        (&load(r#" // For a schema with nested types
             { name: my_int, type: { type: int } }
-         */
-        (&OwnedStruct::from_iter(vec![("name", OwnedElement::from(text_token("my_int"))), ("type", OwnedElement::new_struct(vec![("type", OwnedElement::from(text_token("int")))].into_iter()))].into_iter())).try_into().unwrap(),
+        "#)).try_into().unwrap(),
         IslType::new(Some("my_int".to_owned()), vec![IslConstraint::Type(IslTypeRef::AnonymousType(IslType::new(None, vec![IslConstraint::Type(IslTypeRef::CoreIslType(IonType::Integer))])))])
     ),
     case::type_constraint_with_nested_multiple_types(
-        /* For a schema with nested multiple types as below: 
+        (&load(r#" // For a schema with nested multiple types
             { name: my_int, type: { type: int }, type: { type: my_int } }
-         */
-        (&OwnedStruct::from_iter(vec![("name", OwnedElement::from(text_token("my_int"))), ("type", OwnedElement::new_struct(vec![("type", OwnedElement::from(text_token("int")))].into_iter())), ("type", OwnedElement::new_struct(vec![("type", OwnedElement::from(text_token("my_int")))].into_iter()))].into_iter())).try_into().unwrap(),
+        "#)).try_into().unwrap(),
         IslType::new(Some("my_int".to_owned()), vec![IslConstraint::Type(IslTypeRef::AnonymousType(IslType::new(None, vec![IslConstraint::Type(IslTypeRef::CoreIslType(IonType::Integer))]))), IslConstraint::Type(IslTypeRef::AnonymousType(IslType::new(None, vec![IslConstraint::Type(IslTypeRef::NamedType("my_int".to_owned()))])))])
     ),
     case::all_of_constraint(
-        /* For a schema with all_of type as below: 
+        (&load(r#" // For a schema with all_of type as below: 
             { all_of: [{ type: int }] }
-        */
-        (&OwnedStruct::from_iter(vec![("all_of", OwnedElement::new_list(vec![OwnedElement::new_struct(vec![("type", OwnedElement::from(text_token("int")))].into_iter())]))].into_iter())).try_into().unwrap(),
-        IslType::new(None, vec![IslConstraint::AllOf(vec![IslTypeRef::AnonymousType(IslType::new(None, vec![IslConstraint::Type(IslTypeRef::CoreIslType(IonType::Integer))]))])])
+        "#)).try_into().unwrap(),
+    IslType::new(None, vec![IslConstraint::AllOf(vec![IslTypeRef::AnonymousType(IslType::new(None, vec![IslConstraint::Type(IslTypeRef::CoreIslType(IonType::Integer))]))])])
     ),
     )]
     fn owned_struct_to_isl_type(isl_type1: IslType, isl_type2: IslType) {

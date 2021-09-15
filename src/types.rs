@@ -1,7 +1,7 @@
 use crate::constraint::{AllOfConstraint, Constraint, TypeConstraint};
 use crate::isl::{IslConstraint, IslType};
 use crate::result::IonSchemaResult;
-use crate::system::{SharedContext, SharedTypeStore, TypeId, TypeStore};
+use crate::system::{SharedPendingTypes, SharedTypeStore, TypeId, TypeStore};
 use crate::violation::Violations;
 use ion_rs::value::owned::OwnedElement;
 use std::rc::Rc;
@@ -58,7 +58,7 @@ impl TypeDefinition {
     pub fn parse_from_isl_type_and_update_type_store(
         isl_type: &IslType,
         type_store: &SharedTypeStore,
-        context: &SharedContext,
+        context: &SharedPendingTypes,
     ) -> IonSchemaResult<Self> {
         let mut constraints = vec![];
 
@@ -145,7 +145,7 @@ mod type_definition_tests {
     use super::*;
     use crate::constraint::{AllOfConstraint, Constraint, TypeConstraint};
     use crate::isl::{IslConstraint, IslType, IslTypeRef};
-    use crate::system::Context;
+    use crate::system::PendingTypes;
     use ion_rs::IonType;
     use rstest::*;
     use std::cell::RefCell;
@@ -205,7 +205,7 @@ mod type_definition_tests {
     fn isl_type_to_type_definition(isl_type: IslType, type_def: TypeDefinition) {
         // assert if both the IslType are same in terms of constraints and name
         let type_store = Rc::new(RefCell::new(TypeStore::new()));
-        let context = &Rc::new(RefCell::new(Context::new()));
+        let context = &Rc::new(RefCell::new(PendingTypes::new()));
         let this_type_def = TypeDefinition::parse_from_isl_type_and_update_type_store(
             &isl_type,
             &type_store,

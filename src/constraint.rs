@@ -1,6 +1,6 @@
 use crate::isl::IslTypeRef;
 use crate::result::IonSchemaResult;
-use crate::system::{SharedContext, SharedTypeStore, TypeId};
+use crate::system::{SharedPendingTypes, SharedTypeStore, TypeId};
 use crate::violation::Violations;
 use ion_rs::value::owned::OwnedElement;
 
@@ -36,7 +36,7 @@ impl AllOfConstraint {
     pub fn resolve_from_isl_constraint(
         type_references: &[IslTypeRef],
         type_store: &SharedTypeStore,
-        context: &SharedContext,
+        context: &SharedPendingTypes,
     ) -> IonSchemaResult<Self> {
         let resolved_types: Vec<TypeId> = type_references
             .iter()
@@ -74,7 +74,7 @@ impl TypeConstraint {
     pub fn resolve_from_isl_constraint(
         type_reference: &IslTypeRef,
         type_store: &SharedTypeStore,
-        context: &SharedContext,
+        context: &SharedPendingTypes,
     ) -> IonSchemaResult<Self> {
         let type_id = IslTypeRef::resolve_type_reference(type_reference, type_store, context)?;
         Ok(TypeConstraint::new(type_id))
