@@ -2,7 +2,7 @@ use crate::result::{
     invalid_schema_error, invalid_schema_error_raw, unresolvable_schema_error, IonSchemaError,
     IonSchemaResult,
 };
-use crate::system::{SharedPendingTypes, SharedTypeStore, TypeId};
+use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::types::TypeDefinition;
 use ion_rs::value::owned::OwnedElement;
 use ion_rs::value::{Element, Sequence, Struct, SymbolToken};
@@ -183,25 +183,24 @@ impl IslTypeRef {
     /// Resolves a type_reference into a [TypeId] using the type_store
     pub fn resolve_type_reference(
         type_reference: &IslTypeRef,
-        type_store: &SharedTypeStore,
-        context: &SharedPendingTypes,
+        type_store: &mut TypeStore,
+        pending_types: &mut PendingTypes,
     ) -> IonSchemaResult<TypeId> {
         match type_reference {
             IslTypeRef::CoreIslType(ion_type) => {
                 // TODO: create CoreType struct for storing ISLCoreType type definition instead of Type
                 // inserts ISLCoreType as a Type into type_store
-                Ok(context.borrow_mut().add_named_type(
+                Ok(pending_types.add_named_type(
                     &format!("{:?}", ion_type),
                     TypeDefinition::new(Some(format!("{:?}", ion_type)), vec![]),
                     type_store,
                 ))
             }
             IslTypeRef::NamedType(alias) => {
-                let borrow_context = context.borrow_mut();
                 // verify if the AliasType actually exists in the type_store or throw an error
-                match borrow_context.get_type_id_by_name(alias, type_store) {
+                match pending_types.get_type_id_by_name(alias, type_store) {
                     Some(type_id) => Ok(type_id.to_owned()),
-                    None => match borrow_context.get_parent() {
+                    None => match pending_types.get_parent() {
                         Some(parent) => {
                             // if it is a self referencing type resolve it using parent information from type_store
                             if parent.0.eq(alias) {
@@ -221,9 +220,11 @@ impl IslTypeRef {
                 }
             }
             IslTypeRef::AnonymousType(isl_type) => {
-                let type_id = context.borrow().get_total_types();
+                let type_id = pending_types.get_total_types();
                 let type_def = TypeDefinition::parse_from_isl_type_and_update_type_store(
-                    isl_type, type_store, context,
+                    isl_type,
+                    type_store,
+                    pending_types,
                 )?;
                 // get the last added anonymous type's type_id for given anonymous type
                 Ok(type_id)

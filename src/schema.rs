@@ -95,7 +95,6 @@ mod schema_tests {
     use ion_rs::value::reader::element_reader;
     use ion_rs::value::reader::ElementReader;
     use rstest::*;
-    use std::cell::RefCell;
 
     // helper function to be used by isl tests
     fn load(text: &str) -> Vec<OwnedElement> {
@@ -165,7 +164,7 @@ mod schema_tests {
         total_types: usize,
     ) {
         // create a type_store and resolver instance to be used for loading OwnedElements as schema
-        let type_store = &Rc::new(RefCell::new(TypeStore::new()));
+        let type_store = &mut TypeStore::new();
         let mut resolver = Resolver::new(vec![]);
 
         // create a schema from owned_elements and verifies if the result is `ok`

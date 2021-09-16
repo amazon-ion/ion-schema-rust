@@ -1,7 +1,7 @@
 use crate::constraint::{AllOfConstraint, Constraint, TypeConstraint};
 use crate::isl::{IslConstraint, IslType};
 use crate::result::IonSchemaResult;
-use crate::system::{SharedPendingTypes, SharedTypeStore, TypeId, TypeStore};
+use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::violation::Violations;
 use ion_rs::value::owned::OwnedElement;
 use std::rc::Rc;
@@ -57,8 +57,8 @@ impl TypeDefinition {
     /// Parse constraints inside an [OwnedStruct] to a schema [Type]
     pub fn parse_from_isl_type_and_update_type_store(
         isl_type: &IslType,
-        type_store: &SharedTypeStore,
-        context: &SharedPendingTypes,
+        type_store: &mut TypeStore,
+        pending_types: &mut PendingTypes,
     ) -> IonSchemaResult<Self> {
         let mut constraints = vec![];
 
@@ -67,13 +67,11 @@ impl TypeDefinition {
 
         // add parent information for named type
         if type_name.is_some() {
-            context
-                .borrow_mut()
-                .add_parent(type_name.to_owned().unwrap())
+            pending_types.add_parent(type_name.to_owned().unwrap())
         }
 
         // add this unresolved type to context for type_id
-        let type_id = context.borrow_mut().add_type();
+        let type_id = pending_types.add_type();
 
         // convert IslConstraint to Constraint
         for isl_constraint in isl_type.constraints() {
@@ -82,7 +80,7 @@ impl TypeDefinition {
                     let all_of: AllOfConstraint = AllOfConstraint::resolve_from_isl_constraint(
                         type_references,
                         type_store,
-                        context,
+                        pending_types,
                     )?;
                     Constraint::AllOf(all_of)
                 }
@@ -91,7 +89,7 @@ impl TypeDefinition {
                         TypeConstraint::resolve_from_isl_constraint(
                             type_reference,
                             type_store,
-                            context,
+                            pending_types,
                         )?;
                     Constraint::Type(type_constraint)
                 }
@@ -104,20 +102,15 @@ impl TypeDefinition {
         // update with this resolved type_def to context for type_id
         let type_name = type_def.name();
         match type_name {
-            Some(name) => context.borrow_mut().update_named_type(
-                type_id,
-                name,
-                type_def.to_owned(),
-                type_store,
-            ),
-            None => context
-                .borrow_mut()
-                .update_anonymous_type(type_id, type_def.to_owned()),
+            Some(name) => {
+                pending_types.update_named_type(type_id, name, type_def.to_owned(), type_store)
+            }
+            None => pending_types.update_anonymous_type(type_id, type_def.to_owned()),
         };
 
         // clear parent information from type_store as the type is already added in the type_store now
         if type_name.is_some() {
-            context.borrow_mut().clear_parent();
+            pending_types.clear_parent();
         }
 
         Ok(type_def)
@@ -148,7 +141,6 @@ mod type_definition_tests {
     use crate::system::PendingTypes;
     use ion_rs::IonType;
     use rstest::*;
-    use std::cell::RefCell;
 
     #[rstest(
     isl_type, type_def,
@@ -204,15 +196,14 @@ mod type_definition_tests {
     )]
     fn isl_type_to_type_definition(isl_type: IslType, type_def: TypeDefinition) {
         // assert if both the IslType are same in terms of constraints and name
-        let type_store = Rc::new(RefCell::new(TypeStore::new()));
-        let context = &Rc::new(RefCell::new(PendingTypes::new()));
+        let type_store = &mut TypeStore::new();
+        let pending_types = &mut PendingTypes::new();
         let this_type_def = TypeDefinition::parse_from_isl_type_and_update_type_store(
             &isl_type,
-            &type_store,
-            context,
+            type_store,
+            pending_types,
         )
         .unwrap();
-        let t = context.borrow().to_owned();
         assert_eq!(this_type_def, type_def);
     }
 }
