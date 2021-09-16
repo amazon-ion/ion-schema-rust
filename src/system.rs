@@ -1,15 +1,153 @@
 use crate::authority::Authority;
+use crate::isl::IslType;
 use crate::result::{
-    invalid_schema_error, unresolvable_schema_error, IonSchemaError, IonSchemaResult,
+    invalid_schema_error, unresolvable_schema_error, unresolvable_schema_error_raw, IonSchemaError,
+    IonSchemaResult,
 };
 use crate::schema::Schema;
-use crate::types::Type;
+use crate::types::TypeDefinition;
 use ion_rs::value::owned::{text_token, OwnedElement, OwnedSymbolToken};
 use ion_rs::value::{Element, Sequence, Struct};
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::io::ErrorKind;
 use std::rc::Rc;
+
+// TODO: this could be replaced with &mut Context
+pub type SharedPendingTypes = Rc<RefCell<PendingTypes>>;
+
+/// Defines a [Context] struct which stores information on parent types/ not-yet-resolved types
+/// while loading a [Schema] with types which is used to resolve self referencing schema types
+#[derive(Debug, Clone)]
+pub struct PendingTypes {
+    ids_by_name: HashMap<String, TypeId>,
+    parent: Option<(String, TypeId)>,
+    types_by_id: Vec<Option<TypeDefinition>>, // a None in this vector represents a not-yet-resolved type
+}
+
+impl PendingTypes {
+    pub fn new() -> Self {
+        Self {
+            parent: None,
+            ids_by_name: HashMap::new(),
+            types_by_id: Vec::new(),
+        }
+    }
+
+    /// Adds all the types from Context into given TypeStore and clears Context types for loading next set of types
+    /// this is used after a schema named type/root type is loaded entirely into Context
+    pub fn update_type_store(&mut self, type_store: &SharedTypeStore) -> IonSchemaResult<()> {
+        for optional_type in &self.types_by_id {
+            // return an error if any of the type in types_by_id vector is None/Unresolved
+            let type_def = optional_type
+                .to_owned()
+                .ok_or(unresolvable_schema_error_raw(
+                    "Unable to load schema due to unresolvable type",
+                ))?;
+            match type_def.to_owned().name() {
+                Some(name) => type_store.borrow_mut().add_named_type(name, type_def),
+                None => type_store.borrow_mut().add_anonymous_type(type_def),
+            };
+        }
+        self.types_by_id.clear();
+        self.ids_by_name.clear();
+        Ok(())
+    }
+
+    /// Returns total number of types stored in the [TypeStore]
+    pub fn get_total_types(&self) -> usize {
+        self.types_by_id.len()
+    }
+
+    /// Provides the [TypeId] associated with given name if it exists in the [TypeStore] or [Context]  
+    /// Otherwise returns None
+    pub fn get_type_id_by_name(&self, name: &str, type_store: &SharedTypeStore) -> Option<TypeId> {
+        match self.ids_by_name.get(name) {
+            Some(id) => Some(*id),
+            None => match type_store.borrow().get_type_id_by_name(name) {
+                Some(id) => Some(*id),
+                None => None,
+            },
+        }
+    }
+
+    /// Adds the [TypeDefinition] and the associated name in the [Context] and returns the [TypeId] for it
+    /// If the name already exists in the [TypeStore] or [Context] it returns the associated [TypeId]
+    pub fn add_named_type(
+        &mut self,
+        name: &str,
+        type_def: TypeDefinition,
+        type_store: &SharedTypeStore,
+    ) -> TypeId {
+        if let Some(exists) = self.ids_by_name.get(name) {
+            return exists.to_owned();
+        }
+        if let Some(exists) = type_store.borrow_mut().get_type_id_by_name(name) {
+            return exists.to_owned();
+        }
+        let type_id = self.types_by_id.len();
+        self.ids_by_name.insert(name.to_owned(), type_id);
+        self.types_by_id.push(Some(type_def));
+        type_id
+    }
+
+    /// Adds the [TypeDefinition] in the [TypeStore] or [Context] and returns the [TypeId] for it
+    pub fn add_anonymous_type(&mut self, type_def: TypeDefinition) -> TypeId {
+        let type_id = self.types_by_id.len();
+        self.types_by_id.push(Some(type_def));
+        type_id
+    }
+
+    /// Updates the unresolved named type that was added as None while loading types in a schema
+    /// with a resolved [TypeDefinition]
+    pub fn update_named_type(
+        &mut self,
+        type_id: TypeId,
+        name: &str,
+        type_def: TypeDefinition,
+        type_store: &SharedTypeStore,
+    ) -> TypeId {
+        if let Some(exists) = self.ids_by_name.get(name) {
+            return exists.to_owned();
+        }
+        if let Some(exists) = type_store.borrow().get_type_id_by_name(name) {
+            return exists.to_owned();
+        }
+        self.ids_by_name.insert(name.to_owned(), type_id);
+        self.types_by_id[type_id] = Some(type_def);
+        type_id
+    }
+
+    /// Updates the unresolved anonymous type that was added as None while loading types in a schema
+    /// with a resolved [TypeDefinition]
+    pub fn update_anonymous_type(&mut self, type_id: TypeId, type_def: TypeDefinition) -> TypeId {
+        self.types_by_id[type_id] = Some(type_def);
+        type_id
+    }
+
+    /// Adds parent information storing the name and possible TypeId of the parent
+    pub fn add_parent(&mut self, name: String) {
+        self.parent = Some((name, self.types_by_id.len()))
+    }
+
+    /// Provides parent information: (parent name, type id)
+    pub fn get_parent(&self) -> &Option<(String, TypeId)> {
+        &self.parent
+    }
+
+    /// Clears parent information once that tree of types is traversed
+    pub fn clear_parent(&mut self) {
+        self.parent = None
+    }
+
+    /// Adds the unresolved type as None before it gets resolved and gets the associated [TypeId]
+    pub fn add_type(&mut self) -> TypeId {
+        let type_id = self.types_by_id.len();
+        self.types_by_id.push(None);
+        type_id
+    }
+}
 
 /// Provides a type cache reference which will be shared to resolve types during load_schema
 pub type SharedTypeStore = Rc<RefCell<TypeStore>>;
@@ -20,7 +158,7 @@ pub type TypeId = usize;
 #[derive(Debug, Clone)]
 pub struct TypeStore {
     ids_by_name: HashMap<String, TypeId>,
-    types_by_id: Vec<Type>,
+    types_by_id: Vec<TypeDefinition>,
 }
 
 impl TypeStore {
@@ -32,13 +170,13 @@ impl TypeStore {
     }
 
     /// Returns [Type]s stored in the [TypeStore] to be used by [SchemaTypeIterator]
-    pub fn get_types(&self) -> &[Type] {
+    pub fn get_types(&self) -> &[TypeDefinition] {
         &self.types_by_id
     }
 
     /// Provides the [Type] associated with given name if it exists in the [TypeStore]  
     /// Otherwise returns None
-    pub fn get_type_by_name(&self, name: &str) -> Option<&Type> {
+    pub fn get_type_by_name(&self, name: &str) -> Option<&TypeDefinition> {
         self.ids_by_name
             .get(name)
             .and_then(|id| self.types_by_id.get(*id))
@@ -52,13 +190,13 @@ impl TypeStore {
 
     /// Provides the [Type] associated with given [TypeId] if it exists in the [TypeStore]  
     /// Otherwise returns None
-    pub fn get_type_by_id(&self, id: TypeId) -> Option<&Type> {
+    pub fn get_type_by_id(&self, id: TypeId) -> Option<&TypeDefinition> {
         self.types_by_id.get(id)
     }
 
     /// Adds the [Type] and the associated name in the [TypeStore] and returns the [TypeId] for it
     /// If the name already exists in the [TypeStore] it returns the associated [TypeId]
-    pub fn add_named_type(&mut self, name: &str, type_def: Type) -> TypeId {
+    pub fn add_named_type(&mut self, name: &str, type_def: TypeDefinition) -> TypeId {
         if let Some(exists) = self.ids_by_name.get(name) {
             return exists.to_owned();
         }
@@ -69,7 +207,7 @@ impl TypeStore {
     }
 
     /// Adds the [Type] in the [TypeStore] and returns the [TypeId] for it
-    pub fn add_anonymous_type(&mut self, type_def: Type) -> TypeId {
+    pub fn add_anonymous_type(&mut self, type_def: TypeDefinition) -> TypeId {
         let type_id = self.types_by_id.len();
         self.types_by_id.push(type_def);
         type_id
@@ -116,12 +254,19 @@ impl Resolver {
             }
             // load types for schema
             else if annotations.contains(&&text_token("type")) {
-                let type_def: Type =
-                    Type::parse_from_ion_element(try_to!(value.as_struct()), type_store)?;
-                // add the resolved type_def into type_store
-                type_store
-                    .borrow_mut()
-                    .add_named_type(type_def.to_owned().name(), type_def);
+                // convert OwnedElement to IslType
+                let isl_type: IslType = (&value).try_into()?;
+
+                let context = &Rc::new(RefCell::new(PendingTypes::new()));
+
+                // convert IslType to TypeDefinition
+                let type_def: TypeDefinition =
+                    TypeDefinition::parse_from_isl_type_and_update_type_store(
+                        &isl_type, type_store, context,
+                    )?;
+
+                // add all types from context to type_store
+                context.borrow_mut().update_type_store(type_store)?;
             }
             // load footer for schema
             else if annotations.contains(&&text_token("schema_footer")) {

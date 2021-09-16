@@ -1,10 +1,8 @@
-use crate::result::{invalid_schema_error_raw, IonSchemaResult};
-use crate::system::{SharedTypeStore, TypeId};
-use crate::types::TypeRef;
+use crate::isl::IslTypeRef;
+use crate::result::IonSchemaResult;
+use crate::system::{SharedPendingTypes, SharedTypeStore, TypeId};
 use crate::violation::Violations;
 use ion_rs::value::owned::OwnedElement;
-use ion_rs::value::{Element, Sequence};
-use ion_rs::IonType;
 
 /// Provides validation for schema Constraint
 pub trait ConstraintValidator {
@@ -15,7 +13,7 @@ pub trait ConstraintValidator {
 }
 
 /// Defines schema Constraints
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 // TODO: add other constraints
 pub enum Constraint {
     AllOf(AllOfConstraint),
@@ -35,34 +33,28 @@ impl AllOfConstraint {
     }
 
     /// Tries to create an [AllOf] constraint from the given OwnedElement
-    pub fn parse_from_ion_element(
-        ion: &OwnedElement,
+    pub fn resolve_from_isl_constraint(
+        type_references: &[IslTypeRef],
         type_store: &SharedTypeStore,
+        context: &SharedPendingTypes,
     ) -> IonSchemaResult<Self> {
-        if ion.ion_type() != IonType::List {
-            return Err(invalid_schema_error_raw(format!(
-                "all_of constraint was a {:?} instead of a list",
-                ion.ion_type()
-            )));
-        }
-        let types: Vec<TypeRef> = ion
-            .as_sequence()
-            .unwrap()
+        let resolved_types: Vec<TypeId> = type_references
             .iter()
-            .map(|e| TypeRef::parse_from_ion_element(e, type_store))
-            .collect::<IonSchemaResult<Vec<TypeRef>>>()?;
-
-        let resolved_types: Vec<TypeId> = types
-            .iter()
-            .map(|t| TypeRef::resolve_type_reference(t, type_store))
+            .map(|t| IslTypeRef::resolve_type_reference(t, type_store, context))
             .collect::<IonSchemaResult<Vec<TypeId>>>()?;
-        Ok(AllOfConstraint::new(resolved_types.to_owned()))
+        Ok(AllOfConstraint::new(resolved_types))
     }
 }
 
 impl ConstraintValidator for AllOfConstraint {
     fn validate(&self, value: OwnedElement, issues: &mut Violations) {
         todo!()
+    }
+}
+
+impl PartialEq for AllOfConstraint {
+    fn eq(&self, other: &Self) -> bool {
+        self.type_ids == other.type_ids
     }
 }
 
@@ -79,18 +71,12 @@ impl TypeConstraint {
     }
 
     /// Tries to create a [Type] constraint from the given OwnedElement
-    pub fn parse_from_ion_element(
-        ion: &OwnedElement,
+    pub fn resolve_from_isl_constraint(
+        type_reference: &IslTypeRef,
         type_store: &SharedTypeStore,
+        context: &SharedPendingTypes,
     ) -> IonSchemaResult<Self> {
-        if ion.ion_type() != IonType::Symbol && ion.ion_type() != IonType::Struct {
-            return Err(invalid_schema_error_raw(format!(
-                "type constraint was a {:?} instead of a symbol/struct",
-                ion.ion_type()
-            )));
-        }
-        let type_reference: TypeRef = TypeRef::parse_from_ion_element(ion, type_store)?;
-        let type_id = TypeRef::resolve_type_reference(&type_reference, type_store)?;
+        let type_id = IslTypeRef::resolve_type_reference(type_reference, type_store, context)?;
         Ok(TypeConstraint::new(type_id))
     }
 }
@@ -98,5 +84,11 @@ impl TypeConstraint {
 impl ConstraintValidator for TypeConstraint {
     fn validate(&self, value: OwnedElement, issues: &mut Violations) {
         todo!()
+    }
+}
+
+impl PartialEq for TypeConstraint {
+    fn eq(&self, other: &Self) -> bool {
+        self.type_id == other.type_id
     }
 }
