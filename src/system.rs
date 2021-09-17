@@ -13,8 +13,19 @@ use std::convert::TryInto;
 use std::io::ErrorKind;
 use std::rc::Rc;
 
-/// Defines a [PendingTypes] struct which stores information on parent types/ not-yet-resolved types
-/// while loading a [Schema] with types which is used to resolve self referencing schema types
+/// Stores information about types that are in the process of being defined.
+///
+/// An ISL type definition can include types that are not yet fully defined. 
+/// For example, an ISL type definition might include:
+/// * A reference to itself. This could happen in a recursive structure like a
+///   linked list or binary tree.
+/// * A nested anonymous type definition.
+/// Because the [SchemaSystem] does not yet know the complete definition
+/// of these types, it cannot find them in the [TypeStore].
+/// An instance of [PendingTypes] is used to track information about types
+/// that we do not have a complete definition for yet. When the 
+/// [SchemaSystem] finishes loading these types, the type definitions in
+/// [PendingTypes] can be promoted the [TypeStore].
 #[derive(Debug, Clone)]
 pub struct PendingTypes {
     ids_by_name: HashMap<String, TypeId>,
