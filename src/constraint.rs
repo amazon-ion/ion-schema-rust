@@ -1,6 +1,6 @@
 use crate::isl::IslTypeRef;
 use crate::result::IonSchemaResult;
-use crate::system::{SharedPendingTypes, SharedTypeStore, TypeId};
+use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::violation::Violations;
 use ion_rs::value::owned::OwnedElement;
 
@@ -35,12 +35,12 @@ impl AllOfConstraint {
     /// Tries to create an [AllOf] constraint from the given OwnedElement
     pub fn resolve_from_isl_constraint(
         type_references: &[IslTypeRef],
-        type_store: &SharedTypeStore,
-        context: &SharedPendingTypes,
+        type_store: &mut TypeStore,
+        pending_types: &mut PendingTypes,
     ) -> IonSchemaResult<Self> {
         let resolved_types: Vec<TypeId> = type_references
             .iter()
-            .map(|t| IslTypeRef::resolve_type_reference(t, type_store, context))
+            .map(|t| IslTypeRef::resolve_type_reference(t, type_store, pending_types))
             .collect::<IonSchemaResult<Vec<TypeId>>>()?;
         Ok(AllOfConstraint::new(resolved_types))
     }
@@ -73,10 +73,11 @@ impl TypeConstraint {
     /// Tries to create a [Type] constraint from the given OwnedElement
     pub fn resolve_from_isl_constraint(
         type_reference: &IslTypeRef,
-        type_store: &SharedTypeStore,
-        context: &SharedPendingTypes,
+        type_store: &mut TypeStore,
+        pending_types: &mut PendingTypes,
     ) -> IonSchemaResult<Self> {
-        let type_id = IslTypeRef::resolve_type_reference(type_reference, type_store, context)?;
+        let type_id =
+            IslTypeRef::resolve_type_reference(type_reference, type_store, pending_types)?;
         Ok(TypeConstraint::new(type_id))
     }
 }

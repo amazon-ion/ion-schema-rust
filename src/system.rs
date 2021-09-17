@@ -8,17 +8,24 @@ use crate::schema::Schema;
 use crate::types::TypeDefinition;
 use ion_rs::value::owned::{text_token, OwnedElement, OwnedSymbolToken};
 use ion_rs::value::{Element, Sequence, Struct};
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::io::ErrorKind;
 use std::rc::Rc;
 
-// TODO: this could be replaced with &mut Context
-pub type SharedPendingTypes = Rc<RefCell<PendingTypes>>;
-
-/// Defines a [Context] struct which stores information on parent types/ not-yet-resolved types
-/// while loading a [Schema] with types which is used to resolve self referencing schema types
+/// Stores information about types that are in the process of being defined.
+///
+/// An ISL type definition can include types that are not yet fully defined.
+/// For example, an ISL type definition might include:
+/// * A reference to itself. This could happen in a recursive structure like a
+///   linked list or binary tree.
+/// * A nested anonymous type definition.
+/// Because the [SchemaSystem] does not yet know the complete definition
+/// of these types, it cannot find them in the [TypeStore].
+/// An instance of [PendingTypes] is used to track information about types
+/// that we do not have a complete definition for yet. When the
+/// [SchemaSystem] finishes loading these types, the type definitions in
+/// [PendingTypes] can be promoted the [TypeStore].
 #[derive(Debug, Clone)]
 pub struct PendingTypes {
     ids_by_name: HashMap<String, TypeId>,
@@ -37,7 +44,7 @@ impl PendingTypes {
 
     /// Adds all the types from Context into given TypeStore and clears Context types for loading next set of types
     /// this is used after a schema named type/root type is loaded entirely into Context
-    pub fn update_type_store(&mut self, type_store: &SharedTypeStore) -> IonSchemaResult<()> {
+    pub fn update_type_store(&mut self, type_store: &mut TypeStore) -> IonSchemaResult<()> {
         for optional_type in &self.types_by_id {
             // return an error if any of the type in types_by_id vector is None/Unresolved
             let type_def = optional_type
@@ -46,8 +53,8 @@ impl PendingTypes {
                     "Unable to load schema due to unresolvable type",
                 ))?;
             match type_def.to_owned().name() {
-                Some(name) => type_store.borrow_mut().add_named_type(name, type_def),
-                None => type_store.borrow_mut().add_anonymous_type(type_def),
+                Some(name) => type_store.add_named_type(name, type_def),
+                None => type_store.add_anonymous_type(type_def),
             };
         }
         self.types_by_id.clear();
@@ -62,10 +69,10 @@ impl PendingTypes {
 
     /// Provides the [TypeId] associated with given name if it exists in the [TypeStore] or [Context]  
     /// Otherwise returns None
-    pub fn get_type_id_by_name(&self, name: &str, type_store: &SharedTypeStore) -> Option<TypeId> {
+    pub fn get_type_id_by_name(&self, name: &str, type_store: &mut TypeStore) -> Option<TypeId> {
         match self.ids_by_name.get(name) {
             Some(id) => Some(*id),
-            None => match type_store.borrow().get_type_id_by_name(name) {
+            None => match type_store.get_type_id_by_name(name) {
                 Some(id) => Some(*id),
                 None => None,
             },
@@ -78,12 +85,12 @@ impl PendingTypes {
         &mut self,
         name: &str,
         type_def: TypeDefinition,
-        type_store: &SharedTypeStore,
+        type_store: &mut TypeStore,
     ) -> TypeId {
         if let Some(exists) = self.ids_by_name.get(name) {
             return exists.to_owned();
         }
-        if let Some(exists) = type_store.borrow_mut().get_type_id_by_name(name) {
+        if let Some(exists) = type_store.get_type_id_by_name(name) {
             return exists.to_owned();
         }
         let type_id = self.types_by_id.len();
@@ -106,12 +113,12 @@ impl PendingTypes {
         type_id: TypeId,
         name: &str,
         type_def: TypeDefinition,
-        type_store: &SharedTypeStore,
+        type_store: &mut TypeStore,
     ) -> TypeId {
         if let Some(exists) = self.ids_by_name.get(name) {
             return exists.to_owned();
         }
-        if let Some(exists) = type_store.borrow().get_type_id_by_name(name) {
+        if let Some(exists) = type_store.get_type_id_by_name(name) {
             return exists.to_owned();
         }
         self.ids_by_name.insert(name.to_owned(), type_id);
@@ -148,9 +155,6 @@ impl PendingTypes {
         type_id
     }
 }
-
-/// Provides a type cache reference which will be shared to resolve types during load_schema
-pub type SharedTypeStore = Rc<RefCell<TypeStore>>;
 
 pub type TypeId = usize;
 
@@ -232,7 +236,7 @@ impl Resolver {
         &mut self,
         elements: I,
         id: &str,
-        type_store: &SharedTypeStore,
+        type_store: &mut TypeStore,
     ) -> IonSchemaResult<Rc<Schema>> {
         let mut found_header = false;
         let mut found_footer = false;
@@ -257,16 +261,18 @@ impl Resolver {
                 // convert OwnedElement to IslType
                 let isl_type: IslType = (&value).try_into()?;
 
-                let context = &Rc::new(RefCell::new(PendingTypes::new()));
+                let pending_types = &mut PendingTypes::new();
 
                 // convert IslType to TypeDefinition
                 let type_def: TypeDefinition =
                     TypeDefinition::parse_from_isl_type_and_update_type_store(
-                        &isl_type, type_store, context,
+                        &isl_type,
+                        type_store,
+                        pending_types,
                     )?;
 
                 // add all types from context to type_store
-                context.borrow_mut().update_type_store(type_store)?;
+                pending_types.update_type_store(type_store)?;
             }
             // load footer for schema
             else if annotations.contains(&&text_token("schema_footer")) {
@@ -279,17 +285,14 @@ impl Resolver {
             return invalid_schema_error("For any schema while a header and footer are both optional, a footer is required if a header is present (and vice-versa).");
         }
 
-        Ok(Rc::new(Schema::new(
-            id,
-            Rc::new(type_store.borrow().to_owned()),
-        )))
+        Ok(Rc::new(Schema::new(id, Rc::new(type_store.to_owned()))))
     }
 
     /// Loads a [Schema] with resolved [Type]s using authorities and type_store
     fn load_schema<A: AsRef<str>>(
         &mut self,
         id: A,
-        type_store: &SharedTypeStore,
+        type_store: &mut TypeStore,
     ) -> IonSchemaResult<Rc<Schema>> {
         let id: &str = id.as_ref();
         if let Some(schema) = self.resolved_schema_cache.get(id) {
@@ -331,8 +334,7 @@ impl SchemaSystem {
     /// until one successfully resolves it.
     /// If an Authority throws an exception, resolution silently proceeds to the next Authority.
     fn load_schema<A: AsRef<str>>(&mut self, id: A) -> IonSchemaResult<Rc<Schema>> {
-        self.resolver
-            .load_schema(id, &Rc::new(RefCell::new(TypeStore::new())))
+        self.resolver.load_schema(id, &mut TypeStore::new())
     }
 
     /// Returns authorities associated with this [SchemaSystem]
