@@ -1,4 +1,4 @@
-use crate::authority::Authority;
+use crate::authority::DocumentAuthority;
 use crate::isl::IslType;
 use crate::result::{
     invalid_schema_error, unresolvable_schema_error, unresolvable_schema_error_raw, IonSchemaError,
@@ -216,12 +216,12 @@ impl TypeStore {
 
 /// Provides functions to load [Schema] with [Type]s using authorities for [System]
 pub struct Resolver {
-    authorities: Vec<Box<dyn Authority>>,
+    authorities: Vec<Box<dyn DocumentAuthority>>,
     resolved_schema_cache: HashMap<String, Rc<Schema>>,
 }
 
 impl Resolver {
-    pub fn new(authorities: Vec<Box<dyn Authority>>) -> Self {
+    pub fn new(authorities: Vec<Box<dyn DocumentAuthority>>) -> Self {
         Self {
             authorities,
             resolved_schema_cache: HashMap::new(),
@@ -321,7 +321,7 @@ pub struct SchemaSystem {
 
 // TODO: make methods public based on the requirements
 impl SchemaSystem {
-    pub fn new(authorities: Vec<Box<dyn Authority>>) -> Self {
+    pub fn new(authorities: Vec<Box<dyn DocumentAuthority>>) -> Self {
         Self {
             resolver: Resolver::new(authorities),
         }
@@ -336,24 +336,24 @@ impl SchemaSystem {
     }
 
     /// Returns authorities associated with this [SchemaSystem]
-    fn authorities(&mut self) -> &[Box<dyn Authority>] {
+    fn authorities(&mut self) -> &[Box<dyn DocumentAuthority>] {
         &self.resolver.authorities
     }
 
     /// Adds the provided authority to the list of [Authority]s.
-    fn add_authority(&mut self, authority: Box<dyn Authority>) {
+    fn add_authority(&mut self, authority: Box<dyn DocumentAuthority>) {
         self.resolver.authorities.push(authority);
     }
 
     /// Replaces the list of [Authority]s with a list containing only the specified authority.
-    fn with_authority(&mut self, authority: Box<dyn Authority>) {
-        let authorities: Vec<Box<dyn Authority>> = vec![authority];
+    fn with_authority(&mut self, authority: Box<dyn DocumentAuthority>) {
+        let authorities: Vec<Box<dyn DocumentAuthority>> = vec![authority];
         self.resolver.authorities = authorities;
     }
 
     // TODO: Use IntoIterator here instead of a Vec
     /// Replaces the list of [Authority]s with the specified list of [Authority]s.
-    fn with_authorities(&mut self, authorities: Vec<Box<dyn Authority>>) {
+    fn with_authorities(&mut self, authorities: Vec<Box<dyn DocumentAuthority>>) {
         self.resolver.authorities = authorities;
     }
 }
@@ -361,34 +361,41 @@ impl SchemaSystem {
 #[cfg(test)]
 mod schema_system_tests {
     use super::*;
-    use crate::authority::FileSystemAuthority;
+    use crate::authority::FileSystemDocumentAuthority;
     use std::path::Path;
 
     #[test]
     fn schema_system_add_authorities_test() {
-        let mut schema_system =
-            SchemaSystem::new(vec![Box::new(FileSystemAuthority::new(Path::new("src")))]);
-        schema_system.add_authority(Box::new(FileSystemAuthority::new(Path::new("test"))));
+        let mut schema_system = SchemaSystem::new(vec![Box::new(
+            FileSystemDocumentAuthority::new(Path::new("src")),
+        )]);
+        schema_system.add_authority(Box::new(FileSystemDocumentAuthority::new(Path::new(
+            "test",
+        ))));
         let schema_system_authorities = schema_system.authorities();
         assert_eq!(2, schema_system_authorities.len());
     }
 
     #[test]
     fn schema_system_with_authority_test() {
-        let mut schema_system =
-            SchemaSystem::new(vec![Box::new(FileSystemAuthority::new(Path::new("src")))]);
-        schema_system.with_authority(Box::new(FileSystemAuthority::new(Path::new("test"))));
+        let mut schema_system = SchemaSystem::new(vec![Box::new(
+            FileSystemDocumentAuthority::new(Path::new("src")),
+        )]);
+        schema_system.with_authority(Box::new(FileSystemDocumentAuthority::new(Path::new(
+            "test",
+        ))));
         let schema_system_authorities = schema_system.authorities();
         assert_eq!(1, schema_system_authorities.len());
     }
 
     #[test]
     fn schema_system_with_authorities_test() {
-        let mut schema_system =
-            SchemaSystem::new(vec![Box::new(FileSystemAuthority::new(Path::new("src")))]);
+        let mut schema_system = SchemaSystem::new(vec![Box::new(
+            FileSystemDocumentAuthority::new(Path::new("src")),
+        )]);
         schema_system.with_authorities(vec![
-            Box::new(FileSystemAuthority::new(Path::new("test"))),
-            Box::new(FileSystemAuthority::new(Path::new("ion"))),
+            Box::new(FileSystemDocumentAuthority::new(Path::new("test"))),
+            Box::new(FileSystemDocumentAuthority::new(Path::new("ion"))),
         ]);
         let schema_system_authorities = schema_system.authorities();
         assert_eq!(2, schema_system_authorities.len());
@@ -397,9 +404,9 @@ mod schema_system_tests {
     #[test]
     fn schema_system_load_schema_test() {
         let root_path = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let mut schema_system = SchemaSystem::new(vec![Box::new(FileSystemAuthority::new(
-            &root_path.join(Path::new("ion-schema-tests/")),
-        ))]);
+        let mut schema_system = SchemaSystem::new(vec![Box::new(
+            FileSystemDocumentAuthority::new(&root_path.join(Path::new("ion-schema-tests/"))),
+        )]);
         // load schema for core types
         let schema = schema_system
             .load_schema("constraints/type/validation_int.isl".to_owned())

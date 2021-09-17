@@ -11,18 +11,18 @@ use std::path::{Path, PathBuf};
 ///
 /// The structure of a schema identifier string is defined by the
 /// Authority responsible for the schema/type(s) being imported.
-pub trait Authority: Debug {
+pub trait DocumentAuthority: Debug {
     fn elements(&self, id: &str) -> IonSchemaResult<Vec<OwnedElement>>;
 }
 
 /// An [Authority] implementation that attempts to resolve schema ids to files
 /// relative to a basePath.
 #[derive(Debug, Clone)]
-pub struct FileSystemAuthority {
+pub struct FileSystemDocumentAuthority {
     base_path: PathBuf,
 }
 
-impl FileSystemAuthority {
+impl FileSystemDocumentAuthority {
     pub fn new(base_path: &Path) -> Self {
         Self {
             base_path: base_path.to_path_buf(),
@@ -35,7 +35,7 @@ impl FileSystemAuthority {
     }
 }
 
-impl Authority for FileSystemAuthority {
+impl DocumentAuthority for FileSystemDocumentAuthority {
     /// Returns a vector of [OwnedElement]s based on given schema id
     fn elements(&self, id: &str) -> IonSchemaResult<Vec<OwnedElement>> {
         let absolute_path = self.base_path().join(id);
