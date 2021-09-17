@@ -1,5 +1,5 @@
 use crate::authority::DocumentAuthority;
-use crate::isl::IslType;
+use crate::isl::isl_type::IslType;
 use crate::result::{
     invalid_schema_error, unresolvable_schema_error, unresolvable_schema_error_raw, IonSchemaError,
     IonSchemaResult,

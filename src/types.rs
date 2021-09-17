@@ -1,5 +1,6 @@
 use crate::constraint::{AllOfConstraint, Constraint, TypeConstraint};
-use crate::isl::{IslConstraint, IslType};
+use crate::isl::isl_constraint::IslConstraint;
+use crate::isl::isl_type::IslType;
 use crate::result::IonSchemaResult;
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::violation::Violations;
@@ -137,7 +138,9 @@ impl TypeValidator for TypeDefinition {
 mod type_definition_tests {
     use super::*;
     use crate::constraint::{AllOfConstraint, Constraint, TypeConstraint};
-    use crate::isl::{IslConstraint, IslType, IslTypeRef};
+    use crate::isl::isl_constraint::IslConstraint;
+    use crate::isl::isl_type::IslType;
+    use crate::isl::isl_type_reference::IslTypeRef;
     use crate::system::PendingTypes;
     use ion_rs::IonType;
     use rstest::*;
