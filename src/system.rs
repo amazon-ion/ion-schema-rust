@@ -15,7 +15,7 @@ use std::rc::Rc;
 
 /// Stores information about types that are in the process of being defined.
 ///
-/// An ISL type definition can include types that are not yet fully defined. 
+/// An ISL type definition can include types that are not yet fully defined.
 /// For example, an ISL type definition might include:
 /// * A reference to itself. This could happen in a recursive structure like a
 ///   linked list or binary tree.
@@ -23,7 +23,7 @@ use std::rc::Rc;
 /// Because the [SchemaSystem] does not yet know the complete definition
 /// of these types, it cannot find them in the [TypeStore].
 /// An instance of [PendingTypes] is used to track information about types
-/// that we do not have a complete definition for yet. When the 
+/// that we do not have a complete definition for yet. When the
 /// [SchemaSystem] finishes loading these types, the type definitions in
 /// [PendingTypes] can be promoted the [TypeStore].
 #[derive(Debug, Clone)]
