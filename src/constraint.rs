@@ -1,4 +1,4 @@
-use crate::isl::IslTypeRef;
+use crate::isl::isl_type_reference::IslTypeRef;
 use crate::result::IonSchemaResult;
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::violation::Violations;
