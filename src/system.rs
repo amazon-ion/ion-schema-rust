@@ -1,15 +1,14 @@
 use crate::authority::DocumentAuthority;
-use crate::isl::isl_type::IslType;
+use crate::isl::isl_type::NamedIslType;
 use crate::result::{
     invalid_schema_error, unresolvable_schema_error, unresolvable_schema_error_raw, IonSchemaError,
     IonSchemaResult,
 };
 use crate::schema::Schema;
-use crate::types::TypeDefinition;
+use crate::types::{AnonymousTypeDefinition, NamedTypeDefinition, TypeDefinition};
 use ion_rs::value::owned::{text_token, OwnedElement, OwnedSymbolToken};
 use ion_rs::value::{Element, Sequence, Struct};
 use std::collections::HashMap;
-use std::convert::TryInto;
 use std::io::ErrorKind;
 use std::rc::Rc;
 
@@ -52,9 +51,15 @@ impl PendingTypes {
                 .ok_or(unresolvable_schema_error_raw(
                     "Unable to load schema due to unresolvable type",
                 ))?;
-            match type_def.to_owned().name() {
-                Some(name) => type_store.add_named_type(name, type_def),
-                None => type_store.add_anonymous_type(type_def),
+            match type_def.to_owned() {
+                // Some(name) => type_store.add_named_type(name, type_def),
+                // None => type_store.add_anonymous_type(type_def),
+                TypeDefinition::NamedTypeDefinition(named_type_def) => {
+                    type_store.add_named_type(named_type_def)
+                }
+                TypeDefinition::AnonymousTypeDefinition(anonymous_type_def) => {
+                    type_store.add_anonymous_type(anonymous_type_def)
+                }
             };
         }
         self.types_by_id.clear();
@@ -73,18 +78,18 @@ impl PendingTypes {
         match self.ids_by_name.get(name) {
             Some(id) => Some(*id),
             None => match type_store.get_type_id_by_name(name) {
-                Some(id) => Some(*id),
+                Some(id) => Some(*id + type_store.types_by_id.len()),
                 None => None,
             },
         }
     }
 
-    /// Adds the [TypeDefinition] and the associated name in the [Context] and returns the [TypeId] for it
-    /// If the name already exists in the [TypeStore] or [Context] it returns the associated [TypeId]
+    /// Adds the [NamedTypeDefinition] and the associated name in the [Context] and returns the [TypeId] for it
+    /// If the given name already exists in the [TypeStore] or [Context] it returns the associated [TypeId]
     pub fn add_named_type(
         &mut self,
         name: &str,
-        type_def: TypeDefinition,
+        type_def: NamedTypeDefinition,
         type_store: &mut TypeStore,
     ) -> TypeId {
         if let Some(exists) = self.ids_by_name.get(name) {
@@ -95,15 +100,9 @@ impl PendingTypes {
         }
         let type_id = self.types_by_id.len();
         self.ids_by_name.insert(name.to_owned(), type_id);
-        self.types_by_id.push(Some(type_def));
-        type_id
-    }
-
-    /// Adds the [TypeDefinition] in the [TypeStore] or [Context] and returns the [TypeId] for it
-    pub fn add_anonymous_type(&mut self, type_def: TypeDefinition) -> TypeId {
-        let type_id = self.types_by_id.len();
-        self.types_by_id.push(Some(type_def));
-        type_id
+        self.types_by_id
+            .push(Some(TypeDefinition::NamedTypeDefinition(type_def)));
+        type_id + type_store.types_by_id.len()
     }
 
     /// Updates the unresolved named type that was added as None while loading types in a schema
@@ -112,9 +111,10 @@ impl PendingTypes {
         &mut self,
         type_id: TypeId,
         name: &str,
-        type_def: TypeDefinition,
+        type_def: NamedTypeDefinition,
         type_store: &mut TypeStore,
     ) -> TypeId {
+        let type_id = type_id - type_store.types_by_id.len();
         if let Some(exists) = self.ids_by_name.get(name) {
             return exists.to_owned();
         }
@@ -122,15 +122,21 @@ impl PendingTypes {
             return exists.to_owned();
         }
         self.ids_by_name.insert(name.to_owned(), type_id);
-        self.types_by_id[type_id] = Some(type_def);
-        type_id
+        self.types_by_id[type_id] = Some(TypeDefinition::NamedTypeDefinition(type_def));
+        type_id + type_store.types_by_id.len()
     }
 
     /// Updates the unresolved anonymous type that was added as None while loading types in a schema
     /// with a resolved [TypeDefinition]
-    pub fn update_anonymous_type(&mut self, type_id: TypeId, type_def: TypeDefinition) -> TypeId {
-        self.types_by_id[type_id] = Some(type_def);
-        type_id
+    pub fn update_anonymous_type(
+        &mut self,
+        type_id: TypeId,
+        type_def: AnonymousTypeDefinition,
+        type_store: &mut TypeStore,
+    ) -> TypeId {
+        self.types_by_id[type_id - type_store.types_by_id.len()] =
+            Some(TypeDefinition::AnonymousTypeDefinition(type_def));
+        type_id + type_store.types_by_id.len()
     }
 
     /// Adds parent information storing the name and possible TypeId of the parent
@@ -149,10 +155,10 @@ impl PendingTypes {
     }
 
     /// Adds the unresolved type as None before it gets resolved and gets the associated [TypeId]
-    pub fn add_type(&mut self) -> TypeId {
+    pub fn add_type(&mut self, type_store: &mut TypeStore) -> TypeId {
         let type_id = self.types_by_id.len();
         self.types_by_id.push(None);
-        type_id
+        type_id + type_store.types_by_id.len()
     }
 }
 
@@ -198,22 +204,25 @@ impl TypeStore {
         self.types_by_id.get(id)
     }
 
-    /// Adds the [Type] and the associated name in the [TypeStore] and returns the [TypeId] for it
+    /// Adds the [NamedTypeDefinition] and the associated name in the [TypeStore] and returns the [TypeId] for it
     /// If the name already exists in the [TypeStore] it returns the associated [TypeId]
-    pub fn add_named_type(&mut self, name: &str, type_def: TypeDefinition) -> TypeId {
+    pub fn add_named_type(&mut self, type_def: NamedTypeDefinition) -> TypeId {
+        let name = type_def.name();
         if let Some(exists) = self.ids_by_name.get(name) {
             return exists.to_owned();
         }
         let type_id = self.types_by_id.len();
         self.ids_by_name.insert(name.to_owned(), type_id);
-        self.types_by_id.push(type_def);
+        self.types_by_id
+            .push(TypeDefinition::NamedTypeDefinition(type_def));
         type_id
     }
 
     /// Adds the [Type] in the [TypeStore] and returns the [TypeId] for it
-    pub fn add_anonymous_type(&mut self, type_def: TypeDefinition) -> TypeId {
+    pub fn add_anonymous_type(&mut self, type_def: AnonymousTypeDefinition) -> TypeId {
         let type_id = self.types_by_id.len();
-        self.types_by_id.push(type_def);
+        self.types_by_id
+            .push(TypeDefinition::AnonymousTypeDefinition(type_def));
         type_id
     }
 }
@@ -259,13 +268,13 @@ impl Resolver {
             // load types for schema
             else if annotations.contains(&&text_token("type")) {
                 // convert OwnedElement to IslType
-                let isl_type: IslType = (&value).try_into()?;
+                let isl_type: NamedIslType = NamedIslType::parse_from_owned_element(&value)?;
 
                 let pending_types = &mut PendingTypes::new();
 
                 // convert IslType to TypeDefinition
-                let type_def: TypeDefinition =
-                    TypeDefinition::parse_from_isl_type_and_update_type_store(
+                let type_def: NamedTypeDefinition =
+                    NamedTypeDefinition::parse_from_isl_type_and_update_type_store(
                         &isl_type,
                         type_store,
                         pending_types,
@@ -401,18 +410,5 @@ mod schema_system_tests {
         ]);
         let schema_system_authorities = schema_system.authorities();
         assert_eq!(2, schema_system_authorities.len());
-    }
-
-    #[test]
-    fn schema_system_load_schema_test() {
-        let root_path = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let mut schema_system = SchemaSystem::new(vec![Box::new(
-            FileSystemDocumentAuthority::new(&root_path.join(Path::new("ion-schema-tests/"))),
-        )]);
-        // load schema for core types
-        let schema = schema_system
-            .load_schema("constraints/type/validation_int.isl".to_owned())
-            .unwrap();
-        assert_eq!(schema.id(), "constraints/type/validation_int.isl");
     }
 }

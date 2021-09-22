@@ -1,11 +1,11 @@
-use crate::isl::isl_type::IslType;
+use crate::isl::isl_type::AnonymousIslType;
 use crate::result::{invalid_schema_error_raw, unresolvable_schema_error, IonSchemaResult};
 use crate::system::{PendingTypes, TypeId, TypeStore};
-use crate::types::TypeDefinition;
+use crate::types::AnonymousTypeDefinition;
+use crate::types::NamedTypeDefinition;
 use ion_rs::value::owned::OwnedElement;
 use ion_rs::value::{Element, SymbolToken};
 use ion_rs::IonType;
-use std::convert::TryInto;
 
 /// Provides an internal representation of a schema type reference.
 /// The type reference grammar is defined in the [Ion Schema Spec]
@@ -19,7 +19,7 @@ pub enum IslTypeRef {
     /// Represents a type reference defined as an inlined import type from another schema
     // TODO: add ImportType(Import) where ImportType could either point to a schema represented by an id with all the types or a single type from inside it
     /// represents an unnamed type definition reference
-    AnonymousType(IslType),
+    AnonymousType(AnonymousIslType),
 }
 
 // TODO: add a check for nullable type reference
@@ -56,7 +56,7 @@ impl IslTypeRef {
                     })
             }
             IonType::Struct =>
-                Ok(IslTypeRef::AnonymousType(value.try_into()?)),
+                Ok(IslTypeRef::AnonymousType(AnonymousIslType::parse_from_owned_element(value)?)),
             _ => Err(invalid_schema_error_raw(
                 "type reference can either be a symbol(For base/alias type reference) or a struct (for anonymous type reference)",
             )),
@@ -76,7 +76,7 @@ impl IslTypeRef {
                 // inserts ISLCoreType as a Type into type_store
                 Ok(pending_types.add_named_type(
                     &format!("{:?}", ion_type),
-                    TypeDefinition::new(Some(format!("{:?}", ion_type)), vec![]),
+                    NamedTypeDefinition::new(format!("{:?}", ion_type), vec![]),
                     type_store,
                 ))
             }
@@ -105,7 +105,7 @@ impl IslTypeRef {
             }
             IslTypeRef::AnonymousType(isl_type) => {
                 let type_id = pending_types.get_total_types();
-                let type_def = TypeDefinition::parse_from_isl_type_and_update_type_store(
+                let type_def = AnonymousTypeDefinition::parse_from_isl_type_and_update_type_store(
                     isl_type,
                     type_store,
                     pending_types,

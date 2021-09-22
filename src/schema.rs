@@ -1,6 +1,6 @@
 use crate::import::Import;
 use crate::system::TypeStore;
-use crate::types::{TypeDefinition, TypeRef};
+use crate::types::{NamedTypeDefinition, TypeDefinition, TypeRef};
 use std::rc::Rc;
 
 /// A Schema is a collection of zero or more [Type]s.
@@ -58,7 +58,7 @@ impl Schema {
     /// instance plus the provided type.  Note that the added type
     /// in the returned instance will hide a type of the same name
     /// from this instance.
-    fn plus_type(&self, schema_type: TypeDefinition) -> Self {
+    fn plus_type(&self, schema_type: NamedTypeDefinition) -> Self {
         todo!()
     }
 }
@@ -105,56 +105,46 @@ mod schema_tests {
 
     #[rstest(
     owned_elements, total_types,
-    case::type_constraint_with_anonymous_type(
-        /* For a schema with single anonymous type as below: 
-            type:: { type: int }
-         */
-        load(r#" // For a schema with single anonymous type
-            type:: {type: int}
-        "#).into_iter(),
-        2 // this includes the core type int and the anonymous type
-    ),
     case::type_constraint_with_named_type(
-        load(r#" For a schema with named type as below: 
+        load(r#" // For a schema with named type as below: 
             type:: { name: my_int, type: int }
         "#).into_iter(),
         2 // this includes the core type int and the anonymous type
     ),
     case::type_constraint_with_self_reference_type(
-        load(r#" For a schema with self reference type as below: 
+        load(r#" // For a schema with self reference type as below: 
             type:: { name: my_int, type: my_int }
         "#).into_iter(),
         1 // this includes only my_int type
     ),
     case::type_constraint_with_nested_self_reference_type(
-        load(r#" For a schema with nested self reference type as below:
+        load(r#" // For a schema with nested self reference type as below:
             type:: { name: my_int, type: { type: my_int } }
         "#).into_iter(),
         2 // this includes my_int type and the anonymous type that uses my_int
     ),
     case::type_constraint_with_nested_type(
-        load(r#" For a schema with nested types as below:
+        load(r#" // For a schema with nested types as below:
             type:: { name: my_int, type: { type: int } }
         "#).into_iter(),
         3 // this includes my_int type, the anonymous type that uses int and core type int
     ),
     case::type_constraint_with_nested_multiple_types(
-        load(r#"  For a schema with nested multiple types as below: 
+        load(r#" // For a schema with nested multiple types as below: 
             type:: { name: my_int, type: { type: int }, type: { type: my_int } }
         "#).into_iter(),
         4 //  this includes my_int type, the anonymous type that uses int, core type int and the anonymous type that uses my_int type
     ),
-    case::type_constraint_wiht_multiple_types(
-        load(r#" For a schema with multiple type as below:
+    case::type_constraint_with_multiple_types(
+        load(r#" // For a schema with multiple type as below:
              type:: { name: my_int, type: int }
              type:: { name: my_bool, type: bool }
-             type:: { type: string }
         "#).into_iter(),
-        6
+        4
     ),
     case::all_of_constraint(
-        load(r#" For a schema with all_of type as below: 
-            type:: { all_of: [{ type: int }] }
+        load(r#" // For a schema with all_of type as below: 
+            type:: { name: all_of_type, all_of: [{ type: int }] }
         "#).into_iter(),
         3
     ),

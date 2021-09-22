@@ -30,66 +30,80 @@ pub mod isl_type_reference;
 #[cfg(test)]
 mod isl_tests {
     use crate::isl::isl_constraint::IslConstraint;
-    use crate::isl::isl_type::IslType;
+    use crate::isl::isl_type::{AnonymousIslType, IslType, NamedIslType};
     use crate::isl::isl_type_reference::IslTypeRef;
     use ion_rs::value::reader::element_reader;
     use ion_rs::value::reader::ElementReader;
     use ion_rs::IonType;
     use rstest::*;
-    use std::convert::TryInto;
 
-    // helper function to be used by isl tests
-    fn load(text: &str) -> IslType {
-        (&element_reader()
-            .read_one(text.as_bytes())
-            .expect("parsing failed unexpectedly"))
-            .try_into()
-            .unwrap()
+    // helper function to create NamedIslType for isl tests
+    fn load_named_type(text: &str) -> IslType {
+        IslType::NamedIslType(
+            NamedIslType::parse_from_owned_element(
+                &element_reader()
+                    .read_one(text.as_bytes())
+                    .expect("parsing failed unexpectedly"),
+            )
+            .unwrap(),
+        )
+    }
+
+    // helper function to create AnonymousIslType for isl tests
+    fn load_anonymous_type(text: &str) -> IslType {
+        IslType::AnonymousIslType(
+            AnonymousIslType::parse_from_owned_element(
+                &element_reader()
+                    .read_one(text.as_bytes())
+                    .expect("parsing failed unexpectedly"),
+            )
+            .unwrap(),
+        )
     }
 
     #[rstest(
     isl_type1,isl_type2,
     case::type_constraint_with_anonymous_type(
-    load(r#" // For a schema with single anonymous type
-            {type: int}
-        "#),
-    IslType::new(None, vec![IslConstraint::Type(IslTypeRef::CoreIslType(IonType::Integer))])
+        load_anonymous_type(r#" // For a schema with single anonymous type
+                {type: int}
+            "#),
+        IslType::AnonymousIslType(AnonymousIslType::new(vec![IslConstraint::Type(IslTypeRef::CoreIslType(IonType::Integer))]))
     ),
     case::type_constraint_with_named_type(
-    load(r#" // For a schema with named type 
-            { name: my_int, type: int }
-        "#),
-    IslType::new(Some("my_int".to_owned()), vec![IslConstraint::Type(IslTypeRef::CoreIslType(IonType::Integer))])
+        load_named_type(r#" // For a schema with named type
+                type:: { name: my_int, type: int }
+            "#),
+        IslType::NamedIslType(NamedIslType::new("my_int".to_owned(), vec![IslConstraint::Type(IslTypeRef::CoreIslType(IonType::Integer))]))
     ),
     case::type_constraint_with_self_reference_type(
-    load(r#" // For a schema with self reference type
-            { name: my_int, type: my_int }
-        "#),
-    IslType::new(Some("my_int".to_owned()), vec![IslConstraint::Type(IslTypeRef::NamedType("my_int".to_owned()))])
+        load_named_type(r#" // For a schema with self reference type
+                type:: { name: my_int, type: my_int }
+            "#),
+        IslType::NamedIslType(NamedIslType::new("my_int".to_owned(), vec![IslConstraint::Type(IslTypeRef::NamedType("my_int".to_owned()))]))
     ),
     case::type_constraint_with_nested_self_reference_type(
-    load(r#" // For a schema with nested self reference type
-            { name: my_int, type: { type: my_int } }
-        "#),
-    IslType::new(Some("my_int".to_owned()), vec![IslConstraint::Type(IslTypeRef::AnonymousType(IslType::new(None, vec![IslConstraint::Type(IslTypeRef::NamedType("my_int".to_owned()))])))])
+        load_named_type(r#" // For a schema with nested self reference type
+                type:: { name: my_int, type: { type: my_int } }
+            "#),
+        IslType::NamedIslType(NamedIslType::new("my_int".to_owned(), vec![IslConstraint::Type(IslTypeRef::AnonymousType(AnonymousIslType::new(vec![IslConstraint::Type(IslTypeRef::NamedType("my_int".to_owned()))])))]))
     ),
     case::type_constraint_with_nested_type(
-    load(r#" // For a schema with nested types
-            { name: my_int, type: { type: int } }
-        "#),
-    IslType::new(Some("my_int".to_owned()), vec![IslConstraint::Type(IslTypeRef::AnonymousType(IslType::new(None, vec![IslConstraint::Type(IslTypeRef::CoreIslType(IonType::Integer))])))])
+        load_named_type(r#" // For a schema with nested types
+                type:: { name: my_int, type: { type: int } }
+            "#),
+        IslType::NamedIslType(NamedIslType::new("my_int".to_owned(), vec![IslConstraint::Type(IslTypeRef::AnonymousType(AnonymousIslType::new(vec![IslConstraint::Type(IslTypeRef::CoreIslType(IonType::Integer))])))]))
     ),
     case::type_constraint_with_nested_multiple_types(
-    load(r#" // For a schema with nested multiple types
-            { name: my_int, type: { type: int }, type: { type: my_int } }
-        "#),
-    IslType::new(Some("my_int".to_owned()), vec![IslConstraint::Type(IslTypeRef::AnonymousType(IslType::new(None, vec![IslConstraint::Type(IslTypeRef::CoreIslType(IonType::Integer))]))), IslConstraint::Type(IslTypeRef::AnonymousType(IslType::new(None, vec![IslConstraint::Type(IslTypeRef::NamedType("my_int".to_owned()))])))])
+        load_named_type(r#" // For a schema with nested multiple types
+                type:: { name: my_int, type: { type: int }, type: { type: my_int } }
+            "#),
+        IslType::NamedIslType(NamedIslType::new("my_int".to_owned(), vec![IslConstraint::Type(IslTypeRef::AnonymousType(AnonymousIslType::new(vec![IslConstraint::Type(IslTypeRef::CoreIslType(IonType::Integer))]))), IslConstraint::Type(IslTypeRef::AnonymousType(AnonymousIslType::new(vec![IslConstraint::Type(IslTypeRef::NamedType("my_int".to_owned()))])))]))
     ),
     case::all_of_constraint(
-    load(r#" // For a schema with all_of type as below: 
-            { all_of: [{ type: int }] }
-        "#),
-    IslType::new(None, vec![IslConstraint::AllOf(vec![IslTypeRef::AnonymousType(IslType::new(None, vec![IslConstraint::Type(IslTypeRef::CoreIslType(IonType::Integer))]))])])
+        load_anonymous_type(r#" // For a schema with all_of type as below:
+                { all_of: [{ type: int }] }
+            "#),
+        IslType::AnonymousIslType(AnonymousIslType::new(vec![IslConstraint::AllOf(vec![IslTypeRef::AnonymousType(AnonymousIslType::new(vec![IslConstraint::Type(IslTypeRef::CoreIslType(IonType::Integer))]))])]))
     ),
     )]
     fn owned_struct_to_isl_type(isl_type1: IslType, isl_type2: IslType) {
