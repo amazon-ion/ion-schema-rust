@@ -1,11 +1,11 @@
 use crate::authority::DocumentAuthority;
-use crate::isl::isl_type::NamedIslType;
+use crate::isl::isl_type::IslTypeImpl;
 use crate::result::{
     invalid_schema_error, unresolvable_schema_error, unresolvable_schema_error_raw, IonSchemaError,
     IonSchemaResult,
 };
 use crate::schema::Schema;
-use crate::types::{AnonymousTypeDefinition, NamedTypeDefinition, TypeDefinition};
+use crate::types::{TypeDefinition, TypeDefinitionImpl};
 use ion_rs::value::owned::{text_token, OwnedElement, OwnedSymbolToken};
 use ion_rs::value::{Element, Sequence, Struct};
 use std::collections::HashMap;
@@ -54,10 +54,8 @@ impl PendingTypes {
             match type_def.to_owned() {
                 // Some(name) => type_store.add_named_type(name, type_def),
                 // None => type_store.add_anonymous_type(type_def),
-                TypeDefinition::NamedTypeDefinition(named_type_def) => {
-                    type_store.add_named_type(named_type_def)
-                }
-                TypeDefinition::AnonymousTypeDefinition(anonymous_type_def) => {
+                TypeDefinition::Named(named_type_def) => type_store.add_named_type(named_type_def),
+                TypeDefinition::Anonymous(anonymous_type_def) => {
                     type_store.add_anonymous_type(anonymous_type_def)
                 }
             };
@@ -89,7 +87,7 @@ impl PendingTypes {
     pub fn add_named_type(
         &mut self,
         name: &str,
-        type_def: NamedTypeDefinition,
+        type_def: TypeDefinitionImpl,
         type_store: &mut TypeStore,
     ) -> TypeId {
         if let Some(exists) = self.ids_by_name.get(name) {
@@ -100,8 +98,7 @@ impl PendingTypes {
         }
         let type_id = self.types_by_id.len();
         self.ids_by_name.insert(name.to_owned(), type_id);
-        self.types_by_id
-            .push(Some(TypeDefinition::NamedTypeDefinition(type_def)));
+        self.types_by_id.push(Some(TypeDefinition::Named(type_def)));
         type_id + type_store.types_by_id.len()
     }
 
@@ -111,7 +108,7 @@ impl PendingTypes {
         &mut self,
         type_id: TypeId,
         name: &str,
-        type_def: NamedTypeDefinition,
+        type_def: TypeDefinitionImpl,
         type_store: &mut TypeStore,
     ) -> TypeId {
         let type_id = type_id - type_store.types_by_id.len();
@@ -122,7 +119,7 @@ impl PendingTypes {
             return exists.to_owned();
         }
         self.ids_by_name.insert(name.to_owned(), type_id);
-        self.types_by_id[type_id] = Some(TypeDefinition::NamedTypeDefinition(type_def));
+        self.types_by_id[type_id] = Some(TypeDefinition::Named(type_def));
         type_id + type_store.types_by_id.len()
     }
 
@@ -131,11 +128,11 @@ impl PendingTypes {
     pub fn update_anonymous_type(
         &mut self,
         type_id: TypeId,
-        type_def: AnonymousTypeDefinition,
+        type_def: TypeDefinitionImpl,
         type_store: &mut TypeStore,
     ) -> TypeId {
         self.types_by_id[type_id - type_store.types_by_id.len()] =
-            Some(TypeDefinition::AnonymousTypeDefinition(type_def));
+            Some(TypeDefinition::Anonymous(type_def));
         type_id + type_store.types_by_id.len()
     }
 
@@ -206,23 +203,21 @@ impl TypeStore {
 
     /// Adds the [NamedTypeDefinition] and the associated name in the [TypeStore] and returns the [TypeId] for it
     /// If the name already exists in the [TypeStore] it returns the associated [TypeId]
-    pub fn add_named_type(&mut self, type_def: NamedTypeDefinition) -> TypeId {
-        let name = type_def.name();
+    pub fn add_named_type(&mut self, type_def: TypeDefinitionImpl) -> TypeId {
+        let name = type_def.name().as_ref().unwrap();
         if let Some(exists) = self.ids_by_name.get(name) {
             return exists.to_owned();
         }
         let type_id = self.types_by_id.len();
         self.ids_by_name.insert(name.to_owned(), type_id);
-        self.types_by_id
-            .push(TypeDefinition::NamedTypeDefinition(type_def));
+        self.types_by_id.push(TypeDefinition::Named(type_def));
         type_id
     }
 
     /// Adds the [Type] in the [TypeStore] and returns the [TypeId] for it
-    pub fn add_anonymous_type(&mut self, type_def: AnonymousTypeDefinition) -> TypeId {
+    pub fn add_anonymous_type(&mut self, type_def: TypeDefinitionImpl) -> TypeId {
         let type_id = self.types_by_id.len();
-        self.types_by_id
-            .push(TypeDefinition::AnonymousTypeDefinition(type_def));
+        self.types_by_id.push(TypeDefinition::Anonymous(type_def));
         type_id
     }
 }
@@ -268,13 +263,13 @@ impl Resolver {
             // load types for schema
             else if annotations.contains(&&text_token("type")) {
                 // convert OwnedElement to IslType
-                let isl_type: NamedIslType = NamedIslType::parse_from_owned_element(&value)?;
+                let isl_type: IslTypeImpl = IslTypeImpl::parse_from_owned_element(&value)?;
 
                 let pending_types = &mut PendingTypes::new();
 
                 // convert IslType to TypeDefinition
-                let type_def: NamedTypeDefinition =
-                    NamedTypeDefinition::parse_from_isl_type_and_update_type_store(
+                let type_def: TypeDefinitionImpl =
+                    TypeDefinitionImpl::parse_from_isl_type_and_update_type_store(
                         &isl_type,
                         type_store,
                         pending_types,

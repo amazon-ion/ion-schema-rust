@@ -1,6 +1,6 @@
 use crate::import::Import;
 use crate::system::TypeStore;
-use crate::types::{NamedTypeDefinition, TypeDefinition, TypeRef};
+use crate::types::{TypeDefinition, TypeDefinitionImpl, TypeRef};
 use std::rc::Rc;
 
 /// A Schema is a collection of zero or more [Type]s.
@@ -58,7 +58,7 @@ impl Schema {
     /// instance plus the provided type.  Note that the added type
     /// in the returned instance will hide a type of the same name
     /// from this instance.
-    fn plus_type(&self, schema_type: NamedTypeDefinition) -> Self {
+    fn plus_type(&self, schema_type: TypeDefinitionImpl) -> Self {
         todo!()
     }
 }

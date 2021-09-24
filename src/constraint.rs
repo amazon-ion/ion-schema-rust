@@ -1,3 +1,4 @@
+use crate::isl::isl_constraint::IslConstraint;
 use crate::isl::isl_type_reference::IslTypeRef;
 use crate::result::IonSchemaResult;
 use crate::system::{PendingTypes, TypeId, TypeStore};
@@ -18,6 +19,45 @@ pub trait ConstraintValidator {
 pub enum Constraint {
     AllOf(AllOfConstraint),
     Type(TypeConstraint),
+}
+
+impl Constraint {
+    /// Creates a [Constraint::Type] using the [TypeId] referenced inside it
+    pub fn type_constraint(type_id: TypeId) -> Constraint {
+        Constraint::Type(TypeConstraint::new(type_id))
+    }
+
+    /// Creates a [Constraint::AllOf] using the [TypeId]s referenced inside it
+    pub fn all_of(type_ids: Vec<TypeId>) -> Constraint {
+        Constraint::AllOf(AllOfConstraint::new(type_ids))
+    }
+
+    /// Parse an [IslConstraint] to a [Constraint]
+    pub fn parse_from_isl_constraint(
+        isl_constraint: &IslConstraint,
+        type_store: &mut TypeStore,
+        pending_types: &mut PendingTypes,
+    ) -> IonSchemaResult<Constraint> {
+        // TODO: add more constraints below
+        match isl_constraint {
+            IslConstraint::AllOf(type_references) => {
+                let all_of: AllOfConstraint = AllOfConstraint::resolve_from_isl_constraint(
+                    type_references,
+                    type_store,
+                    pending_types,
+                )?;
+                Ok(Constraint::AllOf(all_of))
+            }
+            IslConstraint::Type(type_reference) => {
+                let type_constraint: TypeConstraint = TypeConstraint::resolve_from_isl_constraint(
+                    type_reference,
+                    type_store,
+                    pending_types,
+                )?;
+                Ok(Constraint::Type(type_constraint))
+            }
+        }
+    }
 }
 
 /// Implements an `all_of` constraint of Ion Schema
