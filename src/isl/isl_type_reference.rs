@@ -25,18 +25,18 @@ pub enum IslTypeRef {
 // TODO: add a check for nullable type reference
 impl IslTypeRef {
     /// Creates a [IslTypeRef::CoreIsl] using the [IonType] referenced inside it
-    pub fn core_isl(ion_type: IonType) -> IslTypeRef {
+    pub fn core(ion_type: IonType) -> IslTypeRef {
         IslTypeRef::CoreIsl(ion_type)
     }
 
     /// Creates a [IslTypeRef::CoreIsl] using the [IonType] referenced inside it
-    pub fn named(name: String) -> IslTypeRef {
-        IslTypeRef::Named(name)
+    pub fn named<A: Into<String>>(name: A) -> IslTypeRef {
+        IslTypeRef::Named(name.into())
     }
 
     /// Creates a [IslTypeRef::CoreIsl] using the [IonType] referenced inside it
-    pub fn anonymous(constraints: Vec<IslConstraint>) -> IslTypeRef {
-        IslTypeRef::Anonymous(IslTypeImpl::new(None, constraints))
+    pub fn anonymous<A: Into<Vec<IslConstraint>>>(constraints: A) -> IslTypeRef {
+        IslTypeRef::Anonymous(IslTypeImpl::new(None, constraints.into()))
     }
 
     /// Tries to create an [IslTypeRef] from the given OwnedElement

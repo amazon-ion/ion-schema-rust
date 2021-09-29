@@ -41,13 +41,19 @@ pub enum TypeDefinition {
 
 impl TypeDefinition {
     /// Creates a [IslType::Named] using the [IslConstraint] defined within it
-    pub fn named(name: String, constraints: Vec<Constraint>) -> TypeDefinition {
-        TypeDefinition::Named(TypeDefinitionImpl::new(Some(name), constraints))
+    pub fn named<A: Into<String>, B: Into<Vec<Constraint>>>(
+        name: A,
+        constraints: B,
+    ) -> TypeDefinition {
+        TypeDefinition::Named(TypeDefinitionImpl::new(
+            Some(name.into()),
+            constraints.into(),
+        ))
     }
 
     /// Creates a [IslType::Anonymous] using the [IslConstraint] defined within it
-    pub fn anonymous(constraints: Vec<Constraint>) -> TypeDefinition {
-        TypeDefinition::Anonymous(TypeDefinitionImpl::new(None, constraints))
+    pub fn anonymous<A: Into<Vec<Constraint>>>(constraints: A) -> TypeDefinition {
+        TypeDefinition::Anonymous(TypeDefinitionImpl::new(None, constraints.into()))
     }
 
     /// Provides the underlying constraints of [TypeDefinitionImpl]
@@ -101,7 +107,7 @@ impl TypeDefinitionImpl {
         // convert IslConstraint to Constraint
         for isl_constraint in isl_type.constraints() {
             let constraint =
-                Constraint::parse_from_isl_constraint(isl_constraint, type_store, pending_types)?;
+                Constraint::resolve_from_isl_constraint(isl_constraint, type_store, pending_types)?;
             constraints.push(constraint);
         }
 
@@ -160,50 +166,50 @@ mod type_definition_tests {
         /* For a schema with single anonymous type as below:
             { type: int }
          */
-        IslType::anonymous(vec![IslConstraint::type_constraint(IslTypeRef::core_isl(IonType::Integer))]),
-        TypeDefinition::anonymous(vec![Constraint::type_constraint(1)])
+        IslType::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer))]),
+        TypeDefinition::anonymous([Constraint::type_constraint(1)])
     ),
     case::type_constraint_with_named_type(
         /* For a schema with named type as below:
             { name: my_int, type: int }
          */
-        IslType::named("my_int".to_owned(), vec![IslConstraint::type_constraint(IslTypeRef::core_isl(IonType::Integer))]),
-        TypeDefinition::named("my_int".to_owned(), vec![Constraint::type_constraint(1)])
+        IslType::named("my_int", [IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer))]),
+        TypeDefinition::named("my_int", [Constraint::type_constraint(1)])
     ),
     case::type_constraint_with_self_reference_type(
         /* For a schema with self reference type as below:
             { name: my_int, type: my_int }
          */
-        IslType::named("my_int".to_owned(), vec![IslConstraint::type_constraint(IslTypeRef::named("my_int".to_owned()))]),
-        TypeDefinition::named("my_int".to_owned(), vec![Constraint::type_constraint(0)])
+        IslType::named("my_int", [IslConstraint::type_constraint(IslTypeRef::named("my_int"))]),
+        TypeDefinition::named("my_int", [Constraint::type_constraint(0)])
     ),
     case::type_constraint_with_nested_self_reference_type(
         /* For a schema with nested self reference type as below:
             { name: my_int, type: { type: my_int } }
          */
-        IslType::named("my_int".to_owned(), vec![IslConstraint::type_constraint(IslTypeRef::anonymous(vec![IslConstraint::type_constraint(IslTypeRef::named("my_int".to_owned()))]))]),
-        TypeDefinition::named("my_int".to_owned(), vec![Constraint::type_constraint(1)])
+        IslType::named("my_int", [IslConstraint::type_constraint(IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("my_int"))]))]),
+        TypeDefinition::named("my_int", [Constraint::type_constraint(1)])
     ),
     case::type_constraint_with_nested_type(
         /* For a schema with nested types as below:
             { name: my_int, type: { type: int } }
          */
-        IslType::named("my_int".to_owned(), vec![IslConstraint::type_constraint(IslTypeRef::anonymous(vec![IslConstraint::type_constraint(IslTypeRef::core_isl(IonType::Integer))]))]),
-        TypeDefinition::named("my_int".to_owned(), vec![Constraint::type_constraint(1)])
+        IslType::named("my_int", [IslConstraint::type_constraint(IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer))]))]),
+        TypeDefinition::named("my_int", [Constraint::type_constraint(1)])
     ),
     case::type_constraint_with_nested_multiple_types(
         /* For a schema with nested multiple types as below:
             { name: my_int, type: { type: int }, type: { type: my_int } }
          */
-        IslType::named("my_int".to_owned(), vec![IslConstraint::type_constraint(IslTypeRef::anonymous(vec![IslConstraint::type_constraint(IslTypeRef::core_isl(IonType::Integer))])), IslConstraint::type_constraint(IslTypeRef::anonymous(vec![IslConstraint::type_constraint(IslTypeRef::named("my_int".to_owned()))]))]),
-        TypeDefinition::named("my_int".to_owned(), vec![Constraint::type_constraint(1), Constraint::type_constraint(3)])
+        IslType::named("my_int", [IslConstraint::type_constraint(IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer))])), IslConstraint::type_constraint(IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("my_int"))]))]),
+        TypeDefinition::named("my_int", [Constraint::type_constraint(1), Constraint::type_constraint(3)])
     ),
     case::all_of_constraint(
         /* For a schema with all_of type as below:
             { all_of: [{ type: int }] }
         */
-        IslType::anonymous(vec![IslConstraint::all_of(vec![IslTypeRef::anonymous(vec![IslConstraint::type_constraint(IslTypeRef::core_isl(IonType::Integer))])])]),
-        TypeDefinition::anonymous(vec![Constraint::all_of(vec![1])])
+        IslType::anonymous([IslConstraint::all_of([IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer))])])]),
+        TypeDefinition::anonymous([Constraint::all_of([1])])
     ),
     )]
     fn isl_type_to_type_definition(isl_type: IslType, type_def: TypeDefinition) {

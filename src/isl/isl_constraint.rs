@@ -13,17 +13,18 @@ pub enum IslConstraint {
 
 impl IslConstraint {
     /// Creates a [IslConstraint::Type] using the [IslTypeRef] referenced inside it
+    // type is rust keyword hence this method is named type_constraint unlike other ISL constraint methods
     pub fn type_constraint(isl_type: IslTypeRef) -> IslConstraint {
         IslConstraint::Type(isl_type)
     }
 
     /// Creates a [IslConstraint::AllOf] using the [IslTypeRef] referenced inside it
-    pub fn all_of(isl_types: Vec<IslTypeRef>) -> IslConstraint {
-        IslConstraint::AllOf(isl_types)
+    pub fn all_of<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
+        IslConstraint::AllOf(isl_types.into())
     }
 
     /// Parse constraints inside an [OwnedElement] to an [IslConstraint]
-    pub fn parse_from_ion_element(
+    pub fn from_ion_element(
         constraint_name: &str,
         value: &OwnedElement,
         type_name: &str,

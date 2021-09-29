@@ -22,18 +22,18 @@ pub enum Constraint {
 }
 
 impl Constraint {
-    /// Creates a [Constraint::Type] using the [TypeId] referenced inside it
+    /// Creates a [Constraint::Type] referring to the type represented by the provided [TypeId].
     pub fn type_constraint(type_id: TypeId) -> Constraint {
         Constraint::Type(TypeConstraint::new(type_id))
     }
 
-    /// Creates a [Constraint::AllOf] using the [TypeId]s referenced inside it
-    pub fn all_of(type_ids: Vec<TypeId>) -> Constraint {
-        Constraint::AllOf(AllOfConstraint::new(type_ids))
+    /// Creates a [Constraint::AllOf] referring to the type represented by the provided [TypeId].
+    pub fn all_of<A: Into<Vec<TypeId>>>(type_ids: A) -> Constraint {
+        Constraint::AllOf(AllOfConstraint::new(type_ids.into()))
     }
 
     /// Parse an [IslConstraint] to a [Constraint]
-    pub fn parse_from_isl_constraint(
+    pub fn resolve_from_isl_constraint(
         isl_constraint: &IslConstraint,
         type_store: &mut TypeStore,
         pending_types: &mut PendingTypes,

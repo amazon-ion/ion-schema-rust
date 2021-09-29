@@ -12,13 +12,13 @@ pub enum IslType {
 
 impl IslType {
     /// Creates a [IslType::Named] using the [IslConstraint] defined within it
-    pub fn named(name: String, constraints: Vec<IslConstraint>) -> IslType {
-        IslType::Named(IslTypeImpl::new(Some(name), constraints))
+    pub fn named<A: Into<String>, B: Into<Vec<IslConstraint>>>(name: A, constraints: B) -> IslType {
+        IslType::Named(IslTypeImpl::new(Some(name.into()), constraints.into()))
     }
 
     /// Creates a [IslType::Anonymous] using the [IslConstraint] defined within it
-    pub fn anonymous(constraints: Vec<IslConstraint>) -> IslType {
-        IslType::Anonymous(IslTypeImpl::new(None, constraints))
+    pub fn anonymous<A: Into<Vec<IslConstraint>>>(constraints: A) -> IslType {
+        IslType::Anonymous(IslTypeImpl::new(None, constraints.into()))
     }
 
     /// Provides the underlying constraints of [IslTypeImpl]
@@ -30,9 +30,9 @@ impl IslType {
     }
 }
 
-/// Represents both named and anonymous [IslType] which can be converted to a solid [TypeDefinition] using TypeStore
-/// named ISL type grammar: `type:: { name: <NAME>, <CONSTRAINT>...}`
-/// anonymous ISL type grammar: `{ <CONSTRAINT>... }`
+/// Represents both named and anonymous [IslType]s and can be converted to a solid [TypeDefinition] using TypeStore
+/// Named ISL type grammar: `type:: { name: <NAME>, <CONSTRAINT>...}`
+/// Anonymous ISL type grammar: `{ <CONSTRAINT>... }`
 #[derive(Debug, Clone, PartialEq)]
 pub struct IslTypeImpl {
     name: Option<String>,
@@ -75,7 +75,7 @@ impl IslTypeImpl {
         };
 
         if contains_annotations && type_name.is_none() {
-            // If a named type doesn't have name field throw an error
+            // If a named type doesn't have name field return an error
             return Err(invalid_schema_error_raw(
                 "Top level types must have a name field in its definition",
             ));
@@ -85,6 +85,12 @@ impl IslTypeImpl {
                 "Top level types must have `type::` annotation in their definition",
             ));
         }
+
+        // set the isl type name for any error that is thrown while parsing its constraints
+        let isl_type_name = match type_name.to_owned() {
+            Some(name) => name,
+            None => format!("{:?}", ion_struct),
+        };
 
         // parses all the constraints inside a Type
         for (field_name, value) in ion_struct.iter() {
@@ -98,14 +104,8 @@ impl IslTypeImpl {
                 }
             };
 
-            // set the isl type name for any error that is thrown while parsing its constraints
-            let mut isl_type_name = format!("{:?}", ion_struct);
-            if type_name.is_some() {
-                isl_type_name = type_name.to_owned().unwrap();
-            }
-
             let constraint =
-                IslConstraint::parse_from_ion_element(constraint_name, value, &isl_type_name)?;
+                IslConstraint::from_ion_element(constraint_name, value, &isl_type_name)?;
             constraints.push(constraint);
         }
         Ok(IslTypeImpl::new(type_name, constraints))

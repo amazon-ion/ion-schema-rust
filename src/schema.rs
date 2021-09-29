@@ -1,5 +1,7 @@
 use crate::import::Import;
-use crate::system::TypeStore;
+use crate::isl::isl_type::IslType;
+use crate::result::IonSchemaResult;
+use crate::system::{PendingTypes, TypeStore};
 use crate::types::{TypeDefinition, TypeDefinitionImpl, TypeRef};
 use std::rc::Rc;
 
@@ -22,6 +24,38 @@ impl Schema {
             imports: vec![],
             types,
         }
+    }
+
+    /// Creates a schema from given [IslType]s
+    pub fn try_from_isl_types<A: AsRef<str>, B: Into<Vec<IslType>>>(
+        id: A,
+        isl_types: B,
+    ) -> IonSchemaResult<Self> {
+        // create type_store and pending types which will be used to create type definition
+        let type_store = &mut TypeStore::new();
+        let pending_types = &mut PendingTypes::new();
+        for isl_type in isl_types.into() {
+            // convert [IslType] into [TypeDefinition]
+            match isl_type {
+                IslType::Named(named_isl_type) => TypeDefinition::Named(
+                    TypeDefinitionImpl::parse_from_isl_type_and_update_type_store(
+                        &named_isl_type,
+                        type_store,
+                        pending_types,
+                    )
+                    .unwrap(),
+                ),
+                IslType::Anonymous(anonymous_isl_type) => TypeDefinition::Anonymous(
+                    TypeDefinitionImpl::parse_from_isl_type_and_update_type_store(
+                        &anonymous_isl_type,
+                        type_store,
+                        pending_types,
+                    )
+                    .unwrap(),
+                ),
+            };
+        }
+        Ok(Schema::new(id, Rc::new(type_store.to_owned())))
     }
 
     /// Returns the id for this Schema

@@ -20,7 +20,7 @@ mod constraint;
 mod import;
 pub mod isl;
 mod result;
-mod schema;
+pub mod schema;
 mod system;
 mod types;
 mod violation;
