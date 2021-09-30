@@ -1,21 +1,45 @@
 use crate::isl::isl_constraint::IslConstraint;
-use crate::isl::isl_type_reference::IslTypeRef;
-use crate::result::{
-    invalid_schema_error, invalid_schema_error_raw, IonSchemaError, IonSchemaResult,
-};
-use ion_rs::value::owned::OwnedElement;
-use ion_rs::value::{Element, Sequence, Struct, SymbolToken};
-use ion_rs::IonType;
-use std::convert::TryFrom;
+use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
+use ion_rs::value::owned::{text_token, OwnedElement, OwnedSymbolToken};
+use ion_rs::value::{Element, Struct, SymbolToken};
 
-/// Represents a public facing schema type [IslType] which can be converted to a solid TypeRef using TypeStore
-#[derive(Debug, Clone)]
-pub struct IslType {
+/// Represents a type in an ISL schema.
+#[derive(Debug, Clone, PartialEq)]
+pub enum IslType {
+    Named(IslTypeImpl),
+    Anonymous(IslTypeImpl),
+}
+
+impl IslType {
+    /// Creates a [IslType::Named] using the [IslConstraint] defined within it
+    pub fn named<A: Into<String>, B: Into<Vec<IslConstraint>>>(name: A, constraints: B) -> IslType {
+        IslType::Named(IslTypeImpl::new(Some(name.into()), constraints.into()))
+    }
+
+    /// Creates a [IslType::Anonymous] using the [IslConstraint] defined within it
+    pub fn anonymous<A: Into<Vec<IslConstraint>>>(constraints: A) -> IslType {
+        IslType::Anonymous(IslTypeImpl::new(None, constraints.into()))
+    }
+
+    /// Provides the underlying constraints of [IslTypeImpl]
+    pub fn constraints(&self) -> &[IslConstraint] {
+        match &self {
+            IslType::Named(named_type) => named_type.constraints(),
+            IslType::Anonymous(anonymous_type) => anonymous_type.constraints(),
+        }
+    }
+}
+
+/// Represents both named and anonymous [IslType]s and can be converted to a solid [TypeDefinition] using TypeStore
+/// Named ISL type grammar: `type:: { name: <NAME>, <CONSTRAINT>...}`
+/// Anonymous ISL type grammar: `{ <CONSTRAINT>... }`
+#[derive(Debug, Clone, PartialEq)]
+pub struct IslTypeImpl {
     name: Option<String>,
     constraints: Vec<IslConstraint>,
 }
 
-impl IslType {
+impl IslTypeImpl {
     pub fn new(name: Option<String>, constraints: Vec<IslConstraint>) -> Self {
         Self { name, constraints }
     }
@@ -27,21 +51,13 @@ impl IslType {
     pub fn constraints(&self) -> &[IslConstraint] {
         &self.constraints
     }
-}
 
-/// Provides an implementation of PartialEq to compare two IslTypes
-impl PartialEq for IslType {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name && self.constraints.eq(&other.constraints)
-    }
-}
-
-/// Parse constraints inside an [OwnedStruct] to an [IslType]
-impl TryFrom<&OwnedElement> for IslType {
-    type Error = IonSchemaError;
-
-    fn try_from(ion: &OwnedElement) -> Result<Self, Self::Error> {
+    /// Parse constraints inside an [OwnedElement] to an [NamedIslType]
+    pub fn parse_from_owned_element(ion: &OwnedElement) -> IonSchemaResult<Self> {
         let mut constraints = vec![];
+        let annotations: Vec<&OwnedSymbolToken> = ion.annotations().collect();
+
+        let contains_annotations = annotations.contains(&&text_token("type"));
 
         let ion_struct = try_to!(ion.as_struct());
 
@@ -55,7 +71,25 @@ impl TryFrom<&OwnedElement> for IslType {
                     ))
                 }
             },
-            None => None, // If the type is UNNAMED_TYPE_DEFINITION/ AnonymousType then set name as None
+            None => None, // If there is no name field then it is an anonymous type
+        };
+
+        if contains_annotations && type_name.is_none() {
+            // If a named type doesn't have name field return an error
+            return Err(invalid_schema_error_raw(
+                "Top level types must have a name field in its definition",
+            ));
+        } else if !contains_annotations && type_name.is_some() {
+            // For named types if it does not have the `type::` annotation return an error
+            return Err(invalid_schema_error_raw(
+                "Top level types must have `type::` annotation in their definition",
+            ));
+        }
+
+        // set the isl type name for any error that is returned while parsing its constraints
+        let isl_type_name = match type_name.to_owned() {
+            Some(name) => name,
+            None => format!("{:?}", ion_struct),
         };
 
         // parses all the constraints inside a Type
@@ -69,46 +103,11 @@ impl TryFrom<&OwnedElement> for IslType {
                     ))
                 }
             };
-            // TODO: add more constraints to match below
-            let constraint = match constraint_name {
-                "all_of" => {
-                    //TODO: create a method/macro for this ion type check which can be reused
-                    if value.ion_type() != IonType::List {
-                        return Err(invalid_schema_error_raw(format!(
-                            "all_of constraint was a {:?} instead of a list",
-                            value.ion_type()
-                        )));
-                    }
-                    let types: Vec<IslTypeRef> = value
-                        .as_sequence()
-                        .unwrap()
-                        .iter()
-                        .map(|e| IslTypeRef::parse_from_ion_element(e))
-                        .collect::<IonSchemaResult<Vec<IslTypeRef>>>()?;
-                    IslConstraint::AllOf(types)
-                }
-                "type" => {
-                    if value.ion_type() != IonType::Symbol && value.ion_type() != IonType::Struct {
-                        return Err(invalid_schema_error_raw(format!(
-                            "type constraint was a {:?} instead of a symbol/struct",
-                            value.ion_type()
-                        )));
-                    }
-                    let type_reference: IslTypeRef = IslTypeRef::parse_from_ion_element(value)?;
-                    IslConstraint::Type(type_reference)
-                }
-                _ => {
-                    return Err(invalid_schema_error_raw(
-                        "Type: ".to_owned()
-                            + &type_name.unwrap()
-                            + " can not be built as constraint: "
-                            + constraint_name
-                            + " does not exist",
-                    ))
-                }
-            };
+
+            let constraint =
+                IslConstraint::from_ion_element(constraint_name, value, &isl_type_name)?;
             constraints.push(constraint);
         }
-        Ok(IslType::new(type_name, constraints))
+        Ok(IslTypeImpl::new(type_name, constraints))
     }
 }
