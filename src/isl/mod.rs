@@ -17,6 +17,8 @@
 //! use ion_rs::IonType;
 //! use ion_schema_rust::isl::{isl_type::*, isl_constraint::*, isl_type_reference::*};
 //! use ion_schema_rust::schema::Schema;
+//! use ion_schema_rust::system::SchemaSystem;
+//! use std::path::Path;
 //!
 //! fn main() {
 //!     // below code represents an ISL type:
@@ -50,8 +52,9 @@
 //!         ]
 //!     );
 //!
-//!     // create a schema from given IslType
-//!     let schema = Schema::try_from_isl_types("my_schema", [isl_type.to_owned()]);
+//!     // create a schema from given IslType using SchemaSystem
+//!     let schema_system = SchemaSystem::new(vec![]); // no authorities added
+//!     let schema = schema_system.schema_from_isl_types("my_schema", [isl_type.to_owned()]);
 //!
 //!     // TODO: add an assert statement for get_types method of this schema
 //!     assert_eq!(schema.is_ok(), true);

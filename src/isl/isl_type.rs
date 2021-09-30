@@ -80,13 +80,13 @@ impl IslTypeImpl {
                 "Top level types must have a name field in its definition",
             ));
         } else if !contains_annotations && type_name.is_some() {
-            // For named types if it does not have the `type::` annotation throw an error
+            // For named types if it does not have the `type::` annotation return an error
             return Err(invalid_schema_error_raw(
                 "Top level types must have `type::` annotation in their definition",
             ));
         }
 
-        // set the isl type name for any error that is thrown while parsing its constraints
+        // set the isl type name for any error that is returned while parsing its constraints
         let isl_type_name = match type_name.to_owned() {
             Some(name) => name,
             None => format!("{:?}", ion_struct),

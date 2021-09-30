@@ -21,6 +21,6 @@ mod import;
 pub mod isl;
 mod result;
 pub mod schema;
-mod system;
+pub mod system;
 mod types;
 mod violation;

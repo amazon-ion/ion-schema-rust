@@ -1,5 +1,5 @@
 use crate::authority::DocumentAuthority;
-use crate::isl::isl_type::IslTypeImpl;
+use crate::isl::isl_type::{IslType, IslTypeImpl};
 use crate::result::{
     invalid_schema_error, unresolvable_schema_error, unresolvable_schema_error_raw, IonSchemaError,
     IonSchemaResult,
@@ -236,6 +236,38 @@ impl Resolver {
         }
     }
 
+    pub fn schema_from_isl_types<A: AsRef<str>, B: Into<Vec<IslType>>>(
+        &self,
+        id: A,
+        isl_types: B,
+    ) -> IonSchemaResult<Schema> {
+        // create type_store and pending types which will be used to create type definition
+        let type_store = &mut TypeStore::new();
+        let pending_types = &mut PendingTypes::new();
+        for isl_type in isl_types.into() {
+            // convert [IslType] into [TypeDefinition]
+            match isl_type {
+                IslType::Named(named_isl_type) => TypeDefinition::Named(
+                    TypeDefinitionImpl::parse_from_isl_type_and_update_type_store(
+                        &named_isl_type,
+                        type_store,
+                        pending_types,
+                    )
+                    .unwrap(),
+                ),
+                IslType::Anonymous(anonymous_isl_type) => TypeDefinition::Anonymous(
+                    TypeDefinitionImpl::parse_from_isl_type_and_update_type_store(
+                        &anonymous_isl_type,
+                        type_store,
+                        pending_types,
+                    )
+                    .unwrap(),
+                ),
+            };
+        }
+        Ok(Schema::new(id, Rc::new(type_store.to_owned())))
+    }
+
     pub fn schema_from_elements<I: Iterator<Item = OwnedElement>>(
         &mut self,
         elements: I,
@@ -361,6 +393,15 @@ impl SchemaSystem {
     /// Replaces the list of [Authority]s with the specified list of [Authority]s.
     fn with_authorities(&mut self, authorities: Vec<Box<dyn DocumentAuthority>>) {
         self.resolver.authorities = authorities;
+    }
+
+    /// Creates a schema from given [IslType]s
+    pub fn schema_from_isl_types<A: AsRef<str>, B: Into<Vec<IslType>>>(
+        &self,
+        id: A,
+        isl_types: B,
+    ) -> IonSchemaResult<Schema> {
+        self.resolver.schema_from_isl_types(id, isl_types)
     }
 }
 
