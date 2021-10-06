@@ -1,0 +1,20 @@
+name: ion-schema-rust
+author: Ion Team
+about: An implementation of Amazon Ion Schema in Rust
+args:
+  - authorities:
+      short: a
+      long: authorities
+      required: true
+      multiple: true
+      min_values: 1
+      value_name: AUTHORITIES
+      help: Set Authorities to be added to the schema system for loading a schema
+      takes_value: true
+  - input:
+        short: f
+        long: input
+        required: true
+        value_name: INPUT
+        help: Provide the Ion Schema file that needs to be loaded
+        takes_value: true

@@ -369,7 +369,7 @@ impl SchemaSystem {
     /// Requests each of the provided [Authority]s, in order, to resolve the requested schema id
     /// until one successfully resolves it.
     /// If an Authority throws an exception, resolution silently proceeds to the next Authority.
-    fn load_schema<A: AsRef<str>>(&mut self, id: A) -> IonSchemaResult<Rc<Schema>> {
+    pub fn load_schema<A: AsRef<str>>(&mut self, id: A) -> IonSchemaResult<Rc<Schema>> {
         self.resolver.load_schema(id, &mut TypeStore::new())
     }
 

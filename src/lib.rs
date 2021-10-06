@@ -15,11 +15,11 @@ macro_rules! try_to {
 }
 
 // TODO: consider changing some of these modules to public if required
-mod authority;
+pub mod authority;
 mod constraint;
 mod import;
 pub mod isl;
-mod result;
+pub mod result;
 pub mod schema;
 pub mod system;
 mod types;
