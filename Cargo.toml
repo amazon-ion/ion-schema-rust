@@ -8,7 +8,7 @@ edition = "2018"
 [dependencies]
 ion-rs = "0.6.0"
 thiserror = "1.0"
-clap = {version = "2.33.3", features = ["yaml"]}
 
 [dev-dependencies]
 rstest = "0.9"
+clap = {version = "2.33.3", features = ["yaml"]}

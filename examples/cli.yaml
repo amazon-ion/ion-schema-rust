@@ -1,20 +1,24 @@
+# clap uses this yaml file to load all the args (arguments) specified in this file for CLI definition.
+# These args will then be used by load_schema.rs to load a schema.
+# For more information: https://docs.rs/clap/2.33.3/clap/#quick-example
+
 name: ion-schema-rust
 author: Ion Team
 about: An implementation of Amazon Ion Schema in Rust
 args:
   - authorities:
-      short: a
-      long: authorities
+      short: b
+      long: base-file-path
       required: true
       multiple: true
       min_values: 1
-      value_name: AUTHORITIES
-      help: Set Authorities to be added to the schema system for loading a schema
+      value_name: BASE-FILE-PATH
+      help: One or more directories that will be searched for the requested schema.
       takes_value: true
   - input:
-        short: f
-        long: input
+        short: s
+        long: schema
         required: true
-        value_name: INPUT
-        help: Provide the Ion Schema file that needs to be loaded
+        value_name: SCHEMA
+        help: Provide the Ion Schema file that needs to be loaded.
         takes_value: true
