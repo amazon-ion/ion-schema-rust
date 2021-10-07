@@ -1,0 +1,24 @@
+# clap uses this yaml file to load all the args (arguments) specified in this file for CLI definition.
+# These args will then be used by load_schema.rs to load a schema.
+# For more information: https://docs.rs/clap/2.33.3/clap/#quick-example
+
+name: ion-schema-rust
+author: Ion Team
+about: An implementation of Amazon Ion Schema in Rust
+args:
+  - directories:
+      short: d
+      long: directory
+      required: true
+      multiple: true
+      min_values: 1
+      value_name: DIRECTORY
+      help: One or more directories that will be searched for the requested schema.
+      takes_value: true
+  - schema:
+        short: s
+        long: schema
+        required: true
+        value_name: SCHEMA
+        help: The Ion Schema file to load.
+        takes_value: true
