@@ -12,10 +12,10 @@ fn main() -> IonSchemaResult<()> {
     let matches = App::from_yaml(yaml).get_matches();
 
     // Extract the user provided authorities
-    let authorities: Vec<_> = matches.values_of("authorities").unwrap().collect();
+    let authorities: Vec<_> = matches.values_of("directories").unwrap().collect();
 
     // Extract schema file provided by user
-    let schema_id = matches.value_of("input").unwrap();
+    let schema_id = matches.value_of("schema").unwrap();
 
     // Set up authorities vector
     let mut document_authorities: Vec<Box<dyn DocumentAuthority>> = vec![];

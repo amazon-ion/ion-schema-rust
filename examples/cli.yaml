@@ -6,19 +6,19 @@ name: ion-schema-rust
 author: Ion Team
 about: An implementation of Amazon Ion Schema in Rust
 args:
-  - authorities:
-      short: b
-      long: base-file-path
+  - directories:
+      short: d
+      long: directory
       required: true
       multiple: true
       min_values: 1
-      value_name: BASE-FILE-PATH
+      value_name: DIRECTORY
       help: One or more directories that will be searched for the requested schema.
       takes_value: true
-  - input:
+  - schema:
         short: s
         long: schema
         required: true
         value_name: SCHEMA
-        help: Provide the Ion Schema file that needs to be loaded.
+        help: The Ion Schema file to load.
         takes_value: true
