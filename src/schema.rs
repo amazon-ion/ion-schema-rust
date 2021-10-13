@@ -124,19 +124,19 @@ mod schema_tests {
         load(r#" // For a schema with nested self reference type as below:
             type:: { name: my_int, type: { type: my_int } }
         "#).into_iter(),
-        2 // this includes my_int type and the anonymous type that uses my_int
+        1 // this includes my_int type and the anonymous type that uses my_int
     ),
     case::type_constraint_with_nested_type(
         load(r#" // For a schema with nested types as below:
             type:: { name: my_int, type: { type: int } }
         "#).into_iter(),
-        3 // this includes my_int type, the anonymous type that uses int and core type int
+        2 // this includes my_int type, the anonymous type that uses int and core type int
     ),
     case::type_constraint_with_nested_multiple_types(
         load(r#" // For a schema with nested multiple types as below: 
             type:: { name: my_int, type: { type: int }, type: { type: my_int } }
         "#).into_iter(),
-        4 //  this includes my_int type, the anonymous type that uses int, core type int and the anonymous type that uses my_int type
+        2 //  this includes my_int type, the anonymous type that uses int, core type int and the anonymous type that uses my_int type
     ),
     case::type_constraint_with_multiple_types(
         load(r#" // For a schema with multiple type as below:
@@ -149,7 +149,7 @@ mod schema_tests {
         load(r#" // For a schema with all_of type as below: 
             type:: { name: all_of_type, all_of: [{ type: int }] }
         "#).into_iter(),
-        3
+        2
     ),
     )]
     fn owned_elements_to_schema<'a, I: Iterator<Item = OwnedElement>>(
