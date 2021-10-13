@@ -1,5 +1,5 @@
 use crate::import::Import;
-use crate::system::TypeStore;
+use crate::system::{TypeId, TypeStore};
 use crate::types::{TypeDefinition, TypeDefinitionImpl, TypeRef};
 use std::rc::Rc;
 
@@ -11,7 +11,6 @@ use std::rc::Rc;
 #[derive(Debug, Clone)]
 pub struct Schema {
     id: String,
-    imports: Vec<Rc<Schema>>, //TODO: Use HashMap for imports
     types: Rc<TypeStore>,
 }
 
@@ -19,7 +18,6 @@ impl Schema {
     pub(crate) fn new<A: AsRef<str>>(id: A, types: Rc<TypeStore>) -> Self {
         Self {
             id: id.as_ref().to_owned(),
-            imports: vec![],
             types,
         }
     }
@@ -35,12 +33,9 @@ impl Schema {
         todo!()
     }
 
-    /// Returns an iterator over the imports of this [Schema].  Note that
-    /// multiple ISL imports referencing the same schema id (to import
-    /// individual types from the same schema id, for example) are
-    /// represented by a single Import object.
-    fn imports(&self) -> Box<dyn Iterator<Item = Import>> {
-        todo!()
+    /// Returns an iterator over the imports of this [Schema].
+    fn imports(&self) -> SchemaTypeIterator {
+        SchemaTypeIterator::new(Rc::clone(&self.types), self.types.get_imports())
     }
 
     /// Returns the requested type, if present in this schema;
@@ -51,7 +46,7 @@ impl Schema {
 
     /// Returns an iterator over the types in this schema.
     pub(crate) fn get_types(&self) -> SchemaTypeIterator {
-        SchemaTypeIterator::new(Rc::clone(&self.types))
+        SchemaTypeIterator::new(Rc::clone(&self.types), self.types.get_types())
     }
 
     /// Returns a new [Schema] instance containing all the types of this
@@ -65,13 +60,18 @@ impl Schema {
 
 /// Provides an Iterator which returns [Type]s inside a [Schema]
 pub struct SchemaTypeIterator {
-    types: Rc<TypeStore>,
+    type_store: Rc<TypeStore>,
     index: usize,
+    types: Vec<TypeId>,
 }
 
 impl SchemaTypeIterator {
-    fn new(types: Rc<TypeStore>) -> Self {
-        Self { types, index: 0 }
+    fn new(type_store: Rc<TypeStore>, types: Vec<TypeId>) -> Self {
+        Self {
+            type_store,
+            index: 0,
+            types,
+        }
     }
 }
 
@@ -79,11 +79,14 @@ impl Iterator for SchemaTypeIterator {
     type Item = TypeRef;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.index >= self.types.get_types().len() {
+        if self.index >= self.types.len() {
             return None;
         }
         self.index = self.index + 1;
-        Some(TypeRef::new(self.index - 1, Rc::clone(&self.types)))
+        Some(TypeRef::new(
+            self.types[self.index - 1],
+            Rc::clone(&self.type_store),
+        ))
     }
 }
 
@@ -158,7 +161,8 @@ mod schema_tests {
         let mut resolver = Resolver::new(vec![]);
 
         // create a schema from owned_elements and verifies if the result is `ok`
-        let schema = resolver.schema_from_elements(owned_elements, "my_schema.isl", type_store);
+        let schema =
+            resolver.schema_from_elements(owned_elements, "my_schema.isl", type_store, false);
         assert_eq!(schema.is_ok(), true);
 
         // check if the types of the created schema matches with the actual types specified by test case

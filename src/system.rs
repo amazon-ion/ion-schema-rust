@@ -1,4 +1,5 @@
 use crate::authority::DocumentAuthority;
+use crate::isl::isl_import::IslImport;
 use crate::isl::isl_type::{IslType, IslTypeImpl};
 use crate::result::{
     invalid_schema_error, unresolvable_schema_error, unresolvable_schema_error_raw, IonSchemaError,
@@ -43,7 +44,11 @@ impl PendingTypes {
 
     /// Adds all the types from Context into given TypeStore and clears Context types for loading next set of types
     /// this is used after a schema named type/root type is loaded entirely into Context
-    pub fn update_type_store(&mut self, type_store: &mut TypeStore) -> IonSchemaResult<()> {
+    pub fn update_type_store(
+        &mut self,
+        type_store: &mut TypeStore,
+        load_imports_to_type_store: bool,
+    ) -> IonSchemaResult<()> {
         for optional_type in &self.types_by_id {
             // return an error if any of the type in types_by_id vector is None/Unresolved
             let type_def = optional_type
@@ -51,14 +56,30 @@ impl PendingTypes {
                 .ok_or(unresolvable_schema_error_raw(
                     "Unable to load schema due to unresolvable type",
                 ))?;
-            match type_def.to_owned() {
-                // Some(name) => type_store.add_named_type(name, type_def),
-                // None => type_store.add_anonymous_type(type_def),
-                TypeDefinition::Named(named_type_def) => type_store.add_named_type(named_type_def),
-                TypeDefinition::Anonymous(anonymous_type_def) => {
-                    type_store.add_anonymous_type(anonymous_type_def)
-                }
-            };
+
+            if load_imports_to_type_store {
+                match type_def.to_owned() {
+                    // Some(name) => type_store.add_named_type(name, type_def),
+                    // None => type_store.add_anonymous_type(type_def),
+                    TypeDefinition::Named(named_type_def) => {
+                        type_store.add_import_type(named_type_def)
+                    }
+                    TypeDefinition::Anonymous(anonymous_type_def) => {
+                        type_store.add_anonymous_type(anonymous_type_def)
+                    }
+                };
+            } else {
+                match type_def.to_owned() {
+                    // Some(name) => type_store.add_named_type(name, type_def),
+                    // None => type_store.add_anonymous_type(type_def),
+                    TypeDefinition::Named(named_type_def) => {
+                        type_store.add_named_type(named_type_def)
+                    }
+                    TypeDefinition::Anonymous(anonymous_type_def) => {
+                        type_store.add_anonymous_type(anonymous_type_def)
+                    }
+                };
+            }
         }
         self.types_by_id.clear();
         self.ids_by_name.clear();
@@ -164,6 +185,7 @@ pub type TypeId = usize;
 /// Defines a cache that can be used to store resolved [Type]s of a [Schema]
 #[derive(Debug, Clone)]
 pub struct TypeStore {
+    imports: HashMap<String, TypeId>, // stores all the imported types of a schema
     ids_by_name: HashMap<String, TypeId>,
     types_by_id: Vec<TypeDefinition>,
 }
@@ -171,14 +193,20 @@ pub struct TypeStore {
 impl TypeStore {
     pub fn new() -> Self {
         Self {
+            imports: HashMap::new(),
             ids_by_name: HashMap::new(),
             types_by_id: Vec::new(),
         }
     }
 
-    /// Returns [Type]s stored in the [TypeStore] to be used by [SchemaTypeIterator]
-    pub fn get_types(&self) -> &[TypeDefinition] {
-        &self.types_by_id
+    /// Returns [TypeId]s stored in the [TypeStore] to be used by [SchemaTypeIterator]
+    pub fn get_types(&self) -> Vec<TypeId> {
+        self.ids_by_name.values().cloned().collect()
+    }
+
+    /// Returns import [TypeId]s stored in the [TypeStore] to be used by [SchemaTypeIterator]
+    pub fn get_imports(&self) -> Vec<TypeId> {
+        self.imports.values().cloned().collect()
     }
 
     /// Provides the [Type] associated with given name if it exists in the [TypeStore]  
@@ -187,12 +215,19 @@ impl TypeStore {
         self.ids_by_name
             .get(name)
             .and_then(|id| self.types_by_id.get(*id))
+            .or_else(|| {
+                self.imports
+                    .get(name)
+                    .and_then(|id| self.types_by_id.get(*id))
+            })
     }
 
     /// Provides the [TypeId] associated with given name if it exists in the [TypeStore]  
     /// Otherwise returns None
     pub fn get_type_id_by_name(&self, name: &str) -> Option<&TypeId> {
-        self.ids_by_name.get(name)
+        self.ids_by_name
+            .get(name)
+            .or_else(|| self.imports.get(name))
     }
 
     /// Provides the [Type] associated with given [TypeId] if it exists in the [TypeStore]  
@@ -210,6 +245,19 @@ impl TypeStore {
         }
         let type_id = self.types_by_id.len();
         self.ids_by_name.insert(name.to_owned(), type_id);
+        self.types_by_id.push(TypeDefinition::Named(type_def));
+        type_id
+    }
+
+    /// Adds the [NamedTypeDefinition] and the associated name as the imports of [TypeStore]
+    ///  and returns the [TypeId] for it. If the name already exists in the [TypeStore] it returns the associated [TypeId]
+    pub fn add_import_type(&mut self, type_def: TypeDefinitionImpl) -> TypeId {
+        let name = type_def.name().as_ref().unwrap();
+        if let Some(exists) = self.imports.get(name) {
+            return exists.to_owned();
+        }
+        let type_id = self.types_by_id.len();
+        self.imports.insert(name.to_owned(), type_id);
         self.types_by_id.push(TypeDefinition::Named(type_def));
         type_id
     }
@@ -273,6 +321,7 @@ impl Resolver {
         elements: I,
         id: &str,
         type_store: &mut TypeStore,
+        load_imports_to_type_store: bool,
     ) -> IonSchemaResult<Rc<Schema>> {
         let mut found_header = false;
         let mut found_footer = false;
@@ -286,9 +335,9 @@ impl Resolver {
                     .and_then(|it| it.as_sequence())
                 {
                     for import in imports.iter() {
-                        let import_id = try_to!(try_to!(import.as_struct()).get("id"));
-                        let imported_schema =
-                            self.load_schema(try_to!(import_id.as_str()), type_store)?;
+                        let import = IslImport::parse_from_ion_element(import)?;
+                        let import_id = import.id();
+                        let imported_schema = self.load_schema(import_id, type_store, true)?;
                     }
                 }
             }
@@ -308,7 +357,7 @@ impl Resolver {
                     )?;
 
                 // add all types from context to type_store
-                pending_types.update_type_store(type_store)?;
+                pending_types.update_type_store(type_store, load_imports_to_type_store)?;
             }
             // load footer for schema
             else if annotations.contains(&&text_token("schema_footer")) {
@@ -329,6 +378,7 @@ impl Resolver {
         &mut self,
         id: A,
         type_store: &mut TypeStore,
+        load_imports_to_type_store: bool,
     ) -> IonSchemaResult<Rc<Schema>> {
         let id: &str = id.as_ref();
         if let Some(schema) = self.resolved_schema_cache.get(id) {
@@ -344,9 +394,12 @@ impl Resolver {
                     },
                     _ => Err(error),
                 },
-                Ok(schema_content) => {
-                    self.schema_from_elements(schema_content.into_iter(), id, type_store)
-                }
+                Ok(schema_content) => self.schema_from_elements(
+                    schema_content.into_iter(),
+                    id,
+                    type_store,
+                    load_imports_to_type_store,
+                ),
             };
         }
         unresolvable_schema_error("Unable to load schema: ".to_owned() + id)
@@ -370,7 +423,7 @@ impl SchemaSystem {
     /// until one successfully resolves it.
     /// If an Authority throws an exception, resolution silently proceeds to the next Authority.
     pub fn load_schema<A: AsRef<str>>(&mut self, id: A) -> IonSchemaResult<Rc<Schema>> {
-        self.resolver.load_schema(id, &mut TypeStore::new())
+        self.resolver.load_schema(id, &mut TypeStore::new(), false)
     }
 
     /// Returns authorities associated with this [SchemaSystem]
