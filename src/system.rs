@@ -48,6 +48,7 @@ impl PendingTypes {
         &mut self,
         type_store: &mut TypeStore,
         load_imports_to_type_store: bool,
+        load_isl_import: Option<&IslImport>,
     ) -> IonSchemaResult<()> {
         for optional_type in &self.types_by_id {
             // return an error if any of the type in types_by_id vector is None/Unresolved
@@ -59,19 +60,44 @@ impl PendingTypes {
 
             if load_imports_to_type_store {
                 match type_def.to_owned() {
-                    // Some(name) => type_store.add_named_type(name, type_def),
-                    // None => type_store.add_anonymous_type(type_def),
-                    TypeDefinition::Named(named_type_def) => {
-                        type_store.add_import_type(named_type_def)
-                    }
+                    TypeDefinition::Named(named_type_def) => match load_isl_import.unwrap() {
+                        IslImport::Schema(_) => type_store.add_import_type(named_type_def),
+                        IslImport::Type(isl_import) => {
+                            // if import has a specified type to import then only add that type
+                            if named_type_def
+                                .name()
+                                .as_ref()
+                                .unwrap()
+                                .eq(isl_import.type_name())
+                            {
+                                type_store.add_import_type(named_type_def)
+                            } else {
+                                continue;
+                            }
+                        }
+                        IslImport::TypeAlias(isl_import) => {
+                            // if import has a specified type with an alias then renamed that type to the given alias and add it
+                            if named_type_def
+                                .name()
+                                .as_ref()
+                                .unwrap()
+                                .eq(isl_import.type_name())
+                            {
+                                type_store.add_alias_import_type(
+                                    isl_import.alias().as_ref().unwrap(),
+                                    named_type_def,
+                                )
+                            } else {
+                                continue;
+                            }
+                        }
+                    },
                     TypeDefinition::Anonymous(anonymous_type_def) => {
                         type_store.add_anonymous_type(anonymous_type_def)
                     }
                 };
             } else {
                 match type_def.to_owned() {
-                    // Some(name) => type_store.add_named_type(name, type_def),
-                    // None => type_store.add_anonymous_type(type_def),
                     TypeDefinition::Named(named_type_def) => {
                         type_store.add_named_type(named_type_def)
                     }
@@ -262,6 +288,18 @@ impl TypeStore {
         type_id
     }
 
+    /// Adds the [NamedTypeDefinition] and the associated alias as the [TypeAlias] import in [TypeStore]
+    ///  and returns the [TypeId] for it. If the name already exists in the [TypeStore] it returns the associated [TypeId]
+    pub fn add_alias_import_type(&mut self, alias: &str, type_def: TypeDefinitionImpl) -> TypeId {
+        if let Some(exists) = self.imports.get(alias) {
+            return exists.to_owned();
+        }
+        let type_id = self.types_by_id.len();
+        self.imports.insert(alias.to_owned(), type_id);
+        self.types_by_id.push(TypeDefinition::Named(type_def));
+        type_id
+    }
+
     /// Adds the [Type] in the [TypeStore] and returns the [TypeId] for it
     pub fn add_anonymous_type(&mut self, type_def: TypeDefinitionImpl) -> TypeId {
         let type_id = self.types_by_id.len();
@@ -322,6 +360,7 @@ impl Resolver {
         id: &str,
         type_store: &mut TypeStore,
         load_imports_to_type_store: bool,
+        load_isl_import: Option<&IslImport>,
     ) -> IonSchemaResult<Rc<Schema>> {
         let mut found_header = false;
         let mut found_footer = false;
@@ -335,9 +374,10 @@ impl Resolver {
                     .and_then(|it| it.as_sequence())
                 {
                     for import in imports.iter() {
-                        let import = IslImport::parse_from_ion_element(import)?;
-                        let import_id = import.id();
-                        let imported_schema = self.load_schema(import_id, type_store, true)?;
+                        let isl_import = IslImport::parse_from_ion_element(import)?;
+                        let import_id = isl_import.id();
+                        let imported_schema =
+                            self.load_schema(import_id, type_store, true, Some(&isl_import))?;
                     }
                 }
             }
@@ -357,7 +397,11 @@ impl Resolver {
                     )?;
 
                 // add all types from context to type_store
-                pending_types.update_type_store(type_store, load_imports_to_type_store)?;
+                pending_types.update_type_store(
+                    type_store,
+                    load_imports_to_type_store,
+                    load_isl_import,
+                )?;
             }
             // load footer for schema
             else if annotations.contains(&&text_token("schema_footer")) {
@@ -379,6 +423,7 @@ impl Resolver {
         id: A,
         type_store: &mut TypeStore,
         load_imports_to_type_store: bool,
+        load_isl_import: Option<&IslImport>,
     ) -> IonSchemaResult<Rc<Schema>> {
         let id: &str = id.as_ref();
         if let Some(schema) = self.resolved_schema_cache.get(id) {
@@ -399,6 +444,7 @@ impl Resolver {
                     id,
                     type_store,
                     load_imports_to_type_store,
+                    load_isl_import,
                 ),
             };
         }
@@ -423,7 +469,8 @@ impl SchemaSystem {
     /// until one successfully resolves it.
     /// If an Authority throws an exception, resolution silently proceeds to the next Authority.
     pub fn load_schema<A: AsRef<str>>(&mut self, id: A) -> IonSchemaResult<Rc<Schema>> {
-        self.resolver.load_schema(id, &mut TypeStore::new(), false)
+        self.resolver
+            .load_schema(id, &mut TypeStore::new(), false, None)
     }
 
     /// Returns authorities associated with this [SchemaSystem]

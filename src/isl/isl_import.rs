@@ -19,6 +19,7 @@ impl IslImport {
             IslImport::TypeAlias(isl_import_impl) => isl_import_impl.id(),
         }
     }
+
     /// Parse constraints inside an [OwnedElement] to an [IslImport]
     pub fn parse_from_ion_element(value: &OwnedElement) -> IonSchemaResult<IslImport> {
         let import = try_to!(value.as_struct());
@@ -39,6 +40,14 @@ impl IslImport {
         let alias = import
             .get("as")
             .and_then(|alias| alias.as_str().and_then(|a| Some(a.to_owned())));
+
+        if alias.is_none() {
+            return Ok(IslImport::Type(IslImportImpl::new(
+                id.to_owned(),
+                type_name.to_owned(),
+                None,
+            )));
+        }
 
         Ok(IslImport::TypeAlias(IslImportImpl::new(
             id.to_owned(),
@@ -69,5 +78,13 @@ impl IslImportImpl {
 
     fn id(&self) -> &String {
         &self.id
+    }
+
+    pub fn type_name(&self) -> &String {
+        &self.type_name
+    }
+
+    pub fn alias(&self) -> &Option<String> {
+        &self.alias
     }
 }

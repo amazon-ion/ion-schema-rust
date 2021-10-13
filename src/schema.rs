@@ -162,7 +162,7 @@ mod schema_tests {
 
         // create a schema from owned_elements and verifies if the result is `ok`
         let schema =
-            resolver.schema_from_elements(owned_elements, "my_schema.isl", type_store, false);
+            resolver.schema_from_elements(owned_elements, "my_schema.isl", type_store, false, None);
         assert_eq!(schema.is_ok(), true);
 
         // check if the types of the created schema matches with the actual types specified by test case
