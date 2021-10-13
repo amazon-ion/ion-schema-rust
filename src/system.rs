@@ -47,7 +47,6 @@ impl PendingTypes {
     pub fn update_type_store(
         &mut self,
         type_store: &mut TypeStore,
-        load_imports_to_type_store: bool,
         load_isl_import: Option<&IslImport>,
     ) -> IonSchemaResult<()> {
         for optional_type in &self.types_by_id {
@@ -58,7 +57,7 @@ impl PendingTypes {
                     "Unable to load schema due to unresolvable type",
                 ))?;
 
-            if load_imports_to_type_store {
+            if load_isl_import.is_some() {
                 match type_def.to_owned() {
                     TypeDefinition::Named(named_type_def) => match load_isl_import.unwrap() {
                         IslImport::Schema(_) => type_store.add_import_type(named_type_def),
@@ -359,7 +358,6 @@ impl Resolver {
         elements: I,
         id: &str,
         type_store: &mut TypeStore,
-        load_imports_to_type_store: bool,
         load_isl_import: Option<&IslImport>,
     ) -> IonSchemaResult<Rc<Schema>> {
         let mut found_header = false;
@@ -377,7 +375,7 @@ impl Resolver {
                         let isl_import = IslImport::parse_from_ion_element(import)?;
                         let import_id = isl_import.id();
                         let imported_schema =
-                            self.load_schema(import_id, type_store, true, Some(&isl_import))?;
+                            self.load_schema(import_id, type_store, Some(&isl_import))?;
                     }
                 }
             }
@@ -397,11 +395,7 @@ impl Resolver {
                     )?;
 
                 // add all types from context to type_store
-                pending_types.update_type_store(
-                    type_store,
-                    load_imports_to_type_store,
-                    load_isl_import,
-                )?;
+                pending_types.update_type_store(type_store, load_isl_import)?;
             }
             // load footer for schema
             else if annotations.contains(&&text_token("schema_footer")) {
@@ -422,8 +416,7 @@ impl Resolver {
         &mut self,
         id: A,
         type_store: &mut TypeStore,
-        load_imports_to_type_store: bool,
-        load_isl_import: Option<&IslImport>,
+        load_isl_import: Option<&IslImport>, // if its the root of schema set it to None otherwise will be set to the IslImport to be loaded
     ) -> IonSchemaResult<Rc<Schema>> {
         let id: &str = id.as_ref();
         if let Some(schema) = self.resolved_schema_cache.get(id) {
@@ -443,7 +436,6 @@ impl Resolver {
                     schema_content.into_iter(),
                     id,
                     type_store,
-                    load_imports_to_type_store,
                     load_isl_import,
                 ),
             };
@@ -469,8 +461,7 @@ impl SchemaSystem {
     /// until one successfully resolves it.
     /// If an Authority throws an exception, resolution silently proceeds to the next Authority.
     pub fn load_schema<A: AsRef<str>>(&mut self, id: A) -> IonSchemaResult<Rc<Schema>> {
-        self.resolver
-            .load_schema(id, &mut TypeStore::new(), false, None)
+        self.resolver.load_schema(id, &mut TypeStore::new(), None)
     }
 
     /// Returns authorities associated with this [SchemaSystem]
