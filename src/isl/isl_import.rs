@@ -7,8 +7,8 @@ use ion_rs::value::{Element, Struct};
 #[derive(Debug, Clone, PartialEq)]
 pub enum IslImport {
     Schema(String),
-    Type(IslImportImpl),
-    TypeAlias(IslImportImpl),
+    Type(IslImportType),
+    TypeAlias(IslImportType),
 }
 
 impl IslImport {
@@ -21,7 +21,7 @@ impl IslImport {
     }
 
     /// Parse constraints inside an [OwnedElement] to an [IslImport]
-    pub fn parse_from_ion_element(value: &OwnedElement) -> IonSchemaResult<IslImport> {
+    pub fn from_ion_element(value: &OwnedElement) -> IonSchemaResult<IslImport> {
         let import = try_to!(value.as_struct());
         let id = match import.get("id") {
             Some(import_id) => try_to!(import_id.as_str()),
@@ -37,19 +37,18 @@ impl IslImport {
             None => return Ok(IslImport::Schema(id.to_owned())),
         };
 
-        let alias = import
-            .get("as")
-            .and_then(|alias| alias.as_str().and_then(|a| Some(a.to_owned())));
+        let alias = match import.get("as") {
+            Some(alias) => alias.as_str().and_then(|a| Some(a.to_owned())),
+            None => {
+                return Ok(IslImport::Type(IslImportType::new(
+                    id.to_owned(),
+                    type_name.to_owned(),
+                    None,
+                )))
+            }
+        };
 
-        if alias.is_none() {
-            return Ok(IslImport::Type(IslImportImpl::new(
-                id.to_owned(),
-                type_name.to_owned(),
-                None,
-            )));
-        }
-
-        Ok(IslImport::TypeAlias(IslImportImpl::new(
+        Ok(IslImport::TypeAlias(IslImportType::new(
             id.to_owned(),
             type_name.to_owned(),
             alias,
@@ -61,13 +60,13 @@ impl IslImport {
 /// Typed import grammar: `{ id: <ID>, type: <TYPE_NAME> }`
 /// Type aliased import grammar: `{ id: <ID>, type: <TYPE_NAME>, as: <TYPE_ALIAS> }`
 #[derive(Debug, Clone, PartialEq)]
-pub struct IslImportImpl {
+pub struct IslImportType {
     id: String,
     type_name: String,
     alias: Option<String>,
 }
 
-impl IslImportImpl {
+impl IslImportType {
     pub fn new(id: String, type_name: String, alias: Option<String>) -> Self {
         Self {
             id,

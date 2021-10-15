@@ -35,6 +35,11 @@ impl Schema {
 
     /// Returns an iterator over the imports of this [Schema].
     fn imports(&self) -> SchemaTypeIterator {
+        todo!()
+    }
+
+    /// Returns an iterator over the imported types of this [Schema].
+    fn import_types(&self) -> SchemaTypeIterator {
         SchemaTypeIterator::new(Rc::clone(&self.types), self.types.get_imports())
     }
 
@@ -45,6 +50,7 @@ impl Schema {
     }
 
     /// Returns an iterator over the types in this schema.
+    /// This includes the core types and named types defined within this schema.
     pub(crate) fn get_types(&self) -> SchemaTypeIterator {
         SchemaTypeIterator::new(Rc::clone(&self.types), self.types.get_types())
     }
@@ -112,7 +118,7 @@ mod schema_tests {
         load(r#" // For a schema with named type as below: 
             type:: { name: my_int, type: int }
         "#).into_iter(),
-        2 // this includes the core type int and the anonymous type
+        2 // this includes the named type my_int and core type int
     ),
     case::type_constraint_with_self_reference_type(
         load(r#" // For a schema with self reference type as below: 
@@ -124,19 +130,19 @@ mod schema_tests {
         load(r#" // For a schema with nested self reference type as below:
             type:: { name: my_int, type: { type: my_int } }
         "#).into_iter(),
-        1 // this includes my_int type and the anonymous type that uses my_int
+        1 // this includes my_int type 
     ),
     case::type_constraint_with_nested_type(
         load(r#" // For a schema with nested types as below:
             type:: { name: my_int, type: { type: int } }
         "#).into_iter(),
-        2 // this includes my_int type, the anonymous type that uses int and core type int
+        2 // this includes my_int type and core type int
     ),
     case::type_constraint_with_nested_multiple_types(
         load(r#" // For a schema with nested multiple types as below: 
             type:: { name: my_int, type: { type: int }, type: { type: my_int } }
         "#).into_iter(),
-        2 //  this includes my_int type, the anonymous type that uses int, core type int and the anonymous type that uses my_int type
+        2 //  this includes my_int type and core type int
     ),
     case::type_constraint_with_multiple_types(
         load(r#" // For a schema with multiple type as below:

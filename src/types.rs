@@ -81,6 +81,13 @@ impl TypeDefinitionImpl {
         &self.name
     }
 
+    pub fn with_name(self, alias: String) -> Self {
+        Self {
+            name: Some(alias),
+            constraints: self.constraints,
+        }
+    }
+
     pub fn constraints(&self) -> &[Constraint] {
         &self.constraints
     }

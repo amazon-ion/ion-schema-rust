@@ -42,12 +42,127 @@ impl PendingTypes {
         }
     }
 
-    /// Adds all the types from Context into given TypeStore and clears Context types for loading next set of types
-    /// this is used after a schema named type/root type is loaded entirely into Context
+    /// Adds all the types from Context into given [TypeStore] including adding all the imported types into imports of [TypeStore].
+    /// It also clears [Context] types for loading next set of types.
+    /// This method is used after a schema named type/root type is loaded entirely into [Context]
+    /// * `type_store` - The TypeStore which will be updated with the types within this PendingType
+    /// * `load_isl_import` - If this argument is Some(isl_import), then we are not within an import process of schema.
+    ///                       Based on given enum variant isl_import we will add the types to type_store.
+    ///                       Otherwise we will add all the types from this PendingTypes to TypeStore.
     pub fn update_type_store(
         &mut self,
         type_store: &mut TypeStore,
         load_isl_import: Option<&IslImport>,
+    ) -> IonSchemaResult<bool> {
+        // if load_isl_import is not None, then match the enum variant and update type store with import types accordingly
+        if load_isl_import.is_some() {
+            match load_isl_import.unwrap() {
+                IslImport::Schema(_) => {
+                    self.update_type_store_with_all_import_types(None, type_store)?;
+                }
+                IslImport::Type(isl_import) => {
+                    // if import has a specified type to import then only add that type
+                    if let Some(named_type_def) =
+                        self.get_type_by_name_for_import(isl_import.type_name(), type_store)
+                    {
+                        type_store.add_import_type(isl_import.alias().as_ref(), named_type_def?);
+                        self.update_type_store_with_all_import_types(
+                            Some(isl_import.type_name()),
+                            type_store,
+                        )?;
+                    } else {
+                        // if the named_type_def appears as None then it means we haven't reached
+                        // the named type to be imported yet hence we return with false pointing
+                        // we haven't yet resolved this import.
+                        return Ok(false);
+                    }
+                }
+                IslImport::TypeAlias(isl_import) => {
+                    // if import has a specified type with an alias then renamed that type to the given alias and add it
+                    if type_store
+                        .imported_type_ids_by_name
+                        .contains_key(isl_import.alias().as_ref().unwrap())
+                    {
+                        // if the type_store already has the import in it then return true (i.e. TypeAlias has already been imported)
+                        return Ok(true);
+                    } else if let Some(named_type_def) =
+                        self.get_type_by_name_for_import(isl_import.type_name(), type_store)
+                    {
+                        let aliased_type_def = named_type_def?
+                            .with_name(isl_import.alias().as_ref().unwrap().to_owned());
+                        type_store.add_import_type(isl_import.alias().as_ref(), aliased_type_def);
+                        self.update_type_store_with_all_import_types(
+                            Some(isl_import.type_name()),
+                            type_store,
+                        )?;
+                    } else {
+                        // if the named_type_def appears as None then it means we haven't reached
+                        // the named type to be imported yet hence we return with false pointing
+                        // we haven't yet resolved this import.
+                        return Ok(false);
+                    }
+                }
+            }
+        } else {
+            // if load_isl_import is None i.e. it is the root schema, then update type_store with all the types inside this PendingTypes
+            self.update_type_store_with_all_types(type_store)?;
+        }
+        self.types_by_id.clear();
+        self.ids_by_name.clear();
+        Ok(true)
+    }
+
+    // helper method get named type for given import_type_name from this PendingTypes
+    // this return type will be used by update_type_store method to then update type_store with this named type as import
+    fn get_type_by_name_for_import(
+        &self,
+        import_type_name: &str,
+        type_store: &mut TypeStore,
+    ) -> Option<IonSchemaResult<TypeDefinitionImpl>> {
+        let type_def = self
+            .get_type_id_by_name(import_type_name, type_store)
+            .and_then(|id| self.types_by_id[id].to_owned());
+
+        match type_def {
+            None => None,
+            Some(type_def) => match type_def {
+                TypeDefinition::Named(named_type_def) => Some(Ok(named_type_def)),
+                TypeDefinition::Anonymous(_) => Some(unresolvable_schema_error(format!(
+                    "Unable to load import type: {} for schema",
+                    import_type_name
+                ))),
+            },
+        }
+    }
+
+    // helper method to update type store with all the types from this PendingTypes
+    fn update_type_store_with_all_types(&self, type_store: &mut TypeStore) -> IonSchemaResult<()> {
+        for optional_type in &self.types_by_id {
+            // return an error if any of the type in types_by_id vector is None/Unresolved
+            let type_def = optional_type
+                .to_owned()
+                .ok_or(unresolvable_schema_error_raw(
+                    "Unable to load schema due to unresolvable type",
+                ))?;
+
+            match type_def.to_owned() {
+                TypeDefinition::Named(named_type_def) => type_store.add_named_type(named_type_def),
+                TypeDefinition::Anonymous(anonymous_type_def) => {
+                    type_store.add_anonymous_type(anonymous_type_def)
+                }
+            };
+        }
+        Ok(())
+    }
+
+    // helper method to update type store with all the types from this PendingTypes
+    // import_type_name: this argument represents whether the import type is SchemaImport or a TypeImport (includes both TypeImport and TypeAliasImport)
+    //                   None - represents its a schema import which imports all types into imported_type_ids_by_name section of type_store
+    //                   Some(_) - represents a type import which import all types into types_by_id of type_store except specified import type as it will be already loaded by parent method that uses this helper method
+    fn update_type_store_with_all_import_types(
+        &self,
+        import_type_name: Option<&str>,
+        type_store: &mut TypeStore,
     ) -> IonSchemaResult<()> {
         for optional_type in &self.types_by_id {
             // return an error if any of the type in types_by_id vector is None/Unresolved
@@ -57,57 +172,30 @@ impl PendingTypes {
                     "Unable to load schema due to unresolvable type",
                 ))?;
 
-            if load_isl_import.is_some() {
-                match type_def.to_owned() {
-                    TypeDefinition::Named(named_type_def) => match load_isl_import.unwrap() {
-                        IslImport::Schema(_) => type_store.add_import_type(named_type_def),
-                        IslImport::Type(isl_import) => {
-                            // if import has a specified type to import then only add that type
-                            if named_type_def
-                                .name()
-                                .as_ref()
-                                .unwrap()
-                                .eq(isl_import.type_name())
-                            {
-                                type_store.add_import_type(named_type_def)
-                            } else {
+            match type_def.to_owned() {
+                TypeDefinition::Named(named_type_def) => {
+                    match import_type_name {
+                        None => {
+                            // imports all types into imported_type_ids_by_name section of type_store
+                            type_store.add_import_type(None, named_type_def);
+                        }
+                        Some(import_type_name) => {
+                            // skip the specified import type as it will be already loaded by parent method that uses this helper method
+                            if named_type_def.name().as_ref().unwrap().eq(import_type_name) {
                                 continue;
                             }
+                            // import all types into types_by_id of type_store which will help resolving the given import type
+                            type_store
+                                .types_by_id
+                                .push(TypeDefinition::Named(named_type_def));
                         }
-                        IslImport::TypeAlias(isl_import) => {
-                            // if import has a specified type with an alias then renamed that type to the given alias and add it
-                            if named_type_def
-                                .name()
-                                .as_ref()
-                                .unwrap()
-                                .eq(isl_import.type_name())
-                            {
-                                type_store.add_alias_import_type(
-                                    isl_import.alias().as_ref().unwrap(),
-                                    named_type_def,
-                                )
-                            } else {
-                                continue;
-                            }
-                        }
-                    },
-                    TypeDefinition::Anonymous(anonymous_type_def) => {
-                        type_store.add_anonymous_type(anonymous_type_def)
                     }
-                };
-            } else {
-                match type_def.to_owned() {
-                    TypeDefinition::Named(named_type_def) => {
-                        type_store.add_named_type(named_type_def)
-                    }
-                    TypeDefinition::Anonymous(anonymous_type_def) => {
-                        type_store.add_anonymous_type(anonymous_type_def)
-                    }
-                };
-            }
+                }
+                TypeDefinition::Anonymous(anonymous_type_def) => {
+                    type_store.add_anonymous_type(anonymous_type_def);
+                }
+            };
         }
-        self.types_by_id.clear();
-        self.ids_by_name.clear();
         Ok(())
     }
 
@@ -120,9 +208,9 @@ impl PendingTypes {
     /// Otherwise returns None
     pub fn get_type_id_by_name(&self, name: &str, type_store: &mut TypeStore) -> Option<TypeId> {
         match self.ids_by_name.get(name) {
-            Some(id) => Some(*id),
+            Some(id) => Some(*id + type_store.types_by_id.len()),
             None => match type_store.get_type_id_by_name(name) {
-                Some(id) => Some(*id + type_store.types_by_id.len()),
+                Some(id) => Some(*id),
                 None => None,
             },
         }
@@ -210,15 +298,15 @@ pub type TypeId = usize;
 /// Defines a cache that can be used to store resolved [Type]s of a [Schema]
 #[derive(Debug, Clone)]
 pub struct TypeStore {
-    imports: HashMap<String, TypeId>, // stores all the imported types of a schema
-    ids_by_name: HashMap<String, TypeId>,
+    imported_type_ids_by_name: HashMap<String, TypeId>, // stores all the imported types of a schema
+    ids_by_name: HashMap<String, TypeId>, // stores all the core types and named types defined within the schema
     types_by_id: Vec<TypeDefinition>,
 }
 
 impl TypeStore {
     pub fn new() -> Self {
         Self {
-            imports: HashMap::new(),
+            imported_type_ids_by_name: HashMap::new(),
             ids_by_name: HashMap::new(),
             types_by_id: Vec::new(),
         }
@@ -231,7 +319,7 @@ impl TypeStore {
 
     /// Returns import [TypeId]s stored in the [TypeStore] to be used by [SchemaTypeIterator]
     pub fn get_imports(&self) -> Vec<TypeId> {
-        self.imports.values().cloned().collect()
+        self.imported_type_ids_by_name.values().cloned().collect()
     }
 
     /// Provides the [Type] associated with given name if it exists in the [TypeStore]  
@@ -241,7 +329,7 @@ impl TypeStore {
             .get(name)
             .and_then(|id| self.types_by_id.get(*id))
             .or_else(|| {
-                self.imports
+                self.imported_type_ids_by_name
                     .get(name)
                     .and_then(|id| self.types_by_id.get(*id))
             })
@@ -252,7 +340,7 @@ impl TypeStore {
     pub fn get_type_id_by_name(&self, name: &str) -> Option<&TypeId> {
         self.ids_by_name
             .get(name)
-            .or_else(|| self.imports.get(name))
+            .or_else(|| self.imported_type_ids_by_name.get(name))
     }
 
     /// Provides the [Type] associated with given [TypeId] if it exists in the [TypeStore]  
@@ -276,25 +364,22 @@ impl TypeStore {
 
     /// Adds the [NamedTypeDefinition] and the associated name as the imports of [TypeStore]
     ///  and returns the [TypeId] for it. If the name already exists in the [TypeStore] it returns the associated [TypeId]
-    pub fn add_import_type(&mut self, type_def: TypeDefinitionImpl) -> TypeId {
-        let name = type_def.name().as_ref().unwrap();
-        if let Some(exists) = self.imports.get(name) {
-            return exists.to_owned();
-        }
-        let type_id = self.types_by_id.len();
-        self.imports.insert(name.to_owned(), type_id);
-        self.types_by_id.push(TypeDefinition::Named(type_def));
-        type_id
-    }
+    pub fn add_import_type(
+        &mut self,
+        alias: Option<&String>,
+        type_def: TypeDefinitionImpl,
+    ) -> TypeId {
+        let name = match alias {
+            None => type_def.name().as_ref().unwrap(),
+            Some(name) => name,
+        };
 
-    /// Adds the [NamedTypeDefinition] and the associated alias as the [TypeAlias] import in [TypeStore]
-    ///  and returns the [TypeId] for it. If the name already exists in the [TypeStore] it returns the associated [TypeId]
-    pub fn add_alias_import_type(&mut self, alias: &str, type_def: TypeDefinitionImpl) -> TypeId {
-        if let Some(exists) = self.imports.get(alias) {
+        if let Some(exists) = self.imported_type_ids_by_name.get(name) {
             return exists.to_owned();
         }
         let type_id = self.types_by_id.len();
-        self.imports.insert(alias.to_owned(), type_id);
+        self.imported_type_ids_by_name
+            .insert(name.to_owned(), type_id);
         self.types_by_id.push(TypeDefinition::Named(type_def));
         type_id
     }
@@ -362,6 +447,9 @@ impl Resolver {
     ) -> IonSchemaResult<Rc<Schema>> {
         let mut found_header = false;
         let mut found_footer = false;
+        // this is used to determine when resolving an import whether it has been imported to the type_store or not
+        let mut update_type_store_result = false;
+
         for value in elements {
             let annotations: Vec<&OwnedSymbolToken> = value.annotations().collect();
             // load header for schema
@@ -372,7 +460,7 @@ impl Resolver {
                     .and_then(|it| it.as_sequence())
                 {
                     for import in imports.iter() {
-                        let isl_import = IslImport::parse_from_ion_element(import)?;
+                        let isl_import = IslImport::from_ion_element(import)?;
                         let import_id = isl_import.id();
                         let imported_schema =
                             self.load_schema(import_id, type_store, Some(&isl_import))?;
@@ -395,7 +483,8 @@ impl Resolver {
                     )?;
 
                 // add all types from context to type_store
-                pending_types.update_type_store(type_store, load_isl_import)?;
+                update_type_store_result =
+                    pending_types.update_type_store(type_store, load_isl_import)?;
             }
             // load footer for schema
             else if annotations.contains(&&text_token("schema_footer")) {
@@ -403,6 +492,9 @@ impl Resolver {
             } else {
                 continue;
             }
+        }
+        if load_isl_import.is_some() && !update_type_store_result {
+            return unresolvable_schema_error(format!("Unable to load import: {}", id));
         }
         if found_footer ^ found_header {
             return invalid_schema_error("For any schema while a header and footer are both optional, a footer is required if a header is present (and vice-versa).");
@@ -412,11 +504,16 @@ impl Resolver {
     }
 
     /// Loads a [Schema] with resolved [Type]s using authorities and type_store
+    // If we are loading the root schema then this will be set to `None` ( i.e. in the beginning when
+    // this method is called from the load_schema method of schema_system it is set to `None`)
+    // Otherwise if we are loading an import of the schema then this will be set to `Some(isl_import)`
+    // to be loaded (i.e. Inside schema_from_elements while loading imports this will be set to
+    // `Some(isl_import)`)
     fn load_schema<A: AsRef<str>>(
         &mut self,
         id: A,
         type_store: &mut TypeStore,
-        load_isl_import: Option<&IslImport>, // if its the root of schema set it to None otherwise will be set to the IslImport to be loaded
+        load_isl_import: Option<&IslImport>,
     ) -> IonSchemaResult<Rc<Schema>> {
         let id: &str = id.as_ref();
         if let Some(schema) = self.resolved_schema_cache.get(id) {
@@ -499,7 +596,7 @@ impl SchemaSystem {
 #[cfg(test)]
 mod schema_system_tests {
     use super::*;
-    use crate::authority::FileSystemDocumentAuthority;
+    use crate::authority::{FileSystemDocumentAuthority, MapDocumentAuthority};
     use std::path::Path;
 
     #[test]
@@ -537,5 +634,172 @@ mod schema_system_tests {
         ]);
         let schema_system_authorities = schema_system.authorities();
         assert_eq!(2, schema_system_authorities.len());
+    }
+
+    #[test]
+    fn schema_system_map_authority_with_type_alias_import_test() {
+        // map with (id, ion content)
+        let map_authority: HashMap<String, String> = [
+            (
+                "sample_number.isl",
+                r#"
+                    schema_header::{
+                      imports: [{ id: "sample_decimal.isl", type: my_decimal, as: other_decimal }],
+                    }
+                    
+                    type::{
+                      name: my_int,
+                      type: int,
+                    }
+                    
+                    type::{
+                      name: my_number,
+                      all_of: [
+                        my_int,
+                        other_decimal,
+                      ],
+                    }
+                    
+                    schema_footer::{
+                    }
+                "#,
+            ),
+            (
+                "sample_decimal.isl",
+                r#"
+                    schema_header::{
+                      imports: [],
+                    }
+                    
+                    type::{
+                      name: my_decimal,
+                      type: decimal,
+                    }
+                    
+                    type::{
+                      name: my_string,
+                      type: string,
+                    }
+                    
+                    schema_footer::{
+                    }
+                "#,
+            ),
+        ]
+        .iter()
+        .map(|(id, ion)| (id.to_owned().to_owned(), ion.to_owned().to_owned()))
+        .collect();
+        let mut schema_system =
+            SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
+        // verify if the schema loads without any errors
+        let schema = schema_system.load_schema("sample_number.isl");
+        assert_eq!(true, schema.is_ok());
+    }
+
+    #[test]
+    fn schema_system_map_authority_with_type_import_test() {
+        // map with (id, ion content)
+        let map_authority: HashMap<String, String> = [
+            (
+                "sample_number.isl",
+                r#"
+                    schema_header::{
+                      imports: [{ id: "sample_decimal.isl", type: my_decimal }],
+                    }
+                    
+                    type::{
+                      name: my_int,
+                      type: int,
+                    }
+                    
+                    type::{
+                      name: my_number,
+                      all_of: [
+                        my_int,
+                        my_decimal,
+                      ],
+                    }
+                    
+                    schema_footer::{
+                    }
+                "#,
+            ),
+            (
+                "sample_decimal.isl",
+                r#"
+                    schema_header::{
+                      imports: [],
+                    }
+                    
+                    type::{
+                      name: my_decimal,
+                      type: decimal,
+                    }
+                    
+                    type::{
+                      name: my_string,
+                      type: string,
+                    }
+                    
+                    schema_footer::{
+                    }
+                "#,
+            ),
+        ]
+        .iter()
+        .map(|(id, ion)| (id.to_owned().to_owned(), ion.to_owned().to_owned()))
+        .collect();
+        let mut schema_system =
+            SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
+        // verify if the schema loads without any errors
+        let schema = schema_system.load_schema("sample_number.isl");
+        assert_eq!(true, schema.is_ok());
+    }
+
+    #[test]
+    fn schema_system_map_authority_with_schema_import_test() {
+        // map with (id, ion content)
+        let map_authority: HashMap<String, String> = [
+            (
+                "sample_import_string.isl",
+                r#"
+                    schema_header::{
+                      imports: [{ id: "sample_string.isl" }],
+                    }
+                    
+                    type::{
+                      name: import_string,
+                      type: my_string,
+                    }
+                    
+                    schema_footer::{
+                    }
+                "#,
+            ),
+            (
+                "sample_string.isl",
+                r#"
+                    schema_header::{
+                      imports: [],
+                    }
+                    
+                    type::{
+                      name: my_string,
+                      type: string,
+                    }
+                    
+                    schema_footer::{
+                    }
+                "#,
+            ),
+        ]
+        .iter()
+        .map(|(id, ion)| (id.to_owned().to_owned(), ion.to_owned().to_owned()))
+        .collect();
+        let mut schema_system =
+            SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
+        // verify if the schema loads without any errors
+        let schema = schema_system.load_schema("sample_import_string.isl");
+        assert_eq!(true, schema.is_ok());
     }
 }
