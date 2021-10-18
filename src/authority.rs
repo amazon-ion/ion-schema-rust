@@ -55,8 +55,13 @@ pub struct MapDocumentAuthority {
 }
 
 impl MapDocumentAuthority {
-    pub fn new(ion_content_by_id: HashMap<String, String>) -> Self {
-        Self { ion_content_by_id }
+    pub fn new<'a, I: IntoIterator<Item = (&'a str, &'a str)>>(ion_content_by_id: I) -> Self {
+        Self {
+            ion_content_by_id: ion_content_by_id
+                .into_iter()
+                .map(|(id, ion)| (id.to_owned(), ion.to_owned()))
+                .collect(),
+        }
     }
 }
 

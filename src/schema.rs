@@ -39,7 +39,7 @@ impl Schema {
     }
 
     /// Returns an iterator over the imported types of this [Schema].
-    fn import_types(&self) -> SchemaTypeIterator {
+    fn imported_types(&self) -> SchemaTypeIterator {
         SchemaTypeIterator::new(Rc::clone(&self.types), self.types.get_imports())
     }
 

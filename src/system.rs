@@ -42,9 +42,9 @@ impl PendingTypes {
         }
     }
 
-    /// Adds all the types from Context into given [TypeStore] including adding all the imported types into imports of [TypeStore].
-    /// It also clears [Context] types for loading next set of types.
-    /// This method is used after a schema named type/root type is loaded entirely into [Context]
+    /// Adds all the types from PendingTypes into given [TypeStore] including adding all the imported types into imports of [TypeStore].
+    /// It also clears [PendingTypes] types for loading next set of types.
+    /// This method is used after a schema named type/root type is loaded entirely into [PendingTypes]
     /// * `type_store` - The TypeStore which will be updated with the types within this PendingType
     /// * `load_isl_import` - If this argument is Some(isl_import), then we are not within an import process of schema.
     ///                       Based on given enum variant isl_import we will add the types to type_store.
@@ -119,20 +119,18 @@ impl PendingTypes {
         import_type_name: &str,
         type_store: &mut TypeStore,
     ) -> Option<IonSchemaResult<TypeDefinitionImpl>> {
-        let type_def = self
+        return self
             .get_type_id_by_name(import_type_name, type_store)
-            .and_then(|id| self.types_by_id[id].to_owned());
-
-        match type_def {
-            None => None,
-            Some(type_def) => match type_def {
+            .and_then(|id| self.types_by_id[id].to_owned())
+            .and_then(|type_def| match type_def {
                 TypeDefinition::Named(named_type_def) => Some(Ok(named_type_def)),
-                TypeDefinition::Anonymous(_) => Some(unresolvable_schema_error(format!(
-                    "Unable to load import type: {} for schema",
-                    import_type_name
-                ))),
-            },
-        }
+                TypeDefinition::Anonymous(_) => {
+                    unreachable!(
+                        "Unable to load import type: {} for schema",
+                        import_type_name
+                    )
+                }
+            });
     }
 
     // helper method to update type store with all the types from this PendingTypes
@@ -145,7 +143,7 @@ impl PendingTypes {
                     "Unable to load schema due to unresolvable type",
                 ))?;
 
-            match type_def.to_owned() {
+            match type_def {
                 TypeDefinition::Named(named_type_def) => type_store.add_named_type(named_type_def),
                 TypeDefinition::Anonymous(anonymous_type_def) => {
                     type_store.add_anonymous_type(anonymous_type_def)
@@ -158,7 +156,8 @@ impl PendingTypes {
     // helper method to update type store with all the types from this PendingTypes
     // import_type_name: this argument represents whether the import type is SchemaImport or a TypeImport (includes both TypeImport and TypeAliasImport)
     //                   None - represents its a schema import which imports all types into imported_type_ids_by_name section of type_store
-    //                   Some(_) - represents a type import which import all types into types_by_id of type_store except specified import type as it will be already loaded by parent method that uses this helper method
+    //                   Some(_) - represents a type import which import all types into types_by_id of type_store,
+    //                             except specified import type as it will be already loaded by parent method that uses this helper method
     fn update_type_store_with_all_import_types(
         &self,
         import_type_name: Option<&str>,
@@ -204,7 +203,7 @@ impl PendingTypes {
         self.types_by_id.len()
     }
 
-    /// Provides the [TypeId] associated with given name if it exists in the [TypeStore] or [Context]  
+    /// Provides the [TypeId] associated with given name if it exists in the [TypeStore] or [PendingTypes]  
     /// Otherwise returns None
     pub fn get_type_id_by_name(&self, name: &str, type_store: &mut TypeStore) -> Option<TypeId> {
         match self.ids_by_name.get(name) {
@@ -216,8 +215,8 @@ impl PendingTypes {
         }
     }
 
-    /// Adds the [NamedTypeDefinition] and the associated name in the [Context] and returns the [TypeId] for it
-    /// If the given name already exists in the [TypeStore] or [Context] it returns the associated [TypeId]
+    /// Adds the [NamedTypeDefinition] and the associated name in the [PendingTypes] and returns the [TypeId] for it
+    /// If the given name already exists in the [TypeStore] or [PendingTypes] it returns the associated [TypeId]
     pub fn add_named_type(
         &mut self,
         name: &str,
@@ -639,7 +638,7 @@ mod schema_system_tests {
     #[test]
     fn schema_system_map_authority_with_type_alias_import_test() {
         // map with (id, ion content)
-        let map_authority: HashMap<String, String> = [
+        let map_authority = [
             (
                 "sample_number.isl",
                 r#"
@@ -685,10 +684,7 @@ mod schema_system_tests {
                     }
                 "#,
             ),
-        ]
-        .iter()
-        .map(|(id, ion)| (id.to_owned().to_owned(), ion.to_owned().to_owned()))
-        .collect();
+        ];
         let mut schema_system =
             SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
         // verify if the schema loads without any errors
@@ -699,7 +695,7 @@ mod schema_system_tests {
     #[test]
     fn schema_system_map_authority_with_type_import_test() {
         // map with (id, ion content)
-        let map_authority: HashMap<String, String> = [
+        let map_authority = [
             (
                 "sample_number.isl",
                 r#"
@@ -745,10 +741,7 @@ mod schema_system_tests {
                     }
                 "#,
             ),
-        ]
-        .iter()
-        .map(|(id, ion)| (id.to_owned().to_owned(), ion.to_owned().to_owned()))
-        .collect();
+        ];
         let mut schema_system =
             SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
         // verify if the schema loads without any errors
@@ -759,7 +752,7 @@ mod schema_system_tests {
     #[test]
     fn schema_system_map_authority_with_schema_import_test() {
         // map with (id, ion content)
-        let map_authority: HashMap<String, String> = [
+        let map_authority = [
             (
                 "sample_import_string.isl",
                 r#"
@@ -792,10 +785,7 @@ mod schema_system_tests {
                     }
                 "#,
             ),
-        ]
-        .iter()
-        .map(|(id, ion)| (id.to_owned().to_owned(), ion.to_owned().to_owned()))
-        .collect();
+        ];
         let mut schema_system =
             SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
         // verify if the schema loads without any errors
