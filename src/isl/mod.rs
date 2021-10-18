@@ -5,6 +5,9 @@
 //! * `isl_type` module represents a schema type [IslType] which converts given ion content in the schema file
 //! into an ISL types(not-yet-resolved types). It stores [IslConstraint]s defined within the given type.
 //!
+//! * `isl_import` module represents a schema import [IslImport] which converts given ion content in the schema file
+//! into an ISL import. It stores schema id, an optional type that needs to be imported and an optional alias to that type.
+//!
 //! * `isl_constraint` module represents schema constraints [IslConstraint]
 //! which converts given ion content in the schema file into an ISL constraint(not-yet-resolved constraints).
 //! This stores [IslTypeRef]s for the given ISL constraint.
@@ -71,6 +74,7 @@
 //                    returning resolved types in a schema) and store generated [TypeId] in the constraint.
 
 pub mod isl_constraint;
+pub mod isl_import;
 pub mod isl_type;
 pub mod isl_type_reference;
 

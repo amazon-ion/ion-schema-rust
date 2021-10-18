@@ -52,7 +52,7 @@ impl IslTypeImpl {
         &self.constraints
     }
 
-    /// Parse constraints inside an [OwnedElement] to an [NamedIslType]
+    /// Parse constraints inside an [OwnedElement] to an [IslTypeImpl]
     pub fn parse_from_owned_element(ion: &OwnedElement) -> IonSchemaResult<Self> {
         let mut constraints = vec![];
         let annotations: Vec<&OwnedSymbolToken> = ion.annotations().collect();

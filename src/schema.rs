@@ -1,5 +1,5 @@
 use crate::import::Import;
-use crate::system::TypeStore;
+use crate::system::{TypeId, TypeStore};
 use crate::types::{TypeDefinition, TypeDefinitionImpl, TypeRef};
 use std::rc::Rc;
 
@@ -11,7 +11,6 @@ use std::rc::Rc;
 #[derive(Debug, Clone)]
 pub struct Schema {
     id: String,
-    imports: Vec<Rc<Schema>>, //TODO: Use HashMap for imports
     types: Rc<TypeStore>,
 }
 
@@ -19,7 +18,6 @@ impl Schema {
     pub(crate) fn new<A: AsRef<str>>(id: A, types: Rc<TypeStore>) -> Self {
         Self {
             id: id.as_ref().to_owned(),
-            imports: vec![],
             types,
         }
     }
@@ -35,12 +33,14 @@ impl Schema {
         todo!()
     }
 
-    /// Returns an iterator over the imports of this [Schema].  Note that
-    /// multiple ISL imports referencing the same schema id (to import
-    /// individual types from the same schema id, for example) are
-    /// represented by a single Import object.
-    fn imports(&self) -> Box<dyn Iterator<Item = Import>> {
+    /// Returns an iterator over the imports of this [Schema].
+    fn imports(&self) -> SchemaTypeIterator {
         todo!()
+    }
+
+    /// Returns an iterator over the imported types of this [Schema].
+    fn imported_types(&self) -> SchemaTypeIterator {
+        SchemaTypeIterator::new(Rc::clone(&self.types), self.types.get_imports())
     }
 
     /// Returns the requested type, if present in this schema;
@@ -50,8 +50,9 @@ impl Schema {
     }
 
     /// Returns an iterator over the types in this schema.
+    /// This includes the core types and named types defined within this schema.
     pub(crate) fn get_types(&self) -> SchemaTypeIterator {
-        SchemaTypeIterator::new(Rc::clone(&self.types))
+        SchemaTypeIterator::new(Rc::clone(&self.types), self.types.get_types())
     }
 
     /// Returns a new [Schema] instance containing all the types of this
@@ -65,13 +66,18 @@ impl Schema {
 
 /// Provides an Iterator which returns [Type]s inside a [Schema]
 pub struct SchemaTypeIterator {
-    types: Rc<TypeStore>,
+    type_store: Rc<TypeStore>,
     index: usize,
+    types: Vec<TypeId>,
 }
 
 impl SchemaTypeIterator {
-    fn new(types: Rc<TypeStore>) -> Self {
-        Self { types, index: 0 }
+    fn new(type_store: Rc<TypeStore>, types: Vec<TypeId>) -> Self {
+        Self {
+            type_store,
+            index: 0,
+            types,
+        }
     }
 }
 
@@ -79,11 +85,14 @@ impl Iterator for SchemaTypeIterator {
     type Item = TypeRef;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.index >= self.types.get_types().len() {
+        if self.index >= self.types.len() {
             return None;
         }
         self.index = self.index + 1;
-        Some(TypeRef::new(self.index - 1, Rc::clone(&self.types)))
+        Some(TypeRef::new(
+            self.types[self.index - 1],
+            Rc::clone(&self.type_store),
+        ))
     }
 }
 
@@ -109,7 +118,7 @@ mod schema_tests {
         load(r#" // For a schema with named type as below: 
             type:: { name: my_int, type: int }
         "#).into_iter(),
-        2 // this includes the core type int and the anonymous type
+        2 // this includes the named type my_int and core type int
     ),
     case::type_constraint_with_self_reference_type(
         load(r#" // For a schema with self reference type as below: 
@@ -121,19 +130,19 @@ mod schema_tests {
         load(r#" // For a schema with nested self reference type as below:
             type:: { name: my_int, type: { type: my_int } }
         "#).into_iter(),
-        2 // this includes my_int type and the anonymous type that uses my_int
+        1 // this includes my_int type 
     ),
     case::type_constraint_with_nested_type(
         load(r#" // For a schema with nested types as below:
             type:: { name: my_int, type: { type: int } }
         "#).into_iter(),
-        3 // this includes my_int type, the anonymous type that uses int and core type int
+        2 // this includes my_int type and core type int
     ),
     case::type_constraint_with_nested_multiple_types(
         load(r#" // For a schema with nested multiple types as below: 
             type:: { name: my_int, type: { type: int }, type: { type: my_int } }
         "#).into_iter(),
-        4 //  this includes my_int type, the anonymous type that uses int, core type int and the anonymous type that uses my_int type
+        2 //  this includes my_int type and core type int
     ),
     case::type_constraint_with_multiple_types(
         load(r#" // For a schema with multiple type as below:
@@ -146,7 +155,7 @@ mod schema_tests {
         load(r#" // For a schema with all_of type as below: 
             type:: { name: all_of_type, all_of: [{ type: int }] }
         "#).into_iter(),
-        3
+        2
     ),
     )]
     fn owned_elements_to_schema<'a, I: Iterator<Item = OwnedElement>>(
@@ -158,7 +167,8 @@ mod schema_tests {
         let mut resolver = Resolver::new(vec![]);
 
         // create a schema from owned_elements and verifies if the result is `ok`
-        let schema = resolver.schema_from_elements(owned_elements, "my_schema.isl", type_store);
+        let schema =
+            resolver.schema_from_elements(owned_elements, "my_schema.isl", type_store, None);
         assert_eq!(schema.is_ok(), true);
 
         // check if the types of the created schema matches with the actual types specified by test case
