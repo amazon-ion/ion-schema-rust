@@ -80,12 +80,18 @@ pub mod isl_constraint;
 pub mod isl_import;
 pub mod isl_type;
 pub mod isl_type_reference;
-/// Provides an internal representation of an ISL file
+
+/// Provides an internal representation of an schema file
+/// * `imports`             - represents all the [IslImport]s inside given schema file.
+///                           For more information: <https://amzn.github.io/ion-schema/docs/spec.html#imports>
+/// * `types`               - represents all the [IslTypeImpl]s defined within given schema file.
+///                           For more information: <https://amzn.github.io/ion-schema/docs/spec.html#type-definitions>
+/// * `inline_import_types` - represents all inline [IslImportType]s of given schema file.
 #[derive(Debug, Clone)]
 pub struct Isl {
     imports: Vec<IslImport>,
     types: Vec<IslTypeImpl>,
-    inline_imports: Vec<IslImportType>,
+    inline_import_types: Vec<IslImportType>,
 }
 
 impl Isl {
@@ -97,7 +103,7 @@ impl Isl {
         Self {
             imports,
             types,
-            inline_imports,
+            inline_import_types: inline_imports,
         }
     }
 
@@ -109,8 +115,8 @@ impl Isl {
         &self.types
     }
 
-    pub fn inline_imports(&self) -> &[IslImportType] {
-        &self.inline_imports
+    pub fn inline_import_types(&self) -> &[IslImportType] {
+        &self.inline_import_types
     }
 }
 
@@ -131,6 +137,7 @@ mod isl_tests {
                 &element_reader()
                     .read_one(text.as_bytes())
                     .expect("parsing failed unexpectedly"),
+                &mut vec![],
             )
             .unwrap(),
         )
@@ -143,6 +150,7 @@ mod isl_tests {
                 &element_reader()
                     .read_one(text.as_bytes())
                     .expect("parsing failed unexpectedly"),
+                &mut vec![],
             )
             .unwrap(),
         )

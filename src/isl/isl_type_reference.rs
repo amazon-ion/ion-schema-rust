@@ -1,10 +1,13 @@
 use crate::isl::isl_constraint::IslConstraint;
+use crate::isl::isl_import::{IslImport, IslImportType};
 use crate::isl::isl_type::IslTypeImpl;
-use crate::result::{invalid_schema_error_raw, unresolvable_schema_error, IonSchemaResult};
+use crate::result::{
+    invalid_schema_error, invalid_schema_error_raw, unresolvable_schema_error, IonSchemaResult,
+};
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::types::TypeDefinitionImpl;
 use ion_rs::value::owned::OwnedElement;
-use ion_rs::value::{Element, SymbolToken};
+use ion_rs::value::{Element, Struct, SymbolToken};
 use ion_rs::IonType;
 
 /// Provides an internal representation of a schema type reference.
@@ -17,7 +20,7 @@ pub enum IslTypeRef {
     /// Represents a reference to a named type (including aliases)
     Named(String),
     /// Represents a type reference defined as an inlined import type from another schema
-    // TODO: add ImportType(Import) where ImportType could either point to a schema represented by an id with all the types or a single type from inside it
+    Import(IslImportType),
     /// represents an unnamed type definition reference
     Anonymous(IslTypeImpl),
 }
@@ -40,7 +43,10 @@ impl IslTypeRef {
     }
 
     /// Tries to create an [IslTypeRef] from the given OwnedElement
-    pub fn parse_from_ion_element(value: &OwnedElement) -> IonSchemaResult<Self> {
+    pub fn parse_from_ion_element(
+        value: &OwnedElement,
+        inline_import_types: &mut Vec<IslImportType>,
+    ) -> IonSchemaResult<Self> {
         match value.ion_type() {
             IonType::Symbol => {
                 value.as_sym().unwrap()
@@ -70,8 +76,27 @@ impl IslTypeRef {
                         Ok(ion_type)
                     })
             }
-            IonType::Struct =>
-                Ok(IslTypeRef::Anonymous(IslTypeImpl::parse_from_owned_element(value)?)),
+            IonType::Struct => {
+                let value_struct = try_to!(value.as_struct());
+                // if the struct doesn't have an id field then it must be an anonymous type
+                if value_struct.get("id").is_none() {
+                    return Ok(IslTypeRef::Anonymous(IslTypeImpl::parse_from_owned_element(value, inline_import_types)?))
+                }
+                // if it is an inline import type store it as import type reference
+                 let isl_import_type = match IslImport::from_ion_element(value)? {
+                    IslImport::Schema(_) => {
+                         return invalid_schema_error("an inline import type reference does not have `type` field specified")
+                    }
+                    IslImport::Type(isl_import_type) => { isl_import_type }
+                    IslImport::TypeAlias(_) => {
+                         return invalid_schema_error("an inline import type reference can not have `alias` field specified")
+                    }
+                };
+                // if an inline import type is encountered add it in the inline_imports_types
+                // this will help resolve these inline imports before we start loading the schema types that uses them as reference
+                inline_import_types.push(isl_import_type.to_owned());
+                Ok(IslTypeRef::Import(isl_import_type))
+            },
             _ => Err(invalid_schema_error_raw(
                 "type reference can either be a symbol(For base/alias type reference) or a struct (for anonymous type reference)",
             )),
@@ -127,7 +152,17 @@ impl IslTypeRef {
                 )?;
                 // get the last added anonymous type's type_id for given anonymous type
                 Ok(type_id)
-            } //TODO: add a check for ImportType type reference here
+            }
+            IslTypeRef::Import(isl_import_type) => {
+                // verify if the inline import type already exists in the type_store
+                match type_store.get_type_id_by_name(isl_import_type.type_name()) {
+                    None => unresolvable_schema_error(format!(
+                        "inline import type: {} does not exists",
+                        isl_import_type.type_name()
+                    )),
+                    Some(type_id) => Ok(type_id.to_owned()),
+                }
+            }
         }
     }
 }
