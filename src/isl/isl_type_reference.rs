@@ -19,7 +19,7 @@ pub enum IslTypeRef {
     CoreIsl(IonType),
     /// Represents a reference to a named type (including aliases)
     Named(String),
-    /// Represents a type reference defined as an inlined import type from another schema
+    /// Represents a type reference defined as an inlined import of a type from another schema
     TypeImport(IslImportType),
     /// represents an unnamed type definition reference
     Anonymous(IslTypeImpl),
@@ -45,7 +45,7 @@ impl IslTypeRef {
     /// Tries to create an [IslTypeRef] from the given OwnedElement
     pub fn parse_from_ion_element(
         value: &OwnedElement,
-        inline_import_types: &mut Vec<IslImportType>,
+        inline_imported_types: &mut Vec<IslImportType>,
     ) -> IonSchemaResult<Self> {
         match value.ion_type() {
             IonType::Symbol => {
@@ -80,7 +80,7 @@ impl IslTypeRef {
                 let value_struct = try_to!(value.as_struct());
                 // if the struct doesn't have an id field then it must be an anonymous type
                 if value_struct.get("id").is_none() {
-                    return Ok(IslTypeRef::Anonymous(IslTypeImpl::from_owned_element(value, inline_import_types)?))
+                    return Ok(IslTypeRef::Anonymous(IslTypeImpl::from_owned_element(value, inline_imported_types)?))
                 }
                 // if it is an inline import type store it as import type reference
                  let isl_import_type = match IslImport::from_ion_element(value)? {
@@ -94,7 +94,7 @@ impl IslTypeRef {
                 };
                 // if an inline import type is encountered add it in the inline_imports_types
                 // this will help resolve these inline imports before we start loading the schema types that uses them as reference
-                inline_import_types.push(isl_import_type.to_owned());
+                inline_imported_types.push(isl_import_type.to_owned());
                 Ok(IslTypeRef::TypeImport(isl_import_type))
             },
             _ => Err(invalid_schema_error_raw(

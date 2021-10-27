@@ -56,7 +56,7 @@ impl IslTypeImpl {
     /// Parse constraints inside an [OwnedElement] to an [IslTypeImpl]
     pub fn from_owned_element(
         ion: &OwnedElement,
-        inline_import_types: &mut Vec<IslImportType>, // stores the inline_imports that are discovered while loading this ISL type
+        inline_imported_types: &mut Vec<IslImportType>, // stores the inline_imports that are discovered while loading this ISL type
     ) -> IonSchemaResult<Self> {
         let mut constraints = vec![];
         let annotations: Vec<&OwnedSymbolToken> = ion.annotations().collect();
@@ -112,7 +112,7 @@ impl IslTypeImpl {
                 constraint_name,
                 value,
                 &isl_type_name,
-                inline_import_types,
+                inline_imported_types,
             )?;
             constraints.push(constraint);
         }

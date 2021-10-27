@@ -82,16 +82,16 @@ pub mod isl_type;
 pub mod isl_type_reference;
 
 /// Provides an internal representation of an schema file
-// * `imports`             - represents all the IslImports inside given schema file.
-//                           For more information: https://amzn.github.io/ion-schema/docs/spec.html#imports
-// * `types`               - represents all the IslTypeImpls defined within given schema file.
-//                           For more information: https://amzn.github.io/ion-schema/docs/spec.html#type-definitions
-// * `inline_import_types` - represents all inline IslImportTypes of given schema file.
 #[derive(Debug, Clone)]
 pub struct IslSchema {
+    // Represents all the IslImports inside the schema file.
+    // For more information: https://amzn.github.io/ion-schema/docs/spec.html#imports
     imports: Vec<IslImport>,
+    // Represents all the IslTypeImpls defined in this schema file.
+    // For more information: https://amzn.github.io/ion-schema/docs/spec.html#type-definitions
     types: Vec<IslTypeImpl>,
-    inline_import_types: Vec<IslImportType>,
+    // Represents all the inline IslImportTypes in this schema file.
+    inline_imported_types: Vec<IslImportType>,
 }
 
 impl IslSchema {
@@ -103,7 +103,7 @@ impl IslSchema {
         Self {
             imports,
             types,
-            inline_import_types: inline_imports,
+            inline_imported_types: inline_imports,
         }
     }
 
@@ -115,8 +115,8 @@ impl IslSchema {
         &self.types
     }
 
-    pub fn inline_import_types(&self) -> &[IslImportType] {
-        &self.inline_import_types
+    pub fn inline_imported_types(&self) -> &[IslImportType] {
+        &self.inline_imported_types
     }
 }
 

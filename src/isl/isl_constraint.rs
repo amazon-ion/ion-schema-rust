@@ -29,7 +29,7 @@ impl IslConstraint {
         constraint_name: &str,
         value: &OwnedElement,
         type_name: &str,
-        inline_import_types: &mut Vec<IslImportType>,
+        inline_imported_types: &mut Vec<IslImportType>,
     ) -> IonSchemaResult<IslConstraint> {
         // TODO: add more constraints to match below
         match constraint_name {
@@ -45,7 +45,7 @@ impl IslConstraint {
                     .as_sequence()
                     .unwrap()
                     .iter()
-                    .map(|e| IslTypeRef::parse_from_ion_element(e, inline_import_types))
+                    .map(|e| IslTypeRef::parse_from_ion_element(e, inline_imported_types))
                     .collect::<IonSchemaResult<Vec<IslTypeRef>>>()?;
                 Ok(IslConstraint::AllOf(types))
             }
@@ -57,7 +57,7 @@ impl IslConstraint {
                     )));
                 }
                 let type_reference: IslTypeRef =
-                    IslTypeRef::parse_from_ion_element(value, inline_import_types)?;
+                    IslTypeRef::parse_from_ion_element(value, inline_imported_types)?;
                 Ok(IslConstraint::Type(type_reference))
             }
             _ => {
