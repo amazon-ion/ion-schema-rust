@@ -54,7 +54,7 @@ impl IslTypeImpl {
     }
 
     /// Parse constraints inside an [OwnedElement] to an [IslTypeImpl]
-    pub fn parse_from_owned_element(
+    pub fn from_owned_element(
         ion: &OwnedElement,
         inline_import_types: &mut Vec<IslImportType>, // stores the inline_imports that are discovered while loading this ISL type
     ) -> IonSchemaResult<Self> {

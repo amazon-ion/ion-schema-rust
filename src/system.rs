@@ -1,7 +1,7 @@
 use crate::authority::DocumentAuthority;
 use crate::isl::isl_import::{IslImport, IslImportType};
 use crate::isl::isl_type::{IslType, IslTypeImpl};
-use crate::isl::Isl;
+use crate::isl::IslSchema;
 use crate::result::{
     invalid_schema_error, unresolvable_schema_error, unresolvable_schema_error_raw, IonSchemaError,
     IonSchemaResult,
@@ -127,7 +127,7 @@ impl PendingTypes {
                     TypeDefinition::Named(named_type_def) => Some(Ok(named_type_def)),
                     TypeDefinition::Anonymous(_) => {
                         unreachable!(
-                            "Unable to load import type: {} for schema",
+                            "The TypeDefinition for the imported type '{}' was Anonymous.",
                             import_type_name
                         )
                     }
@@ -137,7 +137,7 @@ impl PendingTypes {
                     TypeDefinition::Named(named_type_def) => Some(Ok(named_type_def)),
                     TypeDefinition::Anonymous(_) => {
                         unreachable!(
-                            "Unable to load import type: {} for schema",
+                            "The TypeDefinition for the imported type '{}' was Anonymous.",
                             import_type_name
                         )
                     }
@@ -452,11 +452,11 @@ impl Resolver {
     }
 
     /// Converts given owned elements into ISL representation
-    pub fn isl_from_elements<I: Iterator<Item = OwnedElement>>(
+    pub fn isl_schema_from_elements<I: Iterator<Item = OwnedElement>>(
         &mut self,
         elements: I,
         id: &str,
-    ) -> IonSchemaResult<Isl> {
+    ) -> IonSchemaResult<IslSchema> {
         // properties that will be stored in the ISL representation
         let mut isl_imports: Vec<IslImport> = vec![];
         let mut isl_types: Vec<IslTypeImpl> = vec![];
@@ -484,7 +484,7 @@ impl Resolver {
             else if annotations.contains(&&text_token("type")) {
                 // convert OwnedElement to IslType
                 let isl_type: IslTypeImpl =
-                    IslTypeImpl::parse_from_owned_element(&value, &mut isl_inline_imports)?;
+                    IslTypeImpl::from_owned_element(&value, &mut isl_inline_imports)?;
                 isl_types.push(isl_type);
             }
             // load footer for schema
@@ -499,22 +499,23 @@ impl Resolver {
             return invalid_schema_error("For any schema while a header and footer are both optional, a footer is required if a header is present (and vice-versa).");
         }
 
-        Ok(Isl::new(isl_imports, isl_types, isl_inline_imports))
+        Ok(IslSchema::new(isl_imports, isl_types, isl_inline_imports))
     }
 
     /// Converts given ISL representation into a [Schema]
-    pub fn schema_from_isl(
+    pub fn schema_from_isl_schema(
         &mut self,
-        isl: Isl,
+        isl: IslSchema,
         id: &str,
         type_store: &mut TypeStore,
         load_isl_import: Option<&IslImport>,
     ) -> IonSchemaResult<Rc<Schema>> {
-        // this is used to determine when resolving an import whether it has been imported to the type_store or not
+        // this is used while resolving an import, it is initialized as false to indicate that type_store isn't updated with this import type/types
+        // it represents whether the import types has been added correctly to the type_store or not
         let mut update_type_store_result = false;
 
         // Resolve all inline import types if there are any
-        // this will help resolve all inline imports before they ar used as a reference into another type
+        // this will help resolve all inline imports before they are used as a reference to another type
         for isl_inline_import_type in isl.inline_import_types() {
             let import_id = isl_inline_import_type.id();
             let inline_imported_type = self.load_schema(
@@ -548,7 +549,10 @@ impl Resolver {
         }
 
         if load_isl_import.is_some() && !update_type_store_result {
-            return unresolvable_schema_error(format!("Unable to load import: {}", id));
+            return unresolvable_schema_error(format!(
+                "Unable to load import: {} as the type/types were not added to the type_store correctly",
+                id
+            ));
         }
 
         Ok(Rc::new(Schema::new(id, Rc::new(type_store.to_owned()))))
@@ -581,8 +585,8 @@ impl Resolver {
                     _ => Err(error),
                 },
                 Ok(schema_content) => {
-                    let isl = self.isl_from_elements(schema_content.into_iter(), id)?;
-                    self.schema_from_isl(isl, id, type_store, load_isl_import)
+                    let isl = self.isl_schema_from_elements(schema_content.into_iter(), id)?;
+                    self.schema_from_isl_schema(isl, id, type_store, load_isl_import)
                 }
             };
         }
@@ -955,11 +959,11 @@ mod schema_system_tests {
         // verify if the schema loads without any errors
         let schema = schema_system.load_schema("sample_number.isl");
         assert_eq!(true, schema.is_err());
-        assert_eq!(
+        assert!(matches!(
             invalid_schema_error_raw(
                 "an inline import type reference can not have `alias` field specified"
             ),
-            schema.unwrap_err()
-        );
+            schema
+        ));
     }
 }

@@ -82,19 +82,19 @@ pub mod isl_type;
 pub mod isl_type_reference;
 
 /// Provides an internal representation of an schema file
-/// * `imports`             - represents all the [IslImport]s inside given schema file.
-///                           For more information: <https://amzn.github.io/ion-schema/docs/spec.html#imports>
-/// * `types`               - represents all the [IslTypeImpl]s defined within given schema file.
-///                           For more information: <https://amzn.github.io/ion-schema/docs/spec.html#type-definitions>
-/// * `inline_import_types` - represents all inline [IslImportType]s of given schema file.
+// * `imports`             - represents all the IslImports inside given schema file.
+//                           For more information: https://amzn.github.io/ion-schema/docs/spec.html#imports
+// * `types`               - represents all the IslTypeImpls defined within given schema file.
+//                           For more information: https://amzn.github.io/ion-schema/docs/spec.html#type-definitions
+// * `inline_import_types` - represents all inline IslImportTypes of given schema file.
 #[derive(Debug, Clone)]
-pub struct Isl {
+pub struct IslSchema {
     imports: Vec<IslImport>,
     types: Vec<IslTypeImpl>,
     inline_import_types: Vec<IslImportType>,
 }
 
-impl Isl {
+impl IslSchema {
     pub fn new(
         imports: Vec<IslImport>,
         types: Vec<IslTypeImpl>,
@@ -133,7 +133,7 @@ mod isl_tests {
     // helper function to create NamedIslType for isl tests
     fn load_named_type(text: &str) -> IslType {
         IslType::Named(
-            IslTypeImpl::parse_from_owned_element(
+            IslTypeImpl::from_owned_element(
                 &element_reader()
                     .read_one(text.as_bytes())
                     .expect("parsing failed unexpectedly"),
@@ -146,7 +146,7 @@ mod isl_tests {
     // helper function to create AnonymousIslType for isl tests
     fn load_anonymous_type(text: &str) -> IslType {
         IslType::Anonymous(
-            IslTypeImpl::parse_from_owned_element(
+            IslTypeImpl::from_owned_element(
                 &element_reader()
                     .read_one(text.as_bytes())
                     .expect("parsing failed unexpectedly"),

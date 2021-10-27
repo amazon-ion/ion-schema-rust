@@ -20,7 +20,7 @@ pub enum IslTypeRef {
     /// Represents a reference to a named type (including aliases)
     Named(String),
     /// Represents a type reference defined as an inlined import type from another schema
-    Import(IslImportType),
+    TypeImport(IslImportType),
     /// represents an unnamed type definition reference
     Anonymous(IslTypeImpl),
 }
@@ -80,7 +80,7 @@ impl IslTypeRef {
                 let value_struct = try_to!(value.as_struct());
                 // if the struct doesn't have an id field then it must be an anonymous type
                 if value_struct.get("id").is_none() {
-                    return Ok(IslTypeRef::Anonymous(IslTypeImpl::parse_from_owned_element(value, inline_import_types)?))
+                    return Ok(IslTypeRef::Anonymous(IslTypeImpl::from_owned_element(value, inline_import_types)?))
                 }
                 // if it is an inline import type store it as import type reference
                  let isl_import_type = match IslImport::from_ion_element(value)? {
@@ -95,7 +95,7 @@ impl IslTypeRef {
                 // if an inline import type is encountered add it in the inline_imports_types
                 // this will help resolve these inline imports before we start loading the schema types that uses them as reference
                 inline_import_types.push(isl_import_type.to_owned());
-                Ok(IslTypeRef::Import(isl_import_type))
+                Ok(IslTypeRef::TypeImport(isl_import_type))
             },
             _ => Err(invalid_schema_error_raw(
                 "type reference can either be a symbol(For base/alias type reference) or a struct (for anonymous type reference)",
@@ -153,14 +153,14 @@ impl IslTypeRef {
                 // get the last added anonymous type's type_id for given anonymous type
                 Ok(type_id)
             }
-            IslTypeRef::Import(isl_import_type) => {
+            IslTypeRef::TypeImport(isl_import_type) => {
                 // verify if the inline import type already exists in the type_store
                 match type_store.get_type_id_by_name(isl_import_type.type_name()) {
                     None => unresolvable_schema_error(format!(
                         "inline import type: {} does not exists",
                         isl_import_type.type_name()
                     )),
-                    Some(type_id) => Ok(type_id.to_owned()),
+                    Some(type_id) => Ok(*type_id),
                 }
             }
         }
