@@ -73,10 +73,46 @@
 //                 b. While doing (a) store all [TypeDefinition] in the [TypeStore](which could help
 //                    returning resolved types in a schema) and store generated [TypeId] in the constraint.
 
+use crate::isl::isl_import::{IslImport, IslImportType};
+use crate::isl::isl_type::IslTypeImpl;
+
 pub mod isl_constraint;
 pub mod isl_import;
 pub mod isl_type;
 pub mod isl_type_reference;
+/// Provides an internal representation of an ISL file
+#[derive(Debug, Clone)]
+pub struct Isl {
+    imports: Vec<IslImport>,
+    types: Vec<IslTypeImpl>,
+    inline_imports: Vec<IslImportType>,
+}
+
+impl Isl {
+    pub fn new(
+        imports: Vec<IslImport>,
+        types: Vec<IslTypeImpl>,
+        inline_imports: Vec<IslImportType>,
+    ) -> Self {
+        Self {
+            imports,
+            types,
+            inline_imports,
+        }
+    }
+
+    pub fn imports(&self) -> &[IslImport] {
+        &self.imports
+    }
+
+    pub fn types(&self) -> &[IslTypeImpl] {
+        &self.types
+    }
+
+    pub fn inline_imports(&self) -> &[IslImportType] {
+        &self.inline_imports
+    }
+}
 
 #[cfg(test)]
 mod isl_tests {
