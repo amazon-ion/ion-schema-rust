@@ -35,17 +35,17 @@ impl Constraint {
         Constraint::AllOf(AllOfConstraint::new(type_ids.into()))
     }
 
-    /// Creates a [Constraint::AllOf] referring to the type represented by the provided [TypeId].
+    /// Creates a [Constraint::AnyOf] referring to the type represented by the provided [TypeId].
     pub fn any_of<A: Into<Vec<TypeId>>>(type_ids: A) -> Constraint {
         Constraint::AnyOf(AnyOfConstraint::new(type_ids.into()))
     }
 
-    /// Creates a [Constraint::AllOf] referring to the type represented by the provided [TypeId].
+    /// Creates a [Constraint::OneOf] referring to the type represented by the provided [TypeId].
     pub fn one_of<A: Into<Vec<TypeId>>>(type_ids: A) -> Constraint {
         Constraint::OneOf(OneOfConstraint::new(type_ids.into()))
     }
 
-    /// Creates a [Constraint::Type] referring to the type represented by the provided [TypeId].
+    /// Creates a [Constraint::Not] referring to the type represented by the provided [TypeId].
     pub fn not(type_id: TypeId) -> Constraint {
         Constraint::Not(NotConstraint::new(type_id))
     }
