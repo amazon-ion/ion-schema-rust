@@ -155,7 +155,25 @@ mod schema_tests {
         load(r#" // For a schema with all_of type as below: 
             type:: { name: all_of_type, all_of: [{ type: int }] }
         "#).into_iter(),
-        2
+        2 // this includes core type int and named type all_of_type
+    ),
+    case::any_of_constraint(
+        load(r#" // For a schema with any_of constraint as below: 
+                type:: { name: any_of_type, any_of: [{ type: int }, { type: decimal }] }
+            "#).into_iter(),
+        3 // this includes core type int, core type decimal and named type any_of_type
+    ),
+    case::all_of_constraint(
+        load(r#" // For a schema with one_of constarint as below: 
+                type:: { name: one_of_type, one_of: [{ type: int }, { type: decimal }] }
+            "#).into_iter(),
+        3 // this includes core type int, core type decimal and named type one_of_type
+    ),
+    case::all_of_constraint(
+        load(r#" // For a schema with not constraint as below: 
+                type:: { name: not_type, not: { type: int } }
+            "#).into_iter(),
+        2 // this includes core type int and named type not_type
     ),
     )]
     fn owned_elements_to_schema<'a, I: Iterator<Item = OwnedElement>>(

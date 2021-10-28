@@ -10,6 +10,9 @@ use ion_rs::IonType;
 pub enum IslConstraint {
     AllOf(Vec<IslTypeRef>),
     Type(IslTypeRef),
+    AnyOf(Vec<IslTypeRef>),
+    OneOf(Vec<IslTypeRef>),
+    Not(IslTypeRef),
 }
 
 impl IslConstraint {
@@ -24,6 +27,21 @@ impl IslConstraint {
         IslConstraint::AllOf(isl_types.into())
     }
 
+    /// Creates a [IslConstraint::AnyOf] using the [IslTypeRef] referenced inside it
+    pub fn any_of<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
+        IslConstraint::AnyOf(isl_types.into())
+    }
+
+    /// Creates a [IslConstraint::OneOf] using the [IslTypeRef] referenced inside it
+    pub fn one_of<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
+        IslConstraint::OneOf(isl_types.into())
+    }
+
+    /// Creates a [IslConstraint::Not] using the [IslTypeRef] referenced inside it
+    pub fn not(isl_type: IslTypeRef) -> IslConstraint {
+        IslConstraint::Not(isl_type)
+    }
+
     /// Parse constraints inside an [OwnedElement] to an [IslConstraint]
     pub fn from_ion_element(
         constraint_name: &str,
@@ -34,20 +52,36 @@ impl IslConstraint {
         // TODO: add more constraints to match below
         match constraint_name {
             "all_of" => {
-                //TODO: create a method/macro for this ion type check which can be reused
-                if value.ion_type() != IonType::List {
+                let types: Vec<IslTypeRef> = IslConstraint::isl_type_references_from_ion_element(
+                    value,
+                    inline_imported_types,
+                )?;
+                Ok(IslConstraint::AllOf(types))
+            }
+            "any_of" => {
+                let types: Vec<IslTypeRef> = IslConstraint::isl_type_references_from_ion_element(
+                    value,
+                    inline_imported_types,
+                )?;
+                Ok(IslConstraint::AnyOf(types))
+            }
+            "one_of" => {
+                let types: Vec<IslTypeRef> = IslConstraint::isl_type_references_from_ion_element(
+                    value,
+                    inline_imported_types,
+                )?;
+                Ok(IslConstraint::OneOf(types))
+            }
+            "not" => {
+                if value.ion_type() != IonType::Symbol && value.ion_type() != IonType::Struct {
                     return Err(invalid_schema_error_raw(format!(
-                        "all_of constraint was a {:?} instead of a list",
+                        "type constraint was a {:?} instead of a symbol/struct",
                         value.ion_type()
                     )));
                 }
-                let types: Vec<IslTypeRef> = value
-                    .as_sequence()
-                    .unwrap()
-                    .iter()
-                    .map(|e| IslTypeRef::parse_from_ion_element(e, inline_imported_types))
-                    .collect::<IonSchemaResult<Vec<IslTypeRef>>>()?;
-                Ok(IslConstraint::AllOf(types))
+                let type_reference: IslTypeRef =
+                    IslTypeRef::parse_from_ion_element(value, inline_imported_types)?;
+                Ok(IslConstraint::Not(type_reference))
             }
             "type" => {
                 if value.ion_type() != IonType::Symbol && value.ion_type() != IonType::Struct {
@@ -70,5 +104,25 @@ impl IslConstraint {
                 ))
             }
         }
+    }
+
+    // helper method for from_ion_element to get isl type references from given ion element
+    fn isl_type_references_from_ion_element(
+        value: &OwnedElement,
+        inline_imported_types: &mut Vec<IslImportType>,
+    ) -> IonSchemaResult<Vec<IslTypeRef>> {
+        //TODO: create a method/macro for this ion type check which can be reused
+        if value.ion_type() != IonType::List {
+            return Err(invalid_schema_error_raw(format!(
+                "all_of constraint was a {:?} instead of a list",
+                value.ion_type()
+            )));
+        }
+        Ok(value
+            .as_sequence()
+            .unwrap()
+            .iter()
+            .map(|e| IslTypeRef::parse_from_ion_element(e, inline_imported_types))
+            .collect::<IonSchemaResult<Vec<IslTypeRef>>>()?)
     }
 }

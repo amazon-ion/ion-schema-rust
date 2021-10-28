@@ -200,6 +200,24 @@ mod isl_tests {
             "#),
         IslType::anonymous([IslConstraint::all_of([IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer))])])])
     ),
+    case::any_of_constraint(
+        load_anonymous_type(r#" // For a schema with any_of constraint as below:
+                    { any_of: [{ type: int }, { type: decimal }] }
+                "#),
+        IslType::anonymous([IslConstraint::any_of([IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer))]), IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Decimal))])])])
+    ),
+    case::one_of_constraint(
+        load_anonymous_type(r#" // For a schema with one_of constraint as below:
+                    { one_of: [{ type: int }, { type: decimal }] }
+                "#),
+        IslType::anonymous([IslConstraint::one_of([IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer))]), IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Decimal))])])])
+    ),
+    case::not_constraint(
+        load_anonymous_type(r#" // For a schema with not constraint as below:
+                    { not: { type: int } }
+                "#),
+        IslType::anonymous([IslConstraint::not(IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer))]))])
+    ),
     )]
     fn owned_struct_to_isl_type(isl_type1: IslType, isl_type2: IslType) {
         // assert if both the IslType are same in terms of constraints and name

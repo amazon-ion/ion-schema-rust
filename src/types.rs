@@ -218,6 +218,27 @@ mod type_definition_tests {
         IslType::anonymous([IslConstraint::all_of([IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer))])])]),
         TypeDefinition::anonymous([Constraint::all_of([1])])
     ),
+    case::any_of_constraint(
+        /* For a schema with any_of constraint as below:
+            { any_of: [{ type: int }, { type: decimal }] }
+        */
+        IslType::anonymous([IslConstraint::any_of([IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer))]), IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Decimal))])])]),
+        TypeDefinition::anonymous([Constraint::any_of([1, 3])])
+    ),
+    case::one_of_constraint(
+        /* For a schema with one_of constraint as below:
+            { any_of: [{ type: int }, { type: decimal }] }
+        */
+        IslType::anonymous([IslConstraint::one_of([IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer))]), IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Decimal))])])]),
+        TypeDefinition::anonymous([Constraint::one_of([1, 3])])
+    ),
+    case::not_constraint(
+        /* For a schema with not constraint as below:
+            { not: { type: int } }
+        */
+        IslType::anonymous([IslConstraint::not(IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer))]))]),
+        TypeDefinition::anonymous([Constraint::not(1)])
+    ),
     )]
     fn isl_type_to_type_definition(isl_type: IslType, type_def: TypeDefinition) {
         // assert if both the TypeDefinition are same in terms of constraints and name
