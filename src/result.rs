@@ -42,7 +42,7 @@ pub fn unresolvable_schema_error<T, S: AsRef<str>>(description: S) -> IonSchemaR
 /// A convenience method for creating an  IonSchemaError::InvalidSchemaError with the provided operation
 /// text.
 pub fn invalid_schema_error_raw<S: AsRef<str>>(description: S) -> IonSchemaError {
-    IonSchemaError::UnresolvableSchemaError {
+    IonSchemaError::InvalidSchemaError {
         description: description.as_ref().to_string(),
     }
 }
@@ -50,7 +50,7 @@ pub fn invalid_schema_error_raw<S: AsRef<str>>(description: S) -> IonSchemaError
 /// A convenience method for creating an IonSchemaResult containing an IonSchemaError::InvalidSchemaError
 /// with the provided description text.
 pub fn invalid_schema_error<T, S: AsRef<str>>(description: S) -> IonSchemaResult<T> {
-    Err(IonSchemaError::UnresolvableSchemaError {
+    Err(IonSchemaError::InvalidSchemaError {
         description: description.as_ref().to_string(),
     })
 }

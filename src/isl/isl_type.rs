@@ -1,4 +1,5 @@
 use crate::isl::isl_constraint::IslConstraint;
+use crate::isl::isl_import::IslImportType;
 use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
 use ion_rs::value::owned::{text_token, OwnedElement, OwnedSymbolToken};
 use ion_rs::value::{Element, Struct, SymbolToken};
@@ -53,7 +54,10 @@ impl IslTypeImpl {
     }
 
     /// Parse constraints inside an [OwnedElement] to an [IslTypeImpl]
-    pub fn parse_from_owned_element(ion: &OwnedElement) -> IonSchemaResult<Self> {
+    pub fn from_owned_element(
+        ion: &OwnedElement,
+        inline_imported_types: &mut Vec<IslImportType>, // stores the inline_imports that are discovered while loading this ISL type
+    ) -> IonSchemaResult<Self> {
         let mut constraints = vec![];
         let annotations: Vec<&OwnedSymbolToken> = ion.annotations().collect();
 
@@ -104,8 +108,12 @@ impl IslTypeImpl {
                 }
             };
 
-            let constraint =
-                IslConstraint::from_ion_element(constraint_name, value, &isl_type_name)?;
+            let constraint = IslConstraint::from_ion_element(
+                constraint_name,
+                value,
+                &isl_type_name,
+                inline_imported_types,
+            )?;
             constraints.push(constraint);
         }
         Ok(IslTypeImpl::new(type_name, constraints))

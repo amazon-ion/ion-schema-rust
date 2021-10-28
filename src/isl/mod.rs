@@ -73,10 +73,52 @@
 //                 b. While doing (a) store all [TypeDefinition] in the [TypeStore](which could help
 //                    returning resolved types in a schema) and store generated [TypeId] in the constraint.
 
+use crate::isl::isl_import::{IslImport, IslImportType};
+use crate::isl::isl_type::IslTypeImpl;
+
 pub mod isl_constraint;
 pub mod isl_import;
 pub mod isl_type;
 pub mod isl_type_reference;
+
+/// Provides an internal representation of an schema file
+#[derive(Debug, Clone)]
+pub struct IslSchema {
+    // Represents all the IslImports inside the schema file.
+    // For more information: https://amzn.github.io/ion-schema/docs/spec.html#imports
+    imports: Vec<IslImport>,
+    // Represents all the IslTypeImpls defined in this schema file.
+    // For more information: https://amzn.github.io/ion-schema/docs/spec.html#type-definitions
+    types: Vec<IslTypeImpl>,
+    // Represents all the inline IslImportTypes in this schema file.
+    inline_imported_types: Vec<IslImportType>,
+}
+
+impl IslSchema {
+    pub fn new(
+        imports: Vec<IslImport>,
+        types: Vec<IslTypeImpl>,
+        inline_imports: Vec<IslImportType>,
+    ) -> Self {
+        Self {
+            imports,
+            types,
+            inline_imported_types: inline_imports,
+        }
+    }
+
+    pub fn imports(&self) -> &[IslImport] {
+        &self.imports
+    }
+
+    pub fn types(&self) -> &[IslTypeImpl] {
+        &self.types
+    }
+
+    pub fn inline_imported_types(&self) -> &[IslImportType] {
+        &self.inline_imported_types
+    }
+}
 
 #[cfg(test)]
 mod isl_tests {
@@ -91,10 +133,11 @@ mod isl_tests {
     // helper function to create NamedIslType for isl tests
     fn load_named_type(text: &str) -> IslType {
         IslType::Named(
-            IslTypeImpl::parse_from_owned_element(
+            IslTypeImpl::from_owned_element(
                 &element_reader()
                     .read_one(text.as_bytes())
                     .expect("parsing failed unexpectedly"),
+                &mut vec![],
             )
             .unwrap(),
         )
@@ -103,10 +146,11 @@ mod isl_tests {
     // helper function to create AnonymousIslType for isl tests
     fn load_anonymous_type(text: &str) -> IslType {
         IslType::Anonymous(
-            IslTypeImpl::parse_from_owned_element(
+            IslTypeImpl::from_owned_element(
                 &element_reader()
                     .read_one(text.as_bytes())
                     .expect("parsing failed unexpectedly"),
+                &mut vec![],
             )
             .unwrap(),
         )

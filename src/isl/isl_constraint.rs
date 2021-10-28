@@ -1,3 +1,4 @@
+use crate::isl::isl_import::IslImportType;
 use crate::isl::isl_type_reference::IslTypeRef;
 use crate::result::{invalid_schema_error_raw, IonSchemaResult};
 use ion_rs::value::owned::OwnedElement;
@@ -28,6 +29,7 @@ impl IslConstraint {
         constraint_name: &str,
         value: &OwnedElement,
         type_name: &str,
+        inline_imported_types: &mut Vec<IslImportType>,
     ) -> IonSchemaResult<IslConstraint> {
         // TODO: add more constraints to match below
         match constraint_name {
@@ -43,7 +45,7 @@ impl IslConstraint {
                     .as_sequence()
                     .unwrap()
                     .iter()
-                    .map(|e| IslTypeRef::parse_from_ion_element(e))
+                    .map(|e| IslTypeRef::parse_from_ion_element(e, inline_imported_types))
                     .collect::<IonSchemaResult<Vec<IslTypeRef>>>()?;
                 Ok(IslConstraint::AllOf(types))
             }
@@ -54,7 +56,8 @@ impl IslConstraint {
                         value.ion_type()
                     )));
                 }
-                let type_reference: IslTypeRef = IslTypeRef::parse_from_ion_element(value)?;
+                let type_reference: IslTypeRef =
+                    IslTypeRef::parse_from_ion_element(value, inline_imported_types)?;
                 Ok(IslConstraint::Type(type_reference))
             }
             _ => {

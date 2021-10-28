@@ -75,7 +75,7 @@ impl IslImportType {
         }
     }
 
-    fn id(&self) -> &String {
+    pub(crate) fn id(&self) -> &String {
         &self.id
     }
 
