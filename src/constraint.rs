@@ -18,6 +18,9 @@ pub trait ConstraintValidator {
 // TODO: add other constraints
 pub enum Constraint {
     AllOf(AllOfConstraint),
+    AnyOf(AnyOfConstraint),
+    Not(NotConstraint),
+    OneOf(OneOfConstraint),
     Type(TypeConstraint),
 }
 
@@ -27,9 +30,24 @@ impl Constraint {
         Constraint::Type(TypeConstraint::new(type_id))
     }
 
-    /// Creates a [Constraint::AllOf] referring to the type represented by the provided [TypeId].
+    /// Creates a [Constraint::AllOf] referring to the types represented by the provided [TypeId]s.
     pub fn all_of<A: Into<Vec<TypeId>>>(type_ids: A) -> Constraint {
         Constraint::AllOf(AllOfConstraint::new(type_ids.into()))
+    }
+
+    /// Creates a [Constraint::AnyOf] referring to the types represented by the provided [TypeId]s.
+    pub fn any_of<A: Into<Vec<TypeId>>>(type_ids: A) -> Constraint {
+        Constraint::AnyOf(AnyOfConstraint::new(type_ids.into()))
+    }
+
+    /// Creates a [Constraint::OneOf] referring to the types represented by the provided [TypeId]s.
+    pub fn one_of<A: Into<Vec<TypeId>>>(type_ids: A) -> Constraint {
+        Constraint::OneOf(OneOfConstraint::new(type_ids.into()))
+    }
+
+    /// Creates a [Constraint::Not] referring to the type represented by the provided [TypeId].
+    pub fn not(type_id: TypeId) -> Constraint {
+        Constraint::Not(NotConstraint::new(type_id))
     }
 
     /// Parse an [IslConstraint] to a [Constraint]
@@ -48,6 +66,30 @@ impl Constraint {
                 )?;
                 Ok(Constraint::AllOf(all_of))
             }
+            IslConstraint::AnyOf(type_references) => {
+                let any_of: AnyOfConstraint = AnyOfConstraint::resolve_from_isl_constraint(
+                    type_references,
+                    type_store,
+                    pending_types,
+                )?;
+                Ok(Constraint::AnyOf(any_of))
+            }
+            IslConstraint::OneOf(type_references) => {
+                let one_of: OneOfConstraint = OneOfConstraint::resolve_from_isl_constraint(
+                    type_references,
+                    type_store,
+                    pending_types,
+                )?;
+                Ok(Constraint::OneOf(one_of))
+            }
+            IslConstraint::Not(type_references) => {
+                let not: NotConstraint = NotConstraint::resolve_from_isl_constraint(
+                    type_references,
+                    type_store,
+                    pending_types,
+                )?;
+                Ok(Constraint::Not(not))
+            }
             IslConstraint::Type(type_reference) => {
                 let type_constraint: TypeConstraint = TypeConstraint::resolve_from_isl_constraint(
                     type_reference,
@@ -62,7 +104,7 @@ impl Constraint {
 
 /// Implements an `all_of` constraint of Ion Schema
 /// [all_of]: https://amzn.github.io/ion-schema/docs/spec.html#all_of
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AllOfConstraint {
     type_ids: Vec<TypeId>,
 }
@@ -92,15 +134,103 @@ impl ConstraintValidator for AllOfConstraint {
     }
 }
 
-impl PartialEq for AllOfConstraint {
-    fn eq(&self, other: &Self) -> bool {
-        self.type_ids == other.type_ids
+/// Implements an `any_of` constraint of Ion Schema
+/// [all_of]: https://amzn.github.io/ion-schema/docs/spec.html#any_of
+#[derive(Debug, Clone, PartialEq)]
+pub struct AnyOfConstraint {
+    type_ids: Vec<TypeId>,
+}
+
+impl AnyOfConstraint {
+    pub fn new(type_ids: Vec<TypeId>) -> Self {
+        Self { type_ids }
+    }
+
+    /// Tries to create an [AnyOf] constraint from the given OwnedElement
+    pub fn resolve_from_isl_constraint(
+        type_references: &[IslTypeRef],
+        type_store: &mut TypeStore,
+        pending_types: &mut PendingTypes,
+    ) -> IonSchemaResult<Self> {
+        let resolved_types: Vec<TypeId> = type_references
+            .iter()
+            .map(|t| IslTypeRef::resolve_type_reference(t, type_store, pending_types))
+            .collect::<IonSchemaResult<Vec<TypeId>>>()?;
+        Ok(AnyOfConstraint::new(resolved_types))
+    }
+}
+
+impl ConstraintValidator for AnyOfConstraint {
+    fn validate(&self, value: OwnedElement, issues: &mut Violations) {
+        todo!()
+    }
+}
+
+/// Implements an `one_of` constraint of Ion Schema
+/// [all_of]: https://amzn.github.io/ion-schema/docs/spec.html#one_of
+#[derive(Debug, Clone, PartialEq)]
+pub struct OneOfConstraint {
+    type_ids: Vec<TypeId>,
+}
+
+impl OneOfConstraint {
+    pub fn new(type_ids: Vec<TypeId>) -> Self {
+        Self { type_ids }
+    }
+
+    /// Tries to create an [OneOf] constraint from the given OwnedElement
+    pub fn resolve_from_isl_constraint(
+        type_references: &[IslTypeRef],
+        type_store: &mut TypeStore,
+        pending_types: &mut PendingTypes,
+    ) -> IonSchemaResult<Self> {
+        let resolved_types: Vec<TypeId> = type_references
+            .iter()
+            .map(|t| IslTypeRef::resolve_type_reference(t, type_store, pending_types))
+            .collect::<IonSchemaResult<Vec<TypeId>>>()?;
+        Ok(OneOfConstraint::new(resolved_types))
+    }
+}
+
+impl ConstraintValidator for OneOfConstraint {
+    fn validate(&self, value: OwnedElement, issues: &mut Violations) {
+        todo!()
+    }
+}
+
+/// Implements a `not` constraint
+/// [type]: https://amzn.github.io/ion-schema/docs/spec.html#not
+#[derive(Debug, Clone, PartialEq)]
+pub struct NotConstraint {
+    type_id: TypeId,
+}
+
+impl NotConstraint {
+    pub fn new(type_id: TypeId) -> Self {
+        Self { type_id }
+    }
+
+    /// Tries to create a [Not] constraint from the given OwnedElement
+    pub fn resolve_from_isl_constraint(
+        type_reference: &IslTypeRef,
+        type_store: &mut TypeStore,
+        pending_types: &mut PendingTypes,
+    ) -> IonSchemaResult<Self> {
+        let type_id =
+            IslTypeRef::resolve_type_reference(type_reference, type_store, pending_types)?;
+        Ok(NotConstraint::new(type_id))
+    }
+}
+
+impl ConstraintValidator for NotConstraint {
+    fn validate(&self, value: OwnedElement, issues: &mut Violations) {
+        todo!()
     }
 }
 
 /// Implements a `type` constraint
 /// [type]: https://amzn.github.io/ion-schema/docs/spec.html#type
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TypeConstraint {
     type_id: TypeId,
 }
@@ -125,11 +255,5 @@ impl TypeConstraint {
 impl ConstraintValidator for TypeConstraint {
     fn validate(&self, value: OwnedElement, issues: &mut Violations) {
         todo!()
-    }
-}
-
-impl PartialEq for TypeConstraint {
-    fn eq(&self, other: &Self) -> bool {
-        self.type_id == other.type_id
     }
 }

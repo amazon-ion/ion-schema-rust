@@ -43,7 +43,7 @@ impl IslTypeRef {
     }
 
     /// Tries to create an [IslTypeRef] from the given OwnedElement
-    pub fn parse_from_ion_element(
+    pub fn from_ion_element(
         value: &OwnedElement,
         inline_imported_types: &mut Vec<IslImportType>,
     ) -> IonSchemaResult<Self> {
