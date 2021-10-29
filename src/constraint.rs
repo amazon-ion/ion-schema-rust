@@ -19,8 +19,8 @@ pub trait ConstraintValidator {
 pub enum Constraint {
     AllOf(AllOfConstraint),
     AnyOf(AnyOfConstraint),
-    OneOf(OneOfConstraint),
     Not(NotConstraint),
+    OneOf(OneOfConstraint),
     Type(TypeConstraint),
 }
 
@@ -30,17 +30,17 @@ impl Constraint {
         Constraint::Type(TypeConstraint::new(type_id))
     }
 
-    /// Creates a [Constraint::AllOf] referring to the type represented by the provided [TypeId].
+    /// Creates a [Constraint::AllOf] referring to the types represented by the provided [TypeId]s.
     pub fn all_of<A: Into<Vec<TypeId>>>(type_ids: A) -> Constraint {
         Constraint::AllOf(AllOfConstraint::new(type_ids.into()))
     }
 
-    /// Creates a [Constraint::AnyOf] referring to the type represented by the provided [TypeId].
+    /// Creates a [Constraint::AnyOf] referring to the types represented by the provided [TypeId]s.
     pub fn any_of<A: Into<Vec<TypeId>>>(type_ids: A) -> Constraint {
         Constraint::AnyOf(AnyOfConstraint::new(type_ids.into()))
     }
 
-    /// Creates a [Constraint::OneOf] referring to the type represented by the provided [TypeId].
+    /// Creates a [Constraint::OneOf] referring to the types represented by the provided [TypeId]s.
     pub fn one_of<A: Into<Vec<TypeId>>>(type_ids: A) -> Constraint {
         Constraint::OneOf(OneOfConstraint::new(type_ids.into()))
     }
@@ -104,7 +104,7 @@ impl Constraint {
 
 /// Implements an `all_of` constraint of Ion Schema
 /// [all_of]: https://amzn.github.io/ion-schema/docs/spec.html#all_of
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AllOfConstraint {
     type_ids: Vec<TypeId>,
 }
@@ -134,15 +134,9 @@ impl ConstraintValidator for AllOfConstraint {
     }
 }
 
-impl PartialEq for AllOfConstraint {
-    fn eq(&self, other: &Self) -> bool {
-        self.type_ids == other.type_ids
-    }
-}
-
 /// Implements an `any_of` constraint of Ion Schema
 /// [all_of]: https://amzn.github.io/ion-schema/docs/spec.html#any_of
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AnyOfConstraint {
     type_ids: Vec<TypeId>,
 }
@@ -172,15 +166,9 @@ impl ConstraintValidator for AnyOfConstraint {
     }
 }
 
-impl PartialEq for AnyOfConstraint {
-    fn eq(&self, other: &Self) -> bool {
-        self.type_ids == other.type_ids
-    }
-}
-
 /// Implements an `one_of` constraint of Ion Schema
 /// [all_of]: https://amzn.github.io/ion-schema/docs/spec.html#one_of
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct OneOfConstraint {
     type_ids: Vec<TypeId>,
 }
@@ -210,15 +198,9 @@ impl ConstraintValidator for OneOfConstraint {
     }
 }
 
-impl PartialEq for OneOfConstraint {
-    fn eq(&self, other: &Self) -> bool {
-        self.type_ids == other.type_ids
-    }
-}
-
 /// Implements a `not` constraint
 /// [type]: https://amzn.github.io/ion-schema/docs/spec.html#not
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct NotConstraint {
     type_id: TypeId,
 }
@@ -246,15 +228,9 @@ impl ConstraintValidator for NotConstraint {
     }
 }
 
-impl PartialEq for NotConstraint {
-    fn eq(&self, other: &Self) -> bool {
-        self.type_id == other.type_id
-    }
-}
-
 /// Implements a `type` constraint
 /// [type]: https://amzn.github.io/ion-schema/docs/spec.html#type
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TypeConstraint {
     type_id: TypeId,
 }
@@ -279,11 +255,5 @@ impl TypeConstraint {
 impl ConstraintValidator for TypeConstraint {
     fn validate(&self, value: OwnedElement, issues: &mut Violations) {
         todo!()
-    }
-}
-
-impl PartialEq for TypeConstraint {
-    fn eq(&self, other: &Self) -> bool {
-        self.type_id == other.type_id
     }
 }

@@ -9,10 +9,10 @@ use ion_rs::IonType;
 #[derive(Debug, Clone, PartialEq)]
 pub enum IslConstraint {
     AllOf(Vec<IslTypeRef>),
-    Type(IslTypeRef),
     AnyOf(Vec<IslTypeRef>),
-    OneOf(Vec<IslTypeRef>),
     Not(IslTypeRef),
+    OneOf(Vec<IslTypeRef>),
+    Type(IslTypeRef),
 }
 
 impl IslConstraint {
@@ -80,7 +80,7 @@ impl IslConstraint {
                     )));
                 }
                 let type_reference: IslTypeRef =
-                    IslTypeRef::parse_from_ion_element(value, inline_imported_types)?;
+                    IslTypeRef::from_ion_element(value, inline_imported_types)?;
                 Ok(IslConstraint::Not(type_reference))
             }
             "type" => {
@@ -91,7 +91,7 @@ impl IslConstraint {
                     )));
                 }
                 let type_reference: IslTypeRef =
-                    IslTypeRef::parse_from_ion_element(value, inline_imported_types)?;
+                    IslTypeRef::from_ion_element(value, inline_imported_types)?;
                 Ok(IslConstraint::Type(type_reference))
             }
             _ => {
@@ -122,7 +122,7 @@ impl IslConstraint {
             .as_sequence()
             .unwrap()
             .iter()
-            .map(|e| IslTypeRef::parse_from_ion_element(e, inline_imported_types))
+            .map(|e| IslTypeRef::from_ion_element(e, inline_imported_types))
             .collect::<IonSchemaResult<Vec<IslTypeRef>>>()?)
     }
 }

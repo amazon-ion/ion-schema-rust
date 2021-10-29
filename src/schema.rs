@@ -164,7 +164,7 @@ mod schema_tests {
         3 // this includes core type int, core type decimal and named type any_of_type
     ),
     case::all_of_constraint(
-        load(r#" // For a schema with one_of constarint as below: 
+        load(r#" // For a schema with one_of constraint as below: 
                 type:: { name: one_of_type, one_of: [{ type: int }, { type: decimal }] }
             "#).into_iter(),
         3 // this includes core type int, core type decimal and named type one_of_type
