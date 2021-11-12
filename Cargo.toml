@@ -8,6 +8,9 @@ edition = "2018"
 [dependencies]
 ion-rs = "0.6.0"
 thiserror = "1.0"
+num-bigint = "0.3"
+num-traits = "0.2"
+chrono = "0.4"
 
 [dev-dependencies]
 rstest = "0.9"
