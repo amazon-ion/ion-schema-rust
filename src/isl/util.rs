@@ -5,7 +5,6 @@ use ion_rs::value::owned::{text_token, OwnedElement, OwnedSymbolToken};
 use ion_rs::value::{AnyInt, Element, IntAccess, Sequence, SymbolToken};
 use ion_rs::IonType;
 use num_traits::Signed;
-use std::convert::TryInto;
 
 /// Represents ISL [Range]s where some constraints can be defined by a range
 /// <RANGE<RANGE_TYPE>> ::= range::[ <EXCLUSIVITY><RANGE_TYPE>, <EXCLUSIVITY><RANGE_TYPE> ]
@@ -28,41 +27,54 @@ pub enum Range {
 }
 
 impl Range {
-    pub fn decimal_range(
-        start: RangeBoundaryValue,
-        end: RangeBoundaryValue,
-    ) -> IonSchemaResult<Range> {
-        Range::validate_range_boundaries(&start, &end)?;
-        Ok(Range::Decimal(start, end))
-    }
+    pub fn range(start: RangeBoundaryValue, end: RangeBoundaryValue) -> IonSchemaResult<Range> {
+        use RangeBoundaryValue::*;
+        use RangeBoundaryValueType::*;
 
-    pub fn float_range(
-        start: RangeBoundaryValue,
-        end: RangeBoundaryValue,
-    ) -> IonSchemaResult<Range> {
-        Range::validate_range_boundaries(&start, &end)?;
-        Ok(Range::Float(start, end))
-    }
+        // validate the range boundary values : `start` and `end`
+        let range_boundary_value_type = match (&start, &end) {
+            (Min, Max) => {
+                return invalid_schema_error("Range boundaries can not be min and max together (i.e. range::[min, max] is not allowed)")
+            }
+            (Min, Value(v, _)) => {
+                v.to_owned()
+            }
+            (Value(v, _), Max) => {
+                v.to_owned()
+            }
+            (Value(v1, _), Value(v2, _)) => {
+                match (v1, v2) {
+                    (Integer(_), Integer(_)) => {}
+                    (IntegerNonNegative(_),IntegerNonNegative(_)) => {}
+                    (Decimal(_), Decimal(_)) => {}
+                    (Float(_), Float(_)) => {}
+                    (Timestamp(_), Timestamp(_)) => {},
+                    _ => {
+                        return invalid_schema_error("Both range boundary values must be of same type")
+                    }
+                };
+                // TODO: un-comment below code once the timestamp comparator for ion-rust is implemented
+                // if start > end {
+                //     return invalid_schema_error("Lower range boundary value can not be bigger than upper range boundary")
+                // }
+                v1.to_owned()
+            }
+            (Max, _) => {
+                return invalid_schema_error("Lower range boundary value must not be max")
+            }
+            (_, Min) => {
+                return invalid_schema_error("Upper range boundary value must not be min")
+            }
+        };
 
-    pub fn int_range(start: RangeBoundaryValue, end: RangeBoundaryValue) -> IonSchemaResult<Range> {
-        Range::validate_range_boundaries(&start, &end)?;
-        Ok(Range::Integer(start, end))
-    }
-
-    pub fn int_non_negative_range(
-        start: RangeBoundaryValue,
-        end: RangeBoundaryValue,
-    ) -> IonSchemaResult<Range> {
-        Range::validate_range_boundaries(&start, &end)?;
-        Ok(Range::IntegerNonNegative(start, end))
-    }
-
-    pub fn timestamp_range(
-        start: RangeBoundaryValue,
-        end: RangeBoundaryValue,
-    ) -> IonSchemaResult<Range> {
-        Range::validate_range_boundaries(&start, &end)?;
-        Ok(Range::Timestamp(start, end))
+        // create a range based on the range_boundary_value_type from above
+        Ok(match range_boundary_value_type {
+            Decimal(_) => Range::Decimal(start, end),
+            Integer(_) => Range::Integer(start, end),
+            Float(_) => Range::Float(start, end),
+            Timestamp(_) => Range::Timestamp(start, end),
+            IntegerNonNegative(_) => Range::IntegerNonNegative(start, end),
+        })
     }
 
     pub fn from_ion_element(value: &OwnedElement, is_non_negative: bool) -> IonSchemaResult<Range> {
@@ -79,33 +91,18 @@ impl Range {
         // set end of the range
         let end = RangeBoundaryValue::from_ion_element(try_to!(range.get(1)), is_non_negative)?;
 
-        // validate both range boundary values
-        let range_type = Range::validate_range_boundaries(&start, &end)?;
-        match range_type {
-            RangeBoundaryValueType::Decimal(_) => Ok(Range::Decimal(start, end)),
-            RangeBoundaryValueType::Float(_) => Ok(Range::Float(start, end)),
-            RangeBoundaryValueType::Integer(_) => Ok(Range::Integer(start, end)),
-            RangeBoundaryValueType::IntegerNonNegative(_) => {
-                Ok(Range::IntegerNonNegative(start, end))
-            }
-            RangeBoundaryValueType::Timestamp(_) => Ok(Range::Timestamp(start, end)),
-        }
+        // validate both range boundary values and returns created `Range`
+        Range::range(start, end)
     }
 
     // helper method to which validates a non negative integer range boundary value
     fn validate_non_negative_integer_range_boundary_value(
         value: &AnyInt,
-    ) -> IonSchemaResult<usize> {
+    ) -> IonSchemaResult<&AnyInt> {
         match value.as_i64() {
             Some(v) => {
-                if v > 0 {
-                    match v.try_into() {
-                        Err(_) => invalid_schema_error(format!(
-                            "Expected non negative integer for range boundary values, found {}",
-                            v
-                        )),
-                        Ok(non_negative_int_value) => Ok(non_negative_int_value),
-                    }
+                if v >= 0 {
+                    Ok(value)
                 } else {
                     invalid_schema_error(format!(
                         "Expected non negative integer for range boundary values, found {}",
@@ -118,14 +115,8 @@ impl Range {
                     unreachable!("Expected range boundary values must be a non negative integer")
                 }
                 Some(v) => {
-                    if v.is_negative() {
-                        match v.try_into() {
-                            Err(_) => invalid_schema_error(format!(
-                                "Expected non negative integer for range boundary values, found {}",
-                                v
-                            )),
-                            Ok(non_negative_int_value) => Ok(non_negative_int_value),
-                        }
+                    if !v.is_negative() {
+                        Ok(value)
                     } else {
                         invalid_schema_error(format!(
                             "Expected non negative integer for range boundary values, found {}",
@@ -136,49 +127,6 @@ impl Range {
             },
         }
     }
-
-    // this function validates the range boundaries and returns a range boundary value type,
-    // which helps determine the range type (Decimal, integer, etc.)
-    fn validate_range_boundaries(
-        start: &RangeBoundaryValue,
-        end: &RangeBoundaryValue,
-    ) -> IonSchemaResult<RangeBoundaryValueType> {
-        use RangeBoundaryValue::*;
-        match (start, end) {
-            (Min, Max) => {
-                return invalid_schema_error("Range boundaries can not be min and max together (i.e. range::[min, max] is not allowed)")
-            }
-            (Min, Value(v, _)) => {
-                Ok(v.to_owned())
-            }
-            (Value(v, _), Max) => {
-                Ok(v.to_owned())
-            }
-            (Value(v1, _), Value(v2, _)) => {
-                match (v1, v2) {
-                    (RangeBoundaryValueType::Integer(_), RangeBoundaryValueType::Integer(_)) => {}
-                    (RangeBoundaryValueType::IntegerNonNegative(_), RangeBoundaryValueType::IntegerNonNegative(_)) => {}
-                    (RangeBoundaryValueType::Decimal(_), RangeBoundaryValueType::Decimal(_)) => {}
-                    (RangeBoundaryValueType::Float(_), RangeBoundaryValueType::Float(_)) => {}
-                    (RangeBoundaryValueType::Timestamp(_), RangeBoundaryValueType::Timestamp(_)) => {},
-                    _ => {
-                        return invalid_schema_error("Both range boundary values must be of same type")
-                    }
-                };
-                // TODO: un-comment below code once the timestamp comparator for ion-rust is implemented
-                // if start > end {
-                //     return invalid_schema_error("Lower range boundary value can not be bigger than upper range boundary")
-                // }
-                Ok(v1.to_owned())
-            }
-            (Max, _) => {
-                return invalid_schema_error("Lower range boundary value must not be max")
-            }
-            (_, Min) => {
-                return invalid_schema_error("Upper range boundary value must not be min")
-            }
-        }
-    }
 }
 
 /// Represents the type of range boundary value
@@ -186,8 +134,8 @@ impl Range {
 pub enum RangeBoundaryValueType {
     Decimal(Decimal),
     Float(f64),
-    Integer(i64),
-    IntegerNonNegative(usize),
+    Integer(AnyInt),
+    IntegerNonNegative(AnyInt),
     Timestamp(Timestamp),
 }
 
@@ -200,10 +148,10 @@ pub enum RangeBoundaryValue {
 }
 
 impl RangeBoundaryValue {
-    pub fn int_value(value: i64, range_boundary_type: RangeBoundaryType) -> Self {
+    pub fn int_value(value: AnyInt, range_boundary_type: RangeBoundaryType) -> Self {
         RangeBoundaryValue::Value(RangeBoundaryValueType::Integer(value), range_boundary_type)
     }
-    pub fn int_non_negative_value(value: usize, range_boundary_type: RangeBoundaryType) -> Self {
+    pub fn int_non_negative_value(value: AnyInt, range_boundary_type: RangeBoundaryType) -> Self {
         RangeBoundaryValue::Value(
             RangeBoundaryValueType::IntegerNonNegative(value),
             range_boundary_type,
@@ -256,7 +204,7 @@ impl RangeBoundaryValue {
                     ))
                 } else {
                     Ok(RangeBoundaryValue::int_value(
-                        value.as_any_int().unwrap().as_i64().unwrap(),
+                        value.as_any_int().unwrap().to_owned(),
                         range_boundary_type,
                     ))
                 }

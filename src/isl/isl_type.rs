@@ -124,13 +124,14 @@ impl IslTypeImpl {
 // Related issue: https://github.com/amzn/ion-rust/issues/200
 impl PartialEq for IslTypeImpl {
     fn eq(&self, other: &Self) -> bool {
-        let matching = self.constraints.iter().all(|constraint| {
-            other
-                .constraints
-                .iter()
-                .find(|other_constraint| &constraint == other_constraint)
-                .is_some()
-        });
-        matching && self.constraints.len() == other.constraints.len() && self.name == other.name
+        self.constraints.len() == other.constraints.len()
+            && self.name == other.name
+            && self.constraints.iter().all(|constraint| {
+                other
+                    .constraints
+                    .iter()
+                    .find(|other_constraint| &constraint == other_constraint)
+                    .is_some()
+            })
     }
 }

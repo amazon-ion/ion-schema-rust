@@ -132,6 +132,7 @@ mod isl_tests {
     use ion_rs::types::timestamp::Timestamp;
     use ion_rs::value::reader::element_reader;
     use ion_rs::value::reader::ElementReader;
+    use ion_rs::value::AnyInt;
     use ion_rs::IonType;
     use rstest::*;
 
@@ -248,9 +249,9 @@ mod isl_tests {
                     range::[min, 5]
                 "#
             ),
-            Range::int_range(
+            Range::range(
                 RangeBoundaryValue::Min,
-                RangeBoundaryValue::int_value(5, RangeBoundaryType::Inclusive)
+                RangeBoundaryValue::int_value(AnyInt::I64(5), RangeBoundaryType::Inclusive)
             )
         ),
         case::range_with_float(
@@ -259,7 +260,7 @@ mod isl_tests {
                     range::[2e1, 5e1]
                 "#
             ),
-            Range::float_range(
+            Range::range(
                 RangeBoundaryValue::float_value(2e1, RangeBoundaryType::Inclusive),
                 RangeBoundaryValue::float_value(5e1, RangeBoundaryType::Inclusive)
             )
@@ -270,7 +271,7 @@ mod isl_tests {
                     range::[20.4, 50.5]
                 "#
             ),
-            Range::decimal_range(
+            Range::range(
                 RangeBoundaryValue::decimal_value(Decimal::new(204, -1), RangeBoundaryType::Inclusive),
                 RangeBoundaryValue::decimal_value(Decimal::new(505, -1), RangeBoundaryType::Inclusive)
             )
@@ -281,7 +282,7 @@ mod isl_tests {
                     range::[2020-01-01T, 2021-01-01T]
                 "#
             ),
-            Range::timestamp_range(
+            Range::range(
                 RangeBoundaryValue::timestamp_value(Timestamp::with_year(2020).with_month(1).with_day(1).build().unwrap(), RangeBoundaryType::Inclusive),
                 RangeBoundaryValue::timestamp_value(Timestamp::with_year(2021).with_month(1).with_day(1).build().unwrap(), RangeBoundaryType::Inclusive)
             )
@@ -311,6 +312,11 @@ mod isl_tests {
         case::range_with_min_upper_bound(load_range(
             r#"
                 range::[5, min]
+            "#
+        )),
+        case::range_with_mismatched_bounds(load_range(
+            r#"
+                range::[5, 7.834]
             "#
         )),
         // TODO: uncomment below test case once we have a comparator for timestamp in ion-rust 
