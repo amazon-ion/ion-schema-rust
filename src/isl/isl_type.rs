@@ -34,7 +34,7 @@ impl IslType {
 /// Represents both named and anonymous [IslType]s and can be converted to a solid [TypeDefinition] using TypeStore
 /// Named ISL type grammar: `type:: { name: <NAME>, <CONSTRAINT>...}`
 /// Anonymous ISL type grammar: `{ <CONSTRAINT>... }`
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct IslTypeImpl {
     name: Option<String>,
     constraints: Vec<IslConstraint>,
@@ -117,5 +117,21 @@ impl IslTypeImpl {
             constraints.push(constraint);
         }
         Ok(IslTypeImpl::new(type_name, constraints))
+    }
+}
+
+// OwnedStruct doesn't preserve field order hence the PartialEq won't work properly for unordered constraints
+// Related issue: https://github.com/amzn/ion-rust/issues/200
+impl PartialEq for IslTypeImpl {
+    fn eq(&self, other: &Self) -> bool {
+        self.constraints.len() == other.constraints.len()
+            && self.name == other.name
+            && self.constraints.iter().all(|constraint| {
+                other
+                    .constraints
+                    .iter()
+                    .find(|other_constraint| &constraint == other_constraint)
+                    .is_some()
+            })
     }
 }

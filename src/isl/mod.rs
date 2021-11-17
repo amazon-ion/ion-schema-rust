@@ -80,6 +80,7 @@ pub mod isl_constraint;
 pub mod isl_import;
 pub mod isl_type;
 pub mod isl_type_reference;
+mod util;
 
 /// Provides an internal representation of an schema file
 #[derive(Debug, Clone)]
@@ -125,8 +126,13 @@ mod isl_tests {
     use crate::isl::isl_constraint::IslConstraint;
     use crate::isl::isl_type::{IslType, IslTypeImpl};
     use crate::isl::isl_type_reference::IslTypeRef;
+    use crate::isl::util::{Range, RangeBoundaryType, RangeBoundaryValue};
+    use crate::result::IonSchemaResult;
+    use ion_rs::types::decimal::*;
+    use ion_rs::types::timestamp::Timestamp;
     use ion_rs::value::reader::element_reader;
     use ion_rs::value::reader::ElementReader;
+    use ion_rs::value::AnyInt;
     use ion_rs::IonType;
     use rstest::*;
 
@@ -222,5 +228,106 @@ mod isl_tests {
     fn owned_struct_to_isl_type(isl_type1: IslType, isl_type2: IslType) {
         // assert if both the IslType are same in terms of constraints and name
         assert_eq!(isl_type1, isl_type2);
+    }
+
+    // helper function to create a range
+    fn load_range(text: &str) -> IonSchemaResult<Range> {
+        Range::from_ion_element(
+            &element_reader()
+                .read_one(text.as_bytes())
+                .expect("parsing failed unexpectedly"),
+            false,
+        )
+    }
+
+    #[rstest(
+        range1,
+        range2,
+        case::range_with_integer(
+            load_range(
+                r#"
+                    range::[min, 5]
+                "#
+            ),
+            Range::range(
+                RangeBoundaryValue::Min,
+                RangeBoundaryValue::int_value(AnyInt::I64(5), RangeBoundaryType::Inclusive)
+            )
+        ),
+        case::range_with_float(
+            load_range(
+                r#"
+                    range::[2e1, 5e1]
+                "#
+            ),
+            Range::range(
+                RangeBoundaryValue::float_value(2e1, RangeBoundaryType::Inclusive),
+                RangeBoundaryValue::float_value(5e1, RangeBoundaryType::Inclusive)
+            )
+        ),
+        case::range_with_decimal(
+            load_range(
+                r#"
+                    range::[20.4, 50.5]
+                "#
+            ),
+            Range::range(
+                RangeBoundaryValue::decimal_value(Decimal::new(204, -1), RangeBoundaryType::Inclusive),
+                RangeBoundaryValue::decimal_value(Decimal::new(505, -1), RangeBoundaryType::Inclusive)
+            )
+        ),
+        case::range_with_timestamp(
+            load_range(
+                r#"
+                    range::[2020-01-01T, 2021-01-01T]
+                "#
+            ),
+            Range::range(
+                RangeBoundaryValue::timestamp_value(Timestamp::with_year(2020).with_month(1).with_day(1).build().unwrap(), RangeBoundaryType::Inclusive),
+                RangeBoundaryValue::timestamp_value(Timestamp::with_year(2021).with_month(1).with_day(1).build().unwrap(), RangeBoundaryType::Inclusive)
+            )
+        )
+    )]
+    fn owned_struct_to_range(range1: IonSchemaResult<Range>, range2: IonSchemaResult<Range>) {
+        // determine that both the ranges are created with no errors
+        assert_eq!(range1.is_ok(), true);
+        assert_eq!(range2.is_ok(), true);
+
+        // assert if both the ranges are same
+        assert_eq!(range1.unwrap(), range2.unwrap());
+    }
+
+    #[rstest(
+        range,
+        case::range_with_min_max(load_range(
+            r#"
+                range::[min, max]
+            "#
+        )),
+        case::range_with_max_lower_bound(load_range(
+            r#"
+                range::[max, 5]
+            "#
+        )),
+        case::range_with_min_upper_bound(load_range(
+            r#"
+                range::[5, min]
+            "#
+        )),
+        case::range_with_mismatched_bounds(load_range(
+            r#"
+                range::[5, 7.834]
+            "#
+        )),
+        // TODO: uncomment below test case once we have a comparator for timestamp in ion-rust 
+        // case::range_with_lower_bound_greater_than_upper_bound(load_range(
+        //     r#"
+        //         range::[10, 5]
+        //     "#
+        // ))
+    )]
+    fn invalid_ranges(range: IonSchemaResult<Range>) {
+        // determine that the range is created with an error for an invalid range
+        assert_eq!(range.is_err(), true);
     }
 }
