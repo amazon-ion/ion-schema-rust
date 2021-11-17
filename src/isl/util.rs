@@ -96,13 +96,11 @@ impl Range {
     }
 
     // helper method to which validates a non negative integer range boundary value
-    fn validate_non_negative_integer_range_boundary_value(
-        value: &AnyInt,
-    ) -> IonSchemaResult<&AnyInt> {
+    fn validate_non_negative_integer_range_boundary_value(value: &AnyInt) -> IonSchemaResult<()> {
         match value.as_i64() {
             Some(v) => {
                 if v >= 0 {
-                    Ok(value)
+                    Ok(())
                 } else {
                     invalid_schema_error(format!(
                         "Expected non negative integer for range boundary values, found {}",
@@ -116,7 +114,7 @@ impl Range {
                 }
                 Some(v) => {
                     if !v.is_negative() {
-                        Ok(value)
+                        Ok(())
                     } else {
                         invalid_schema_error(format!(
                             "Expected non negative integer for range boundary values, found {}",
@@ -194,12 +192,11 @@ impl RangeBoundaryValue {
             }
             IonType::Integer => {
                 if is_non_negative {
-                    let value = Range::validate_non_negative_integer_range_boundary_value(
+                    Range::validate_non_negative_integer_range_boundary_value(
                         value.as_any_int().unwrap(),
-                    )?
-                    .to_owned();
+                    )?;
                     Ok(RangeBoundaryValue::int_non_negative_value(
-                        value,
+                        value.as_any_int().unwrap().to_owned(),
                         range_boundary_type,
                     ))
                 } else {
