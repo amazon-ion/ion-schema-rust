@@ -2,8 +2,10 @@ use crate::constraint::Constraint;
 use crate::isl::isl_type::IslTypeImpl;
 use crate::result::IonSchemaResult;
 use crate::system::{PendingTypes, TypeId, TypeStore};
-use crate::violation::Violations;
+use crate::violation::{ViolationImpl, Violations};
 use ion_rs::value::owned::OwnedElement;
+use ion_rs::value::Element;
+use ion_rs::IonType;
 use std::rc::Rc;
 
 /// Provides validation for Type
@@ -15,7 +17,7 @@ pub trait TypeValidator {
     /// Returns a Violations object indicating whether the specified value
     /// is valid for this type, and if not, provides details as to which
     /// constraints were violated.
-    fn validate(&self, value: &OwnedElement, issues: &mut Violations);
+    fn validate(&self, value: &OwnedElement, issues: &mut impl Violations, type_store: &TypeStore);
 }
 
 // Provides a public facing schema type which has a reference to TypeStore
@@ -30,6 +32,13 @@ impl TypeRef {
     pub fn new(id: TypeId, type_store: Rc<TypeStore>) -> Self {
         Self { id, type_store }
     }
+
+    pub fn validate(&self, value: OwnedElement, issues: &mut impl Violations) {
+        let type_def = self.type_store.get_type_by_id(self.id).unwrap();
+        for constraint in type_def.constraints() {
+            constraint.validate(value.to_owned(), issues, &self.type_store);
+        }
+    }
 }
 
 /// Represents a [TypeDefinition] which stores a resolved ISL type using [TypeStore]
@@ -37,6 +46,7 @@ impl TypeRef {
 pub enum TypeDefinition {
     Named(TypeDefinitionImpl),
     Anonymous(TypeDefinitionImpl),
+    Core(IonType),
 }
 
 impl TypeDefinition {
@@ -55,13 +65,39 @@ impl TypeDefinition {
     pub fn anonymous<A: Into<Vec<Constraint>>>(constraints: A) -> TypeDefinition {
         TypeDefinition::Anonymous(TypeDefinitionImpl::new(None, constraints.into()))
     }
-
     /// Provides the underlying constraints of [TypeDefinitionImpl]
     pub fn constraints(&self) -> &[Constraint] {
         match &self {
             TypeDefinition::Named(named_type) => named_type.constraints(),
             TypeDefinition::Anonymous(anonymous_type) => anonymous_type.constraints(),
+            _ => &[],
         }
+    }
+}
+
+impl TypeValidator for TypeDefinition {
+    fn is_valid(&self, value: &OwnedElement) -> bool {
+        todo!()
+    }
+
+    fn validate(&self, value: &OwnedElement, issues: &mut impl Violations, type_store: &TypeStore) {
+        match self {
+            TypeDefinition::Named(named_type) => {
+                named_type.validate(&value, issues, type_store);
+            }
+            TypeDefinition::Anonymous(anonymous_type) => {
+                anonymous_type.validate(&value, issues, type_store);
+            }
+            TypeDefinition::Core(ion_type) => {
+                if value.ion_type() != *ion_type {
+                    issues.add_violation(ViolationImpl::new(
+                        "type_constraint",
+                        "type_mismatched",
+                        &format!("expected type {:?}, found {:?}", ion_type, value.ion_type()),
+                    ));
+                }
+            }
+        };
     }
 }
 
@@ -151,8 +187,10 @@ impl TypeValidator for TypeDefinitionImpl {
         todo!()
     }
 
-    fn validate(&self, value: &OwnedElement, issues: &mut Violations) {
-        todo!()
+    fn validate(&self, value: &OwnedElement, issues: &mut impl Violations, type_store: &TypeStore) {
+        for constraint in self.constraints() {
+            constraint.validate(value.to_owned(), issues, type_store);
+        }
     }
 }
 

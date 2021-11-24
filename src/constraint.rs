@@ -2,7 +2,8 @@ use crate::isl::isl_constraint::IslConstraint;
 use crate::isl::isl_type_reference::IslTypeRef;
 use crate::result::IonSchemaResult;
 use crate::system::{PendingTypes, TypeId, TypeStore};
-use crate::violation::Violations;
+use crate::types::TypeValidator;
+use crate::violation::{ViolationImpl, Violations};
 use ion_rs::value::owned::OwnedElement;
 
 /// Provides validation for schema Constraint
@@ -10,7 +11,7 @@ pub trait ConstraintValidator {
     /// Checks this constraint against the provided value,
     /// adding [Violation]s and/or [ViolationChild]ren to issues
     /// if the constraint is violated.
-    fn validate(&self, value: OwnedElement, issues: &mut Violations);
+    fn validate(&self, value: OwnedElement, issues: &mut impl Violations, type_store: &TypeStore);
 }
 
 /// Defines schema Constraints
@@ -100,6 +101,23 @@ impl Constraint {
             }
         }
     }
+
+    pub fn validate(
+        &self,
+        value: OwnedElement,
+        issues: &mut impl Violations,
+        type_store: &TypeStore,
+    ) {
+        match self {
+            Constraint::AllOf(all_of) => all_of.validate(value, issues, type_store),
+            Constraint::AnyOf(any_of) => any_of.validate(value, issues, type_store),
+            Constraint::Not(not) => not.validate(value, issues, type_store),
+            Constraint::OneOf(one_of) => one_of.validate(value, issues, type_store),
+            Constraint::Type(type_constraint) => {
+                type_constraint.validate(value, issues, type_store)
+            }
+        }
+    }
 }
 
 /// Implements an `all_of` constraint of Ion Schema
@@ -129,8 +147,25 @@ impl AllOfConstraint {
 }
 
 impl ConstraintValidator for AllOfConstraint {
-    fn validate(&self, value: OwnedElement, issues: &mut Violations) {
-        todo!()
+    fn validate(&self, value: OwnedElement, issues: &mut impl Violations, type_store: &TypeStore) {
+        let mut valid_types = vec![];
+        let mut all_of_violation = ViolationImpl::new("all_of", "all_types_not_matched", "");
+        for type_id in &self.type_ids {
+            let type_def = type_store.get_type_by_id(*type_id).unwrap();
+            let checkpoint = all_of_violation.checkpoint();
+            type_def.validate(&value, &mut all_of_violation, type_store);
+            if checkpoint.is_valid(&all_of_violation) {
+                valid_types.push(type_id);
+            }
+        }
+        if valid_types.len() != self.type_ids.len() {
+            all_of_violation.message = format!(
+                "value matches {} types, expected {}",
+                valid_types.len(),
+                self.type_ids.len()
+            );
+            issues.add_violation(all_of_violation)
+        }
     }
 }
 
@@ -161,8 +196,24 @@ impl AnyOfConstraint {
 }
 
 impl ConstraintValidator for AnyOfConstraint {
-    fn validate(&self, value: OwnedElement, issues: &mut Violations) {
-        todo!()
+    fn validate(&self, value: OwnedElement, issues: &mut impl Violations, type_store: &TypeStore) {
+        let mut valid_types = vec![];
+        let mut any_of_violation = ViolationImpl::new(
+            "any_of",
+            "no_types_matched",
+            "value matches none of the types",
+        );
+        for type_id in &self.type_ids {
+            let type_def = type_store.get_type_by_id(*type_id).unwrap();
+            let checkpoint = any_of_violation.checkpoint();
+            type_def.validate(&value, &mut any_of_violation, type_store);
+            if checkpoint.is_valid(&any_of_violation) {
+                valid_types.push(type_id);
+            }
+        }
+        if valid_types.len() == 0 {
+            issues.add_violation(any_of_violation)
+        }
     }
 }
 
@@ -193,8 +244,28 @@ impl OneOfConstraint {
 }
 
 impl ConstraintValidator for OneOfConstraint {
-    fn validate(&self, value: OwnedElement, issues: &mut Violations) {
-        todo!()
+    fn validate(&self, value: OwnedElement, issues: &mut impl Violations, type_store: &TypeStore) {
+        let mut valid_types = vec![];
+        let mut one_of_violation = ViolationImpl::new("one_of", "", "");
+        for type_id in &self.type_ids {
+            let type_def = type_store.get_type_by_id(*type_id).unwrap();
+            let checkpoint = one_of_violation.checkpoint();
+            type_def.validate(&value, &mut one_of_violation, type_store);
+            if checkpoint.is_valid(&one_of_violation) {
+                valid_types.push(type_id);
+            }
+        }
+        if valid_types.len() != 1 {
+            if valid_types.len() == 0 {
+                one_of_violation.code = "no_types_matched".to_owned();
+                one_of_violation.message = "value matches none of the types".to_owned();
+            } else if valid_types.len() > 1 {
+                one_of_violation.code = "more_than_one_type_matched".to_owned();
+                one_of_violation.message =
+                    format!("value matches {} types, expected 1", valid_types.len());
+            }
+            issues.add_violation(one_of_violation)
+        }
     }
 }
 
@@ -223,8 +294,14 @@ impl NotConstraint {
 }
 
 impl ConstraintValidator for NotConstraint {
-    fn validate(&self, value: OwnedElement, issues: &mut Violations) {
-        todo!()
+    fn validate(&self, value: OwnedElement, issues: &mut impl Violations, type_store: &TypeStore) {
+        let type_def = type_store.get_type_by_id(self.type_id).unwrap();
+        let mut not_violation =
+            ViolationImpl::new("not", "type_matched", "value unexpectedly matches type");
+        type_def.validate(&value, &mut not_violation, type_store);
+        if not_violation.is_valid() {
+            issues.add_violation(not_violation);
+        }
     }
 }
 
@@ -253,7 +330,8 @@ impl TypeConstraint {
 }
 
 impl ConstraintValidator for TypeConstraint {
-    fn validate(&self, value: OwnedElement, issues: &mut Violations) {
-        todo!()
+    fn validate(&self, value: OwnedElement, issues: &mut impl Violations, type_store: &TypeStore) {
+        let type_def = type_store.get_type_by_id(self.type_id).unwrap();
+        type_def.validate(&value, issues, type_store);
     }
 }
