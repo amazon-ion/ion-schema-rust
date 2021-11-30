@@ -2,7 +2,7 @@ use crate::constraint::Constraint;
 use crate::isl::isl_type::IslTypeImpl;
 use crate::result::IonSchemaResult;
 use crate::system::{PendingTypes, TypeId, TypeStore};
-use crate::violation::{ViolationImpl, Violations};
+use crate::violation::{Violation, ViolationLeaf};
 use ion_rs::value::owned::OwnedElement;
 use ion_rs::value::Element;
 use ion_rs::IonType;
@@ -17,7 +17,7 @@ pub trait TypeValidator {
     /// Returns a Violations object indicating whether the specified value
     /// is valid for this type, and if not, provides details as to which
     /// constraints were violated.
-    fn validate(&self, value: &OwnedElement, issues: &mut impl Violations, type_store: &TypeStore);
+    fn validate(&self, value: &OwnedElement, issues: &mut impl Violation, type_store: &TypeStore);
 }
 
 // Provides a public facing schema type which has a reference to TypeStore
@@ -33,7 +33,7 @@ impl TypeRef {
         Self { id, type_store }
     }
 
-    pub fn validate(&self, value: &OwnedElement, issues: &mut impl Violations) {
+    pub fn validate(&self, value: &OwnedElement, issues: &mut impl Violation) {
         let type_def = self.type_store.get_type_by_id(self.id).unwrap();
         for constraint in type_def.constraints() {
             constraint.validate(value, issues, &self.type_store);
@@ -80,7 +80,7 @@ impl TypeValidator for TypeDefinition {
         todo!()
     }
 
-    fn validate(&self, value: &OwnedElement, issues: &mut impl Violations, type_store: &TypeStore) {
+    fn validate(&self, value: &OwnedElement, issues: &mut impl Violation, type_store: &TypeStore) {
         match self {
             TypeDefinition::Named(named_type) => {
                 named_type.validate(value, issues, type_store);
@@ -90,7 +90,7 @@ impl TypeValidator for TypeDefinition {
             }
             TypeDefinition::Core(ion_type) => {
                 if value.ion_type() != *ion_type {
-                    issues.add_violation(ViolationImpl::new(
+                    issues.add_violation(ViolationLeaf::new(
                         "type_constraint",
                         "type_mismatched",
                         &format!("expected type {:?}, found {:?}", ion_type, value.ion_type()),
@@ -187,7 +187,7 @@ impl TypeValidator for TypeDefinitionImpl {
         todo!()
     }
 
-    fn validate(&self, value: &OwnedElement, issues: &mut impl Violations, type_store: &TypeStore) {
+    fn validate(&self, value: &OwnedElement, issues: &mut impl Violation, type_store: &TypeStore) {
         for constraint in self.constraints() {
             constraint.validate(value, issues, type_store);
         }

@@ -1,31 +1,31 @@
 /// Represents Violations found during validation of values based on schema types
-pub trait Violations {
+pub trait Violation {
     /// adds a violation into the collection of [Violation]s
-    fn add_violation(&mut self, violation: ViolationImpl);
+    fn add_violation(&mut self, violation: ViolationLeaf);
 
     /// Returns `true` if no violations were found, otherwise `false`
     fn is_valid(&self) -> bool;
 
     /// Returns the [Violation]s that were found during validation
-    fn violations(&self) -> &[ViolationImpl];
+    fn violations(&self) -> &[ViolationLeaf];
 
     /// Creates a checkpoint to track the number of violations from this point onwards
     fn checkpoint(&self) -> Checkpoint;
 }
 
 // Represents collection of [Violation]s
-pub struct ViolationsImpl {
-    violations: Vec<ViolationImpl>,
+pub struct ViolationTree {
+    violations: Vec<ViolationLeaf>,
 }
 
-impl ViolationsImpl {
+impl ViolationTree {
     pub fn new() -> Self {
         Self { violations: vec![] }
     }
 }
 
-impl Violations for ViolationsImpl {
-    fn add_violation(&mut self, violation: ViolationImpl) {
+impl Violation for ViolationTree {
+    fn add_violation(&mut self, violation: ViolationLeaf) {
         self.violations.push(violation);
     }
 
@@ -33,7 +33,7 @@ impl Violations for ViolationsImpl {
         self.violations.is_empty()
     }
 
-    fn violations(&self) -> &[ViolationImpl] {
+    fn violations(&self) -> &[ViolationLeaf] {
         &self.violations
     }
 
@@ -54,21 +54,21 @@ impl Checkpoint {
         Self { violations_count }
     }
 
-    pub fn is_valid(&self, violation: &ViolationImpl) -> bool {
+    pub fn is_valid(&self, violation: &ViolationLeaf) -> bool {
         self.violations_count == violation.violations.len()
     }
 }
 
 // Represents a single Violation with detailed error message, error code and the constraint for which the validation failed
 #[derive(Debug, Clone)]
-pub struct ViolationImpl {
+pub struct ViolationLeaf {
     constraint: String,      // represents the constraint that created this violation
     pub(crate) code: String, // represents an error code that indicates the type of the violation
     pub(crate) message: String, // represents the detailed error message for this violation
-    violations: Vec<ViolationImpl>,
+    violations: Vec<ViolationLeaf>,
 }
 
-impl ViolationImpl {
+impl ViolationLeaf {
     pub fn new<A: AsRef<str>>(constraint: A, code: A, message: A) -> Self {
         Self {
             constraint: constraint.as_ref().to_owned(),
@@ -79,8 +79,8 @@ impl ViolationImpl {
     }
 }
 
-impl Violations for ViolationImpl {
-    fn add_violation(&mut self, violation: ViolationImpl) {
+impl Violation for ViolationLeaf {
+    fn add_violation(&mut self, violation: ViolationLeaf) {
         self.violations.push(violation);
     }
 
@@ -88,7 +88,7 @@ impl Violations for ViolationImpl {
         self.violations.is_empty()
     }
 
-    fn violations(&self) -> &[ViolationImpl] {
+    fn violations(&self) -> &[ViolationLeaf] {
         &self.violations
     }
 
