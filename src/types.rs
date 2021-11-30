@@ -33,10 +33,10 @@ impl TypeRef {
         Self { id, type_store }
     }
 
-    pub fn validate(&self, value: OwnedElement, issues: &mut impl Violations) {
+    pub fn validate(&self, value: &OwnedElement, issues: &mut impl Violations) {
         let type_def = self.type_store.get_type_by_id(self.id).unwrap();
         for constraint in type_def.constraints() {
-            constraint.validate(value.to_owned(), issues, &self.type_store);
+            constraint.validate(value, issues, &self.type_store);
         }
     }
 }
@@ -83,10 +83,10 @@ impl TypeValidator for TypeDefinition {
     fn validate(&self, value: &OwnedElement, issues: &mut impl Violations, type_store: &TypeStore) {
         match self {
             TypeDefinition::Named(named_type) => {
-                named_type.validate(&value, issues, type_store);
+                named_type.validate(value, issues, type_store);
             }
             TypeDefinition::Anonymous(anonymous_type) => {
-                anonymous_type.validate(&value, issues, type_store);
+                anonymous_type.validate(value, issues, type_store);
             }
             TypeDefinition::Core(ion_type) => {
                 if value.ion_type() != *ion_type {
@@ -189,7 +189,7 @@ impl TypeValidator for TypeDefinitionImpl {
 
     fn validate(&self, value: &OwnedElement, issues: &mut impl Violations, type_store: &TypeStore) {
         for constraint in self.constraints() {
-            constraint.validate(value.to_owned(), issues, type_store);
+            constraint.validate(value, issues, type_store);
         }
     }
 }

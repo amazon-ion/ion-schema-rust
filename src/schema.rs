@@ -263,7 +263,7 @@ mod schema_tests {
                 type:: { name: one_of_type, one_of: [int, decimal] }
             "#),
         ),
-        // TODO: add a test case for all_od constraint
+        // TODO: add a test case for all_of constraint
         case::any_of_constraint(
             load(r#"
                 5
@@ -285,19 +285,19 @@ mod schema_tests {
         invalid_values: Vec<OwnedElement>,
         schema: Rc<Schema>,
     ) {
-        let types: Vec<TypeRef> = schema.get_types().collect();
+        let type_ref: TypeRef = schema.get_types().next().expect("Loaded schema was empty.");
         // check for validation without any violations
         for valid_value in valid_values.iter() {
             let mut issues = ViolationsImpl::new();
             // there is only a single type in each schema defined above hence validate with that type
-            types[0].validate(valid_value.to_owned(), &mut issues);
+            type_ref.validate(valid_value, &mut issues);
             assert_eq!(issues.violations().len(), 0);
         }
         // check for violations due to invalid values
         for invalid_value in invalid_values.iter() {
             let mut issues = ViolationsImpl::new();
             // there is only a single type in each schema defined above hence validate with that type
-            types[0].validate(invalid_value.to_owned(), &mut issues);
+            type_ref.validate(invalid_value, &mut issues);
             assert_ne!(issues.violations().len(), 0);
         }
     }

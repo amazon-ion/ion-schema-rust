@@ -140,7 +140,7 @@ impl PendingTypes {
                     }
                     TypeDefinition::Core(_) => {
                         unreachable!(
-                            "The TypeDefinition for the imported type '{}' was core type.",
+                            "The TypeDefinition for the imported type '{}' was a core type.",
                             import_type_name
                         )
                     }
@@ -156,7 +156,7 @@ impl PendingTypes {
                     }
                     TypeDefinition::Core(_) => {
                         unreachable!(
-                            "The TypeDefinition for the imported type '{}' was core type.",
+                            "The TypeDefinition for the imported type '{}' was a core type.",
                             import_type_name
                         )
                     }
