@@ -100,7 +100,6 @@ impl Iterator for SchemaTypeIterator {
 mod schema_tests {
     use super::*;
     use crate::system::Resolver;
-    use crate::violation::{Violation, ViolationTree};
     use ion_rs::value::owned::OwnedElement;
     use ion_rs::value::reader::element_reader;
     use ion_rs::value::reader::ElementReader;
@@ -288,17 +287,15 @@ mod schema_tests {
         let type_ref: TypeRef = schema.get_types().next().expect("Loaded schema was empty.");
         // check for validation without any violations
         for valid_value in valid_values.iter() {
-            let mut issues = ViolationTree::new();
             // there is only a single type in each schema defined above hence validate with that type
-            type_ref.validate(valid_value, &mut issues);
-            assert_eq!(issues.violations().len(), 0);
+            let issues = type_ref.validate(valid_value);
+            assert_eq!(issues.is_none(), true);
         }
         // check for violations due to invalid values
         for invalid_value in invalid_values.iter() {
-            let mut issues = ViolationTree::new();
             // there is only a single type in each schema defined above hence validate with that type
-            type_ref.validate(invalid_value, &mut issues);
-            assert_ne!(issues.violations().len(), 0);
+            let issues = type_ref.validate(invalid_value);
+            assert_eq!(issues.is_some(), true);
         }
     }
 }
