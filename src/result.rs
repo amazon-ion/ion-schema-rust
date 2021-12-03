@@ -1,9 +1,13 @@
+use crate::violation::Violation;
 use ion_rs::result::IonError;
 use std::io;
 use thiserror::Error;
 
 /// A unified Result type representing the outcome of method calls that may fail.
 pub type IonSchemaResult<T> = Result<T, IonSchemaError>;
+
+/// A Result type representing the outcome of validation that may result in violations.
+pub type ValidationResult = Result<(), Violation>;
 
 /// Represents the different types of high-level failures that might occur when reading Ion Schema.
 #[derive(Debug, Error)]

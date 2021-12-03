@@ -1,6 +1,6 @@
 use crate::constraint::Constraint;
 use crate::isl::isl_type::IslTypeImpl;
-use crate::result::IonSchemaResult;
+use crate::result::{IonSchemaResult, ValidationResult};
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::violation::Violation;
 use ion_rs::value::owned::OwnedElement;
@@ -14,10 +14,9 @@ pub trait TypeValidator {
     /// returns `false`, otherwise `true`
     fn is_valid(&self, value: &OwnedElement, type_store: &TypeStore) -> bool;
 
-    /// Returns `Some(issues)` where issues provides details as to which
-    /// constraints were violated, otherwise returns `None` indicating no violations were found
-    /// during the validation
-    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> Option<Violation>;
+    /// Returns `Err(violation)` with details as to which constraints were violated,
+    /// otherwise returns `Ok(())` indicating no violations were found during the validation
+    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult;
 }
 
 // Provides a public facing schema type which has a reference to TypeStore
@@ -33,18 +32,28 @@ impl TypeRef {
         Self { id, type_store }
     }
 
-    pub fn validate(&self, value: &OwnedElement) -> Option<Violation> {
-        let mut issues = Violation::new("", "", "");
+    pub fn validate(&self, value: &OwnedElement) -> ValidationResult {
+        let mut violations: Vec<Violation> = vec![];
         let type_def = self.type_store.get_type_by_id(self.id).unwrap();
+        let type_name = match type_def {
+            TypeDefinition::Named(named_type) => named_type.name().as_ref().unwrap().to_owned(),
+            TypeDefinition::Anonymous(anonymous_type) => "".to_owned(),
+            TypeDefinition::Core(ion_type) => format!("{:?}", ion_type),
+        };
         for constraint in type_def.constraints() {
-            if let Some(violation) = constraint.validate(value, &self.type_store) {
-                issues.add_violation(violation);
+            if let Err(violation) = constraint.validate(value, &self.type_store) {
+                violations.push(violation);
             }
         }
-        if issues.is_valid() {
-            return None;
+        if violations.len() == 0 {
+            return Ok(());
         }
-        Some(issues)
+        Err(Violation::with_violations(
+            type_name.as_str(),
+            "type_constraints_unsatisfied",
+            "value didn't satisfy type constraint(s)",
+            violations,
+        ))
     }
 }
 
@@ -87,21 +96,19 @@ impl TypeValidator for TypeDefinition {
         todo!()
     }
 
-    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> Option<Violation> {
+    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
         match self {
             TypeDefinition::Named(named_type) => named_type.validate(value, type_store),
             TypeDefinition::Anonymous(anonymous_type) => anonymous_type.validate(value, type_store),
             TypeDefinition::Core(ion_type) => {
-                let mut issues = Violation::new("", "", "");
                 if value.ion_type() != *ion_type {
-                    issues.add_violation(Violation::new(
+                    return Err(Violation::new(
                         "type_constraint",
                         "type_mismatched",
                         &format!("expected type {:?}, found {:?}", ion_type, value.ion_type()),
                     ));
-                    return Some(issues);
                 }
-                return None;
+                return Ok(());
             }
         }
     }
@@ -191,20 +198,29 @@ impl PartialEq for TypeDefinitionImpl {
 impl TypeValidator for TypeDefinitionImpl {
     fn is_valid(&self, value: &OwnedElement, type_store: &TypeStore) -> bool {
         let violation = self.validate(value, type_store);
-        violation.is_none()
+        violation.is_ok()
     }
 
-    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> Option<Violation> {
-        let mut issues = Violation::new("", "", "");
+    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
+        let mut violations: Vec<Violation> = vec![];
+        let type_name = match self.name() {
+            None => "",
+            Some(name) => name,
+        };
         for constraint in self.constraints() {
-            if let Some(violation) = constraint.validate(value, type_store) {
-                issues.add_violation(violation);
+            if let Err(violation) = constraint.validate(value, type_store) {
+                violations.push(violation);
             }
         }
-        if issues.is_valid() {
-            return None;
+        if violations.len() == 0 {
+            return Ok(());
         }
-        Some(issues)
+        Err(Violation::with_violations(
+            type_name,
+            "type_constraints_unsatisfied",
+            "value didn't satisfy type constraint(s)",
+            violations,
+        ))
     }
 }
 

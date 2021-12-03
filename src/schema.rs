@@ -288,14 +288,14 @@ mod schema_tests {
         // check for validation without any violations
         for valid_value in valid_values.iter() {
             // there is only a single type in each schema defined above hence validate with that type
-            let issues = type_ref.validate(valid_value);
-            assert_eq!(issues.is_none(), true);
+            let validation_result = type_ref.validate(valid_value);
+            assert_eq!(validation_result.is_ok(), true);
         }
         // check for violations due to invalid values
         for invalid_value in invalid_values.iter() {
             // there is only a single type in each schema defined above hence validate with that type
-            let issues = type_ref.validate(invalid_value);
-            assert_eq!(issues.is_some(), true);
+            let validation_result = type_ref.validate(invalid_value);
+            assert_eq!(validation_result.is_err(), true);
         }
     }
 }

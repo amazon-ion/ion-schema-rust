@@ -1,6 +1,6 @@
 use crate::isl::isl_constraint::IslConstraint;
 use crate::isl::isl_type_reference::IslTypeRef;
-use crate::result::IonSchemaResult;
+use crate::result::{IonSchemaResult, ValidationResult};
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::types::TypeValidator;
 use crate::violation::Violation;
@@ -9,10 +9,10 @@ use ion_rs::value::owned::OwnedElement;
 /// Provides validation for schema Constraint
 pub trait ConstraintValidator {
     /// Checks this constraint against the provided value,
-    /// adding [Violation]s and/or [ViolationChild]ren to `Some(issues)`
+    /// adding [Violation]s and/or [ViolationChild]ren to `Err(violation)`
     /// if the constraint is violated.
-    /// Otherwise, if the value passes the validation against the constraint then returns `None`.
-    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> Option<Violation>;
+    /// Otherwise, if the value passes the validation against the constraint then returns `Ok(())`.
+    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult;
 }
 
 /// Defines schema Constraints
@@ -103,7 +103,7 @@ impl Constraint {
         }
     }
 
-    pub fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> Option<Violation> {
+    pub fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
         match self {
             Constraint::AllOf(all_of) => all_of.validate(value, type_store),
             Constraint::AnyOf(any_of) => any_of.validate(value, type_store),
@@ -141,23 +141,31 @@ impl AllOfConstraint {
 }
 
 impl ConstraintValidator for AllOfConstraint {
-    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> Option<Violation> {
-        let mut all_of_violation = Violation::new("all_of", "all_types_not_matched", "");
-        let mut type_results = vec![];
+    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
+        let mut violations: Vec<Violation> = vec![];
+        let mut valid_types = vec![];
         for type_id in &self.type_ids {
             let type_def = type_store.get_type_by_id(*type_id).unwrap();
-            type_results.push(type_def.validate(value, type_store));
+            let validation_result = type_def.validate(value, type_store);
+            match validation_result {
+                Ok(_) => valid_types.push(type_id),
+                Err(violation) => violations.push(violation),
+            }
         }
-        let total_valid_types = type_results.iter().filter(|t| t.is_none()).count();
+        let total_valid_types = valid_types.len();
         if total_valid_types != self.type_ids.len() {
-            all_of_violation.message = format!(
-                "value matches {} types, expected {}",
-                total_valid_types,
-                self.type_ids.len()
-            );
-            return Some(all_of_violation);
+            return Err(Violation::with_violations(
+                "all_of",
+                "all_types_not_matched",
+                &format!(
+                    "value matches {} types, expected {}",
+                    total_valid_types,
+                    self.type_ids.len()
+                ),
+                violations,
+            ));
         }
-        return None;
+        return Ok(());
     }
 }
 
@@ -188,22 +196,27 @@ impl AnyOfConstraint {
 }
 
 impl ConstraintValidator for AnyOfConstraint {
-    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> Option<Violation> {
-        let any_of_violation = Violation::new(
-            "any_of",
-            "no_types_matched",
-            "value matches none of the types",
-        );
-        let mut type_results = vec![];
+    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
+        let mut violations: Vec<Violation> = vec![];
+        let mut valid_types = vec![];
         for type_id in &self.type_ids {
             let type_def = type_store.get_type_by_id(*type_id).unwrap();
-            type_results.push(type_def.validate(value, type_store));
+            let validation_result = type_def.validate(value, type_store);
+            match validation_result {
+                Ok(_) => valid_types.push(type_id),
+                Err(violation) => violations.push(violation),
+            }
         }
-        let total_valid_types = type_results.iter().filter(|t| t.is_none()).count();
+        let total_valid_types = valid_types.len();
         if total_valid_types == 0 {
-            return Some(any_of_violation);
+            return Err(Violation::with_violations(
+                "any_of",
+                "no_types_matched",
+                "value matches none of the types",
+                violations,
+            ));
         }
-        return None;
+        return Ok(());
     }
 }
 
@@ -234,26 +247,33 @@ impl OneOfConstraint {
 }
 
 impl ConstraintValidator for OneOfConstraint {
-    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> Option<Violation> {
-        let mut one_of_violation = Violation::new("one_of", "", "");
-        let mut type_results = vec![];
+    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
+        let mut violations: Vec<Violation> = vec![];
+        let mut valid_types = vec![];
         for type_id in &self.type_ids {
             let type_def = type_store.get_type_by_id(*type_id).unwrap();
-            type_results.push(type_def.validate(value, type_store));
-        }
-        let total_valid_types = type_results.iter().filter(|t| t.is_none()).count();
-        if total_valid_types != 1 {
-            if total_valid_types == 0 {
-                one_of_violation.code = "no_types_matched".to_owned();
-                one_of_violation.message = "value matches none of the types".to_owned();
-            } else if total_valid_types > 1 {
-                one_of_violation.code = "more_than_one_type_matched".to_owned();
-                one_of_violation.message =
-                    format!("value matches {} types, expected 1", total_valid_types);
+            let validation_result = type_def.validate(value, type_store);
+            match validation_result {
+                Ok(_) => valid_types.push(type_id),
+                Err(violation) => violations.push(violation),
             }
-            return Some(one_of_violation);
         }
-        return None;
+        let total_valid_types = valid_types.len();
+        return match total_valid_types {
+            0 => Err(Violation::with_violations(
+                "one_of",
+                "no_types_matched",
+                "value matches none of the types",
+                violations,
+            )),
+            1 => Ok(()),
+            _ => Err(Violation::with_violations(
+                "one_of",
+                "more_than_one_type_matched",
+                &format!("value matches {} types, expected 1", total_valid_types),
+                violations,
+            )),
+        };
     }
 }
 
@@ -282,16 +302,20 @@ impl NotConstraint {
 }
 
 impl ConstraintValidator for NotConstraint {
-    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> Option<Violation> {
+    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
         let type_def = type_store.get_type_by_id(self.type_id).unwrap();
-        let not_violation =
-            Violation::new("not", "type_matched", "value unexpectedly matches type");
         let violation = type_def.validate(value, type_store);
-        if violation.is_none() {
-            // if there were no violations for the types then not constraint was unsatisfied
-            return Some(not_violation);
+        match violation {
+            Err(violation) => Ok(()),
+            Ok(_) => {
+                // if there were no violations for the types then not constraint was unsatisfied
+                Err(Violation::new(
+                    "not",
+                    "type_matched",
+                    "value unexpectedly matches type",
+                ))
+            }
         }
-        return None;
     }
 }
 
@@ -320,7 +344,7 @@ impl TypeConstraint {
 }
 
 impl ConstraintValidator for TypeConstraint {
-    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> Option<Violation> {
+    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
         let type_def = type_store.get_type_by_id(self.type_id).unwrap();
         type_def.validate(value, type_store)
     }
