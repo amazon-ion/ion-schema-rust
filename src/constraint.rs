@@ -146,20 +146,18 @@ impl ConstraintValidator for AllOfConstraint {
         let mut valid_types = vec![];
         for type_id in &self.type_ids {
             let type_def = type_store.get_type_by_id(*type_id).unwrap();
-            let validation_result = type_def.validate(value, type_store);
-            match validation_result {
+            match type_def.validate(value, type_store) {
                 Ok(_) => valid_types.push(type_id),
                 Err(violation) => violations.push(violation),
             }
         }
-        let total_valid_types = valid_types.len();
-        if total_valid_types != self.type_ids.len() {
+        if !violations.is_empty() {
             return Err(Violation::with_violations(
                 "all_of",
                 "all_types_not_matched",
                 &format!(
                     "value matches {} types, expected {}",
-                    total_valid_types,
+                    valid_types.len(),
                     self.type_ids.len()
                 ),
                 violations,
@@ -201,8 +199,7 @@ impl ConstraintValidator for AnyOfConstraint {
         let mut valid_types = vec![];
         for type_id in &self.type_ids {
             let type_def = type_store.get_type_by_id(*type_id).unwrap();
-            let validation_result = type_def.validate(value, type_store);
-            match validation_result {
+            match type_def.validate(value, type_store) {
                 Ok(_) => valid_types.push(type_id),
                 Err(violation) => violations.push(violation),
             }
@@ -252,8 +249,7 @@ impl ConstraintValidator for OneOfConstraint {
         let mut valid_types = vec![];
         for type_id in &self.type_ids {
             let type_def = type_store.get_type_by_id(*type_id).unwrap();
-            let validation_result = type_def.validate(value, type_store);
-            match validation_result {
+            match type_def.validate(value, type_store) {
                 Ok(_) => valid_types.push(type_id),
                 Err(violation) => violations.push(violation),
             }
