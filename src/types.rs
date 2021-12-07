@@ -93,7 +93,8 @@ impl TypeDefinition {
 
 impl TypeValidator for TypeDefinition {
     fn is_valid(&self, value: &OwnedElement, type_store: &TypeStore) -> bool {
-        todo!()
+        let violation = self.validate(value, type_store);
+        violation.is_ok()
     }
 
     fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
