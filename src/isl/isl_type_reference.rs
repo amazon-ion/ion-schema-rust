@@ -114,11 +114,7 @@ impl IslTypeRef {
             IslTypeRef::CoreIsl(ion_type) => {
                 // TODO: create CoreType struct for storing ISLCoreType type definition instead of Type
                 // inserts ISLCoreType as a Type into type_store
-                Ok(pending_types.add_named_type(
-                    &format!("{:?}", ion_type),
-                    TypeDefinitionImpl::new(Some(format!("{:?}", ion_type)), vec![]),
-                    type_store,
-                ))
+                Ok(pending_types.add_core_type(ion_type.to_owned(), type_store))
             }
             IslTypeRef::Named(alias) => {
                 // verify if the AliasType actually exists in the type_store or throw an error

@@ -1,21 +1,22 @@
 use crate::constraint::Constraint;
 use crate::isl::isl_type::IslTypeImpl;
-use crate::result::IonSchemaResult;
+use crate::result::{IonSchemaResult, ValidationResult};
 use crate::system::{PendingTypes, TypeId, TypeStore};
-use crate::violation::Violations;
+use crate::violation::{Violation, ViolationCode};
 use ion_rs::value::owned::OwnedElement;
+use ion_rs::value::Element;
+use ion_rs::IonType;
 use std::rc::Rc;
 
 /// Provides validation for Type
 pub trait TypeValidator {
     /// If the specified value violates one or more of this type's constraints,
     /// returns `false`, otherwise `true`
-    fn is_valid(&self, value: &OwnedElement) -> bool;
+    fn is_valid(&self, value: &OwnedElement, type_store: &TypeStore) -> bool;
 
-    /// Returns a Violations object indicating whether the specified value
-    /// is valid for this type, and if not, provides details as to which
-    /// constraints were violated.
-    fn validate(&self, value: &OwnedElement, issues: &mut Violations);
+    /// Returns `Err(violation)` with details as to which constraints were violated,
+    /// otherwise returns `Ok(())` indicating no violations were found during the validation
+    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult;
 }
 
 // Provides a public facing schema type which has a reference to TypeStore
@@ -30,6 +31,30 @@ impl TypeRef {
     pub fn new(id: TypeId, type_store: Rc<TypeStore>) -> Self {
         Self { id, type_store }
     }
+
+    pub fn validate(&self, value: &OwnedElement) -> ValidationResult {
+        let mut violations: Vec<Violation> = vec![];
+        let type_def = self.type_store.get_type_by_id(self.id).unwrap();
+        let type_name = match type_def {
+            TypeDefinition::Named(named_type) => named_type.name().as_ref().unwrap().to_owned(),
+            TypeDefinition::Anonymous(anonymous_type) => "".to_owned(),
+            TypeDefinition::Core(ion_type) => format!("{:?}", ion_type),
+        };
+        for constraint in type_def.constraints() {
+            if let Err(violation) = constraint.validate(value, &self.type_store) {
+                violations.push(violation);
+            }
+        }
+        if violations.len() == 0 {
+            return Ok(());
+        }
+        Err(Violation::with_violations(
+            type_name.as_str(),
+            ViolationCode::TypeConstraintsUnsatisfied,
+            "value didn't satisfy type constraint(s)",
+            violations,
+        ))
+    }
 }
 
 /// Represents a [TypeDefinition] which stores a resolved ISL type using [TypeStore]
@@ -37,6 +62,7 @@ impl TypeRef {
 pub enum TypeDefinition {
     Named(TypeDefinitionImpl),
     Anonymous(TypeDefinitionImpl),
+    Core(IonType),
 }
 
 impl TypeDefinition {
@@ -55,12 +81,36 @@ impl TypeDefinition {
     pub fn anonymous<A: Into<Vec<Constraint>>>(constraints: A) -> TypeDefinition {
         TypeDefinition::Anonymous(TypeDefinitionImpl::new(None, constraints.into()))
     }
-
     /// Provides the underlying constraints of [TypeDefinitionImpl]
     pub fn constraints(&self) -> &[Constraint] {
         match &self {
             TypeDefinition::Named(named_type) => named_type.constraints(),
             TypeDefinition::Anonymous(anonymous_type) => anonymous_type.constraints(),
+            _ => &[],
+        }
+    }
+}
+
+impl TypeValidator for TypeDefinition {
+    fn is_valid(&self, value: &OwnedElement, type_store: &TypeStore) -> bool {
+        let violation = self.validate(value, type_store);
+        violation.is_ok()
+    }
+
+    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
+        match self {
+            TypeDefinition::Named(named_type) => named_type.validate(value, type_store),
+            TypeDefinition::Anonymous(anonymous_type) => anonymous_type.validate(value, type_store),
+            TypeDefinition::Core(ion_type) => {
+                if value.ion_type() != *ion_type {
+                    return Err(Violation::new(
+                        "type_constraint",
+                        ViolationCode::TypeMismatched,
+                        &format!("expected type {:?}, found {:?}", ion_type, value.ion_type()),
+                    ));
+                }
+                return Ok(());
+            }
         }
     }
 }
@@ -147,12 +197,31 @@ impl PartialEq for TypeDefinitionImpl {
 }
 
 impl TypeValidator for TypeDefinitionImpl {
-    fn is_valid(&self, value: &OwnedElement) -> bool {
-        todo!()
+    fn is_valid(&self, value: &OwnedElement, type_store: &TypeStore) -> bool {
+        let violation = self.validate(value, type_store);
+        violation.is_ok()
     }
 
-    fn validate(&self, value: &OwnedElement, issues: &mut Violations) {
-        todo!()
+    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
+        let mut violations: Vec<Violation> = vec![];
+        let type_name = match self.name() {
+            None => "",
+            Some(name) => name,
+        };
+        for constraint in self.constraints() {
+            if let Err(violation) = constraint.validate(value, type_store) {
+                violations.push(violation);
+            }
+        }
+        if violations.len() == 0 {
+            return Ok(());
+        }
+        Err(Violation::with_violations(
+            type_name,
+            ViolationCode::TypeConstraintsUnsatisfied,
+            "value didn't satisfy type constraint(s)",
+            violations,
+        ))
     }
 }
 
