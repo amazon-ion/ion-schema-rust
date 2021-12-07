@@ -3,7 +3,7 @@ use crate::isl::isl_type_reference::IslTypeRef;
 use crate::result::{IonSchemaResult, ValidationResult};
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::types::TypeValidator;
-use crate::violation::Violation;
+use crate::violation::{Violation, ViolationCode};
 use ion_rs::value::owned::OwnedElement;
 
 /// Provides validation for schema Constraint
@@ -154,7 +154,7 @@ impl ConstraintValidator for AllOfConstraint {
         if !violations.is_empty() {
             return Err(Violation::with_violations(
                 "all_of",
-                "all_types_not_matched",
+                ViolationCode::AllTypesNotMatched,
                 &format!(
                     "value matches {} types, expected {}",
                     valid_types.len(),
@@ -208,7 +208,7 @@ impl ConstraintValidator for AnyOfConstraint {
         if total_valid_types == 0 {
             return Err(Violation::with_violations(
                 "any_of",
-                "no_types_matched",
+                ViolationCode::NoTypesMatched,
                 "value matches none of the types",
                 violations,
             ));
@@ -258,14 +258,14 @@ impl ConstraintValidator for OneOfConstraint {
         return match total_valid_types {
             0 => Err(Violation::with_violations(
                 "one_of",
-                "no_types_matched",
+                ViolationCode::NoTypesMatched,
                 "value matches none of the types",
                 violations,
             )),
             1 => Ok(()),
             _ => Err(Violation::with_violations(
                 "one_of",
-                "more_than_one_type_matched",
+                ViolationCode::MoreThanOneTypeMatched,
                 &format!("value matches {} types, expected 1", total_valid_types),
                 violations,
             )),
@@ -307,7 +307,7 @@ impl ConstraintValidator for NotConstraint {
                 // if there were no violations for the types then not constraint was unsatisfied
                 Err(Violation::new(
                     "not",
-                    "type_matched",
+                    ViolationCode::TypeMatched,
                     "value unexpectedly matches type",
                 ))
             }

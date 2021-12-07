@@ -2,7 +2,7 @@ use crate::constraint::Constraint;
 use crate::isl::isl_type::IslTypeImpl;
 use crate::result::{IonSchemaResult, ValidationResult};
 use crate::system::{PendingTypes, TypeId, TypeStore};
-use crate::violation::Violation;
+use crate::violation::{Violation, ViolationCode};
 use ion_rs::value::owned::OwnedElement;
 use ion_rs::value::Element;
 use ion_rs::IonType;
@@ -50,7 +50,7 @@ impl TypeRef {
         }
         Err(Violation::with_violations(
             type_name.as_str(),
-            "type_constraints_unsatisfied",
+            ViolationCode::TypeConstraintsUnsatisfied,
             "value didn't satisfy type constraint(s)",
             violations,
         ))
@@ -104,7 +104,7 @@ impl TypeValidator for TypeDefinition {
                 if value.ion_type() != *ion_type {
                     return Err(Violation::new(
                         "type_constraint",
-                        "type_mismatched",
+                        ViolationCode::TypeMismatched,
                         &format!("expected type {:?}, found {:?}", ion_type, value.ion_type()),
                     ));
                 }
@@ -217,7 +217,7 @@ impl TypeValidator for TypeDefinitionImpl {
         }
         Err(Violation::with_violations(
             type_name,
-            "type_constraints_unsatisfied",
+            ViolationCode::TypeConstraintsUnsatisfied,
             "value didn't satisfy type constraint(s)",
             violations,
         ))
