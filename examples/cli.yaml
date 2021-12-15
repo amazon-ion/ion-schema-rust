@@ -4,10 +4,10 @@
 
 name: ion-schema-rust
 author: Ion Team
-about: An implementation of Amazon Ion Schema in Rust
+about: An implementation of Amazon Ion Schema in Rust.
 subcommands:
   - load:
-      about: loads a schema file and shows the error messages if there were any failures while loading
+      about: Loads a schema file and shows the error messages if there were any failures while loading.
       args:
         - directories:
             short: d
@@ -26,7 +26,7 @@ subcommands:
               help: The Ion Schema file to load.
               takes_value: true
   - validate:
-      about: validates given ion value with provided schema type
+      about: Validates given ion value with provided schema type.
       args:
         - directories:
             short: d
@@ -42,12 +42,19 @@ subcommands:
             long: schema
             required: true
             value_name: SCHEMA
-            help: The Ion Schema file which contains the type that will be used for validation
+            help: The Ion Schema file which contains the type that will be used for validation.
             takes_value: true
         - input:
             short: i
             long: input
             required: true
             value_name: INPUT_FILE
-            help: Input file containing the Ion values to be validated
+            help: Input file containing the Ion values to be validated.
+            takes_value: true
+        - type:
+            short: t
+            long: type
+            required: true
+            value_name: TYPE
+            help: Name of schema type from given schema that needs to be used for validtaion.
             takes_value: true

@@ -49,13 +49,7 @@ fn load(command_args: &ArgMatches) -> IonSchemaResult<()> {
     let mut schema_system = SchemaSystem::new(document_authorities);
 
     // load schema
-    let schema = schema_system.load_schema(schema_id);
-
-    if schema.is_ok() {
-        eprintln!("Schema: {:?} was successfully loaded", schema.unwrap().id());
-    } else {
-        eprintln!("{:?}", schema.unwrap_err());
-    }
+    eprintln!("Schema: {:#?}", schema_system.load_schema(schema_id)?);
 
     Ok(())
 }
@@ -66,6 +60,9 @@ fn validate(command_args: &ArgMatches) -> IonSchemaResult<()> {
 
     // Extract schema file provided by user
     let schema_id = command_args.value_of("schema").unwrap();
+
+    // Extract the schema type provided by user
+    let schema_type = command_args.value_of("type").unwrap();
 
     // Extract Ion value provided by user
     let input_file = command_args.value_of("input").unwrap();
@@ -89,13 +86,8 @@ fn validate(command_args: &ArgMatches) -> IonSchemaResult<()> {
     // load schema
     let schema = schema_system.load_schema(schema_id);
 
-    // get the type defined within the schema file
-    // there will only be a single type defined within schema
-    let type_ref = schema
-        .unwrap()
-        .get_types()
-        .next()
-        .expect("Loaded schema was empty");
+    // get the type provided by user from the schema file
+    let type_ref = schema.unwrap().get_type(schema_type).unwrap();
 
     // create a text writer to make the output
     let mut output = vec![];
