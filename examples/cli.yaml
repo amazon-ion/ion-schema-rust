@@ -56,5 +56,5 @@ subcommands:
             long: type
             required: true
             value_name: TYPE
-            help: Name of schema type from given schema that needs to be used for validtaion.
+            help: Name of schema type from given schema that needs to be used for validation.
             takes_value: true
