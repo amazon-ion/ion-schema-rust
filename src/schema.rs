@@ -45,13 +45,13 @@ impl Schema {
 
     /// Returns the requested type, if present in this schema;
     /// otherwise returns None.
-    fn get_type<A: AsRef<str>>(&self, name: A) -> Option<&TypeDefinition> {
+    pub fn get_type<A: AsRef<str>>(&self, name: A) -> Option<&TypeDefinition> {
         self.types.get_type_by_name(name.as_ref())
     }
 
     /// Returns an iterator over the types in this schema.
     /// This includes the core types and named types defined within this schema.
-    pub(crate) fn get_types(&self) -> SchemaTypeIterator {
+    pub fn get_types(&self) -> SchemaTypeIterator {
         SchemaTypeIterator::new(Rc::clone(&self.types), self.types.get_types())
     }
 

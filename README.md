@@ -37,6 +37,25 @@ Running all tests for `ion-schema-rust`,
 $ cargo test --workspace
 ```
 
+## Examples
+
+The repository contains an examples folder which is a CLI tool to load and validate schema.
+
+To load a schema from examples:
+```bash
+$ cargo run --package ion-schema --example schema load --directory <DIRECTORY> --schema <SCHEMA_FILE> 
+```
+
+To validate an ion value using a schema type from examples:
+```bash
+$ cargo run --package ion-schema --example schema validate --directory <DIRECTORY> --schema <SCHEMA_FILE> --input <INPUT_FILE>
+```
+
+For more information on how to use examples, run the following command:
+```bash
+$ cargo run --package ion-schema --example schema help  
+```
+
 ## License
 
 This library is licensed under the Apache-2.0 License.
