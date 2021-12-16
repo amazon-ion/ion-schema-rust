@@ -1,24 +1,60 @@
 # clap uses this yaml file to load all the args (arguments) specified in this file for CLI definition.
-# These args will then be used by load_schema.rs to load a schema.
+# These args will then be used by schema.rs to load a schema.
 # For more information: https://docs.rs/clap/2.33.3/clap/#quick-example
 
 name: ion-schema-rust
 author: Ion Team
-about: An implementation of Amazon Ion Schema in Rust
-args:
-  - directories:
-      short: d
-      long: directory
-      required: true
-      multiple: true
-      min_values: 1
-      value_name: DIRECTORY
-      help: One or more directories that will be searched for the requested schema.
-      takes_value: true
-  - schema:
-        short: s
-        long: schema
-        required: true
-        value_name: SCHEMA
-        help: The Ion Schema file to load.
-        takes_value: true
+about: An implementation of Amazon Ion Schema in Rust.
+subcommands:
+  - load:
+      about: Loads a schema file and shows the error messages if there were any failures while loading.
+      args:
+        - directories:
+            short: d
+            long: directory
+            required: true
+            multiple: true
+            min_values: 1
+            value_name: DIRECTORY
+            help: One or more directories that will be searched for the requested schema.
+            takes_value: true
+        - schema:
+              short: s
+              long: schema
+              required: true
+              value_name: SCHEMA
+              help: The Ion Schema file to load.
+              takes_value: true
+  - validate:
+      about: Validates given ion value with provided schema type.
+      args:
+        - directories:
+            short: d
+            long: directory
+            required: true
+            multiple: true
+            min_values: 1
+            value_name: DIRECTORY
+            help: One or more directories that will be searched for the requested schema.
+            takes_value: true
+        - schema:
+            short: s
+            long: schema
+            required: true
+            value_name: SCHEMA
+            help: The Ion Schema file which contains the type that will be used for validation.
+            takes_value: true
+        - input:
+            short: i
+            long: input
+            required: true
+            value_name: INPUT_FILE
+            help: Input file containing the Ion values to be validated.
+            takes_value: true
+        - type:
+            short: t
+            long: type
+            required: true
+            value_name: TYPE
+            help: Name of schema type from given schema that needs to be used for validation.
+            takes_value: true

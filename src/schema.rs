@@ -1,6 +1,6 @@
 use crate::import::Import;
 use crate::system::{TypeId, TypeStore};
-use crate::types::{TypeDefinition, TypeDefinitionImpl, TypeRef};
+use crate::types::{TypeDefinitionImpl, TypeRef};
 use std::rc::Rc;
 
 /// A Schema is a collection of zero or more [Type]s.
@@ -45,13 +45,14 @@ impl Schema {
 
     /// Returns the requested type, if present in this schema;
     /// otherwise returns None.
-    fn get_type<A: AsRef<str>>(&self, name: A) -> Option<&TypeDefinition> {
-        self.types.get_type_by_name(name.as_ref())
+    pub fn get_type<A: AsRef<str>>(&self, name: A) -> Option<TypeRef> {
+        let type_id = self.types.get_type_id_by_name(name.as_ref())?;
+        Some(TypeRef::new(*type_id, Rc::clone(&self.types)))
     }
 
     /// Returns an iterator over the types in this schema.
     /// This includes the core types and named types defined within this schema.
-    pub(crate) fn get_types(&self) -> SchemaTypeIterator {
+    pub fn get_types(&self) -> SchemaTypeIterator {
         SchemaTypeIterator::new(Rc::clone(&self.types), self.types.get_types())
     }
 

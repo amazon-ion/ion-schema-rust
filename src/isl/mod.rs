@@ -18,9 +18,9 @@
 //! ## Example usage of `isl` module to create an [IslType]:
 //! ```
 //! use ion_rs::IonType;
-//! use ion_schema_rust::isl::{isl_type::*, isl_constraint::*, isl_type_reference::*};
-//! use ion_schema_rust::schema::Schema;
-//! use ion_schema_rust::system::SchemaSystem;
+//! use ion_schema::isl::{isl_type::*, isl_constraint::*, isl_type_reference::*};
+//! use ion_schema::schema::Schema;
+//! use ion_schema::system::SchemaSystem;
 //! use std::path::Path;
 //!
 //! fn main() {
