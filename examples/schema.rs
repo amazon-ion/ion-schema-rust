@@ -49,7 +49,7 @@ fn load(command_args: &ArgMatches) -> IonSchemaResult<()> {
     let mut schema_system = SchemaSystem::new(document_authorities);
 
     // load schema
-    eprintln!("Schema: {:#?}", schema_system.load_schema(schema_id)?);
+    println!("Schema: {:#?}", schema_system.load_schema(schema_id)?);
 
     Ok(())
 }
@@ -123,7 +123,7 @@ fn validate(command_args: &ArgMatches) -> IonSchemaResult<()> {
         writer.step_out()?;
     }
     drop(writer);
-    eprintln!("Validation report:");
-    eprintln!("{}", from_utf8(&output).unwrap());
+    println!("Validation report:");
+    println!("{}", from_utf8(&output).unwrap());
     Ok(())
 }
