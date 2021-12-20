@@ -1,8 +1,10 @@
 use crate::isl::isl_import::IslImportType;
 use crate::isl::isl_type_reference::IslTypeRef;
-use crate::result::{invalid_schema_error_raw, IonSchemaResult};
-use ion_rs::value::owned::OwnedElement;
-use ion_rs::value::{Element, Sequence};
+use crate::isl::util::Range;
+use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
+use ion_rs::value::owned::{text_token, OwnedElement, OwnedSymbolToken};
+use ion_rs::value::SymbolToken;
+use ion_rs::value::{AnyInt, Element, Sequence};
 use ion_rs::IonType;
 
 /// Represents a public facing API for schema constraints [IslConstraint] which stores IslTypeRef
@@ -11,7 +13,9 @@ pub enum IslConstraint {
     AllOf(Vec<IslTypeRef>),
     AnyOf(Vec<IslTypeRef>),
     Not(IslTypeRef),
+    Occurs(IslOccurs),
     OneOf(Vec<IslTypeRef>),
+    OrderedElements(Vec<IslTypeRef>),
     Type(IslTypeRef),
 }
 
@@ -35,6 +39,11 @@ impl IslConstraint {
     /// Creates a [IslConstraint::OneOf] using the [IslTypeRef] referenced inside it
     pub fn one_of<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
         IslConstraint::OneOf(isl_types.into())
+    }
+
+    /// Creates a [IslConstraint::OrderedElements] using the [IslTypeRef] referenced inside it
+    pub fn ordered_elements<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
+        IslConstraint::OrderedElements(isl_types.into())
     }
 
     /// Creates a [IslConstraint::Not] using the [IslTypeRef] referenced inside it
@@ -94,6 +103,14 @@ impl IslConstraint {
                     IslTypeRef::from_ion_element(value, inline_imported_types)?;
                 Ok(IslConstraint::Type(type_reference))
             }
+            "occurs" => Ok(IslConstraint::Occurs(IslOccurs::from_ion_element(value)?)),
+            "ordered_elements" => {
+                let types: Vec<IslTypeRef> = IslConstraint::isl_type_references_from_ion_element(
+                    value,
+                    inline_imported_types,
+                )?;
+                Ok(IslConstraint::OrderedElements(types))
+            }
             _ => {
                 return Err(invalid_schema_error_raw(
                     "Type: ".to_owned()
@@ -124,5 +141,64 @@ impl IslConstraint {
             .iter()
             .map(|e| IslTypeRef::from_ion_element(e, inline_imported_types))
             .collect::<IonSchemaResult<Vec<IslTypeRef>>>()?)
+    }
+}
+
+/// Represents ISL [Occurs] where some constraints can be defined by occurs
+/// Grammar: <OCCURS> ::= occurs: <INT>
+///            | occurs: <RANGE<INT>>
+///            | occurs: optional
+///            | occurs: required
+#[derive(Debug, Clone, PartialEq)]
+pub enum IslOccurs {
+    Int(AnyInt),
+    Range(Range),
+    Optional,
+    Required,
+}
+
+impl IslOccurs {
+    pub fn from_ion_element(value: &OwnedElement) -> IonSchemaResult<IslOccurs> {
+        use IonType::*;
+        match value.ion_type() {
+            Integer => Ok(IslOccurs::Int(value.as_any_int().unwrap().to_owned())),
+            List => {
+                let value_annotations: Vec<&OwnedSymbolToken> = value.annotations().collect();
+                if value_annotations.contains(&&text_token("range")) {
+                    let is_non_negative = false; // for integer range is_non_negative is false
+                    let range = Range::from_ion_element(value, is_non_negative)?;
+                    match range {
+                        Range::Integer(_, _) => {}
+                        _ => {
+                            return invalid_schema_error(
+                                "only integer ranges are supported for occurs constraint",
+                            )
+                        }
+                    };
+                    return Ok(IslOccurs::Range(range));
+                } else {
+                    return invalid_schema_error("range annotation missing for occurs constraint");
+                }
+            }
+            Symbol => {
+                let sym = try_to!(try_to!(value.as_sym()).text());
+                match sym {
+                    "optional" => Ok(IslOccurs::Optional),
+                    "required" => Ok(IslOccurs::Required),
+                    _ => {
+                        return invalid_schema_error(format!(
+                            "only optional and required symbols are supported with occurs constraint, found {}",
+                            sym
+                        ))
+                    }
+                }
+            }
+            _ => {
+                return invalid_schema_error(format!(
+                    "ion type: {:?} is not supported with occurs constraint",
+                    value.ion_type()
+                ))
+            }
+        }
     }
 }

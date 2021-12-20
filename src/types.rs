@@ -230,6 +230,7 @@ mod type_definition_tests {
     use super::*;
     use crate::constraint::Constraint;
     use crate::isl::isl_constraint::IslConstraint;
+    use crate::isl::isl_constraint::IslOccurs;
     use crate::isl::isl_type::IslType;
     use crate::isl::isl_type_reference::IslTypeRef;
     use crate::system::PendingTypes;
@@ -307,6 +308,13 @@ mod type_definition_tests {
         */
         IslType::anonymous([IslConstraint::not(IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer))]))]),
         TypeDefinition::anonymous([Constraint::not(1)])
+    ),
+    case::ordered_elements_constraint(
+        /* For a schema with ordered_elements constraint as below:
+            { ordered_elements: [ symbol, { type: int, occurs: optional }, ] }
+        */
+        IslType::anonymous([IslConstraint::ordered_elements([IslTypeRef::core(IonType::Symbol), IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer)), IslConstraint::Occurs(IslOccurs::Optional)])])]),
+        TypeDefinition::anonymous([Constraint::ordered_elements([1, 2])])
     ),
     )]
     fn isl_type_to_type_definition(isl_type: IslType, type_def: TypeDefinition) {

@@ -124,6 +124,7 @@ impl IslSchema {
 #[cfg(test)]
 mod isl_tests {
     use crate::isl::isl_constraint::IslConstraint;
+    use crate::isl::isl_constraint::IslOccurs;
     use crate::isl::isl_type::{IslType, IslTypeImpl};
     use crate::isl::isl_type_reference::IslTypeRef;
     use crate::isl::util::{Range, RangeBoundaryType, RangeBoundaryValue};
@@ -223,6 +224,12 @@ mod isl_tests {
                     { not: { type: int } }
                 "#),
         IslType::anonymous([IslConstraint::not(IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer))]))])
+    ),
+    case::ordered_elements_constraint(
+        load_anonymous_type(r#" // For a schema with ordered_elements constraint as below:
+                    { ordered_elements: [  symbol, { type: int, occurs: optional },  ] }
+                "#),
+        IslType::anonymous([IslConstraint::ordered_elements([IslTypeRef::core(IonType::Symbol), IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer)), IslConstraint::Occurs(IslOccurs::Optional)])])])
     ),
     )]
     fn owned_struct_to_isl_type(isl_type1: IslType, isl_type2: IslType) {
