@@ -1,4 +1,4 @@
-use crate::isl::isl_constraint::IslConstraint;
+use crate::isl::isl_constraint::{IslConstraint, IslOccurs};
 use crate::isl::isl_type_reference::IslTypeRef;
 use crate::result::{IonSchemaResult, ValidationResult};
 use crate::system::{PendingTypes, TypeId, TypeStore};
@@ -23,6 +23,8 @@ pub enum Constraint {
     AnyOf(AnyOfConstraint),
     Not(NotConstraint),
     OneOf(OneOfConstraint),
+    OrderedElements(OrderedElementsConstraint),
+    Occurs(OccursConstraint),
     Type(TypeConstraint),
 }
 
@@ -50,6 +52,11 @@ impl Constraint {
     /// Creates a [Constraint::Not] referring to the type represented by the provided [TypeId].
     pub fn not(type_id: TypeId) -> Constraint {
         Constraint::Not(NotConstraint::new(type_id))
+    }
+
+    /// Creates a [Constraint::OrderedElements] referring to the types represented by the provided [TypeId]s.
+    pub fn ordered_elements<A: Into<Vec<TypeId>>>(type_ids: A) -> Constraint {
+        Constraint::OrderedElements(OrderedElementsConstraint::new(type_ids.into()))
     }
 
     /// Parse an [IslConstraint] to a [Constraint]
@@ -100,6 +107,18 @@ impl Constraint {
                 )?;
                 Ok(Constraint::Type(type_constraint))
             }
+            IslConstraint::Occurs(isl_occurs) => Ok(Constraint::Occurs(OccursConstraint::new(
+                isl_occurs.to_owned(),
+            ))),
+            IslConstraint::OrderedElements(type_references) => {
+                let ordered_elements: OrderedElementsConstraint =
+                    OrderedElementsConstraint::resolve_from_isl_constraint(
+                        type_references,
+                        type_store,
+                        pending_types,
+                    )?;
+                Ok(Constraint::OrderedElements(ordered_elements))
+            }
         }
     }
 
@@ -110,6 +129,10 @@ impl Constraint {
             Constraint::Not(not) => not.validate(value, type_store),
             Constraint::OneOf(one_of) => one_of.validate(value, type_store),
             Constraint::Type(type_constraint) => type_constraint.validate(value, type_store),
+            Constraint::Occurs(occurs) => occurs.validate(value, type_store),
+            Constraint::OrderedElements(ordered_elements) => {
+                ordered_elements.validate(value, type_store)
+            }
         }
     }
 }
@@ -343,5 +366,55 @@ impl ConstraintValidator for TypeConstraint {
     fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
         let type_def = type_store.get_type_by_id(self.type_id).unwrap();
         type_def.validate(value, type_store)
+    }
+}
+
+/// Implements an `occurs` constraint of Ion Schema
+#[derive(Debug, Clone, PartialEq)]
+pub struct OccursConstraint {
+    isl_occurs: IslOccurs,
+}
+
+impl OccursConstraint {
+    pub fn new(isl_occurs: IslOccurs) -> Self {
+        Self { isl_occurs }
+    }
+}
+
+impl ConstraintValidator for OccursConstraint {
+    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
+        todo!()
+    }
+}
+
+/// Implements an `ordered_elements` constraint of Ion Schema
+/// [ordered_elements]: https://amzn.github.io/ion-schema/docs/spec.html#all_of
+#[derive(Debug, Clone, PartialEq)]
+pub struct OrderedElementsConstraint {
+    type_ids: Vec<TypeId>,
+}
+
+impl OrderedElementsConstraint {
+    pub fn new(type_ids: Vec<TypeId>) -> Self {
+        Self { type_ids }
+    }
+
+    /// Tries to create an [OrderedElements] constraint from the given OwnedElement
+    pub fn resolve_from_isl_constraint(
+        type_references: &[IslTypeRef],
+        type_store: &mut TypeStore,
+        pending_types: &mut PendingTypes,
+    ) -> IonSchemaResult<Self> {
+        let resolved_types: Vec<TypeId> = type_references
+            .iter()
+            .map(|t| IslTypeRef::resolve_type_reference(t, type_store, pending_types))
+            .collect::<IonSchemaResult<Vec<TypeId>>>()?;
+        Ok(OrderedElementsConstraint::new(resolved_types))
+    }
+}
+
+impl ConstraintValidator for OrderedElementsConstraint {
+    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
+        todo!()
     }
 }

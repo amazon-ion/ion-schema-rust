@@ -191,6 +191,12 @@ mod schema_tests {
             "#).into_iter(),
         1 // this includes named type not_type
     ),
+    case::ordred_elements_constraint(
+        load(r#" // For a schema with ordered_elements constraint as below:
+                type:: { name: ordred_elements_type, ordered_elements: [ symbol, { type: int, occurs: optional }, ] }
+            "#).into_iter(),
+        1 // this includes named type ordered_elements_type
+    ),
     )]
     fn owned_elements_to_schema<'a, I: Iterator<Item = OwnedElement>>(
         owned_elements: I,
