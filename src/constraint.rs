@@ -370,6 +370,7 @@ impl ConstraintValidator for TypeConstraint {
 }
 
 /// Implements an `occurs` constraint of Ion Schema
+/// [occurs]: https://amzn.github.io/ion-schema/docs/spec.html#type-definitions
 #[derive(Debug, Clone, PartialEq)]
 pub struct OccursConstraint {
     isl_occurs: IslOccurs,
@@ -415,6 +416,7 @@ impl OrderedElementsConstraint {
 
 impl ConstraintValidator for OrderedElementsConstraint {
     fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
+        // this will be implemented with this issue: https://github.com/amzn/ion-schema-rust/issues/9
         todo!()
     }
 }
