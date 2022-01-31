@@ -4,7 +4,9 @@ use ion_rs::types::timestamp::Timestamp;
 use ion_rs::value::owned::{text_token, OwnedElement, OwnedSymbolToken};
 use ion_rs::value::{AnyInt, Element, IntAccess, Sequence, SymbolToken};
 use ion_rs::IonType;
+use num_bigint::BigInt;
 use num_traits::Signed;
+use num_traits::Zero;
 
 /// Represents ISL [Range]s where some constraints can be defined by a range
 /// <RANGE<RANGE_TYPE>> ::= range::[ <EXCLUSIVITY><RANGE_TYPE>, <EXCLUSIVITY><RANGE_TYPE> ]
@@ -27,6 +29,224 @@ pub enum Range {
 }
 
 impl Range {
+    /// Provides a boolean value to specify whether the given value is within the range or not
+    pub fn contains(&self, value: &OwnedElement) -> IonSchemaResult<bool> {
+        use RangeBoundaryValue::*;
+        use RangeBoundaryValueType::*;
+        match self {
+            Range::Integer(start, end) => {
+                match (start, end) {
+                    (Min, Max) => {
+                        unreachable!("Range boundaries can not be min and max together (i.e. range::[min, max] is not allowed)")
+                    },
+                    (Min, Value(end_value, boundary_type)) => {
+                        match end_value {
+                            Integer(range_end_value) => {
+                                return match range_end_value {
+                                    AnyInt::I64(int_end_value) => {
+                                        Ok(int_end_value > &value.as_any_int().unwrap().as_i64().unwrap() || (*boundary_type == RangeBoundaryType::Inclusive && int_end_value == &value.as_any_int().unwrap().as_i64().unwrap()))
+                                    }
+                                    AnyInt::BigInt(big_int_end_value) => {
+                                        Ok(big_int_end_value > &value.as_any_int().unwrap().as_big_int().unwrap() || (*boundary_type == RangeBoundaryType::Inclusive && big_int_end_value == value.as_any_int().unwrap().as_big_int().unwrap()))
+                                    }
+                                }
+                            },
+                            _ => unreachable!("Integer range can only have integers as lower and upper range boundary value")
+                        }
+                    },
+                    (Value(start_value, boundary_type), Max) => {
+                        match start_value {
+                            Integer(range_start_value) => {
+                                return match range_start_value {
+                                    AnyInt::I64(int_start_value) => {
+                                        Ok(int_start_value < &value.as_any_int().unwrap().as_i64().unwrap() || (*boundary_type == RangeBoundaryType::Inclusive && int_start_value == &value.as_any_int().unwrap().as_i64().unwrap()))
+                                    }
+                                    AnyInt::BigInt(big_int_start_value) => {
+                                        Ok(big_int_start_value < &value.as_any_int().unwrap().as_big_int().unwrap() || (*boundary_type == RangeBoundaryType::Inclusive && big_int_start_value == value.as_any_int().unwrap().as_big_int().unwrap()))
+                                    }
+                                }
+                            },
+                            _ => unreachable!("Integer range can only have integers as lower and upper range boundary value")
+                        }
+                    },
+                    (Value(start_value, start_boundary_type), Value(end_value, end_boundary_type)) => {
+                        match (start_value, end_value) {
+                            (Integer(range_start_value), Integer(range_end_value)) => {
+                                return match (range_start_value, range_end_value) {
+                                    (AnyInt::I64(int_start_value), AnyInt::I64(int_end_value)) => {
+                                        let range_start_validation = int_start_value < &value.as_any_int().unwrap().as_i64().unwrap() || (*start_boundary_type == RangeBoundaryType::Inclusive && int_start_value == &value.as_any_int().unwrap().as_i64().unwrap());
+                                        let range_end_validation = int_end_value > &value.as_any_int().unwrap().as_i64().unwrap() || (*end_boundary_type == RangeBoundaryType::Inclusive && int_end_value == &value.as_any_int().unwrap().as_i64().unwrap());
+                                        Ok(range_start_validation && range_end_validation)
+                                    }
+                                    (AnyInt::BigInt(big_int_end_value), AnyInt::BigInt(big_int_start_value)) => {
+                                        let range_start_validation = big_int_start_value < &value.as_any_int().unwrap().as_big_int().unwrap() || (*start_boundary_type == RangeBoundaryType::Inclusive && big_int_start_value == value.as_any_int().unwrap().as_big_int().unwrap());
+                                        let range_end_validation = big_int_end_value > &value.as_any_int().unwrap().as_big_int().unwrap() || (*end_boundary_type == RangeBoundaryType::Inclusive && big_int_end_value == value.as_any_int().unwrap().as_big_int().unwrap());
+                                        Ok(range_start_validation && range_end_validation)
+                                    }
+                                    _ => unreachable!("Both range boundary value should be of same types")
+                                }
+                            },
+                            _ => unreachable!("Integer range can only have integers as lower and upper range boundary value")
+                        }
+                    }
+                    (Max, _) => {
+                        unreachable!("Lower range boundary value must not be max")
+                    }
+                    (_, Min) => {
+                        unreachable!("Upper range boundary value must not be min")
+                    }
+                }
+            },
+            Range::IntegerNonNegative(start, end) => {
+                match (start, end) {
+                    (Min, Max) => {
+                        unreachable!("Range boundaries can not be min and max together (i.e. range::[min, max] is not allowed)")
+                    },
+                    (Min, Value(end_value, boundary_type)) => {
+                        match end_value {
+                            Integer(range_end_value) => {
+                                return match range_end_value {
+                                    AnyInt::I64(int_end_value) => {
+                                        Ok(0 <= value.as_any_int().unwrap().as_i64().unwrap() && int_end_value > &value.as_any_int().unwrap().as_i64().unwrap() || (*boundary_type == RangeBoundaryType::Inclusive && int_end_value == &value.as_any_int().unwrap().as_i64().unwrap()))
+                                    }
+                                    AnyInt::BigInt(big_int_end_value) => {
+                                        Ok(BigInt::zero() <= *value.as_any_int().unwrap().as_big_int().unwrap() && big_int_end_value > &value.as_any_int().unwrap().as_big_int().unwrap() || (*boundary_type == RangeBoundaryType::Inclusive && big_int_end_value == value.as_any_int().unwrap().as_big_int().unwrap()))
+                                    }
+                                }
+                            },
+                            _ => unreachable!("Integer range can only have integers as lower and upper range boundary value")
+                        }
+                    },
+                    (Value(start_value, boundary_type), Max) => {
+                        match start_value {
+                            Integer(range_start_value) => {
+                                return match range_start_value {
+                                    AnyInt::I64(int_start_value) => {
+                                        Ok(int_start_value < &value.as_any_int().unwrap().as_i64().unwrap() || (*boundary_type == RangeBoundaryType::Inclusive && int_start_value == &value.as_any_int().unwrap().as_i64().unwrap()))
+                                    }
+                                    AnyInt::BigInt(big_int_start_value) => {
+                                        Ok(big_int_start_value < &value.as_any_int().unwrap().as_big_int().unwrap() || (*boundary_type == RangeBoundaryType::Inclusive && big_int_start_value == value.as_any_int().unwrap().as_big_int().unwrap()))
+                                    }
+                                }
+                            },
+                            _ => unreachable!("Integer range can only have integers as lower and upper range boundary value")
+                        }
+                    },
+                    (Value(start_value, start_boundary_type), Value(end_value, end_boundary_type)) => {
+                        match (start_value, end_value) {
+                            (Integer(range_start_value), Integer(range_end_value)) => {
+                                return match (range_start_value, range_end_value) {
+                                    (AnyInt::I64(int_start_value), AnyInt::I64(int_end_value)) => {
+                                        let range_start_validation = int_start_value < &value.as_any_int().unwrap().as_i64().unwrap() || (*start_boundary_type == RangeBoundaryType::Inclusive && int_start_value == &value.as_any_int().unwrap().as_i64().unwrap());
+                                        let range_end_validation = int_end_value > &value.as_any_int().unwrap().as_i64().unwrap() || (*end_boundary_type == RangeBoundaryType::Inclusive && int_end_value == &value.as_any_int().unwrap().as_i64().unwrap());
+                                        Ok(range_start_validation && range_end_validation)
+                                    }
+                                    (AnyInt::BigInt(big_int_end_value), AnyInt::BigInt(big_int_start_value)) => {
+                                        let range_start_validation = big_int_start_value < &value.as_any_int().unwrap().as_big_int().unwrap() || (*start_boundary_type == RangeBoundaryType::Inclusive && big_int_start_value == value.as_any_int().unwrap().as_big_int().unwrap());
+                                        let range_end_validation = big_int_end_value > &value.as_any_int().unwrap().as_big_int().unwrap() || (*end_boundary_type == RangeBoundaryType::Inclusive && big_int_end_value == value.as_any_int().unwrap().as_big_int().unwrap());
+                                        Ok(range_start_validation && range_end_validation)
+                                    }
+                                    _ =>
+                                        unreachable!("Both range boundary value should be of same types")
+
+                                }
+                            },
+                            _ => unreachable!("Integer range can only have integers as lower and upper range boundary value")
+                        }
+                    }
+                    (Max, _) => {
+                        unreachable!("Lower range boundary value must not be max")
+                    }
+                    (_, Min) => {
+                        unreachable!("Upper range boundary value must not be min")
+                    }
+                }
+            },
+            Range::Float(start, end) => {
+                match (start, end) {
+                    (Min, Max) => {
+                        unreachable!("Range boundaries can not be min and max together (i.e. range::[min, max] is not allowed)")
+                    },
+                    (Min, Value(end_value, boundary_type)) => {
+                        match end_value {
+                            Float(float_end_value) => {
+                                Ok(float_end_value > &value.as_f64().unwrap() || (*boundary_type == RangeBoundaryType::Inclusive && float_end_value == &value.as_f64().unwrap()))
+                            }
+                            _ => unreachable!("Float range can only have floats as lower and upper range boundary value")
+                        }
+                    }
+                    (Value(start_value, boundary_type), Max) => {
+                        match start_value {
+                            Float(float_start_value) => {
+                                Ok(float_start_value < &value.as_f64().unwrap() || (*boundary_type == RangeBoundaryType::Inclusive && float_start_value == &value.as_f64().unwrap()))
+                            }
+                            _ => unreachable!("Float range can only have floats as lower and upper range boundary value")
+                        }
+                    },
+                    (Value(start_value, start_boundary_type), Value(end_value, end_boundary_type)) => {
+                        match (start_value, end_value) {
+                            (Float(range_start_value), Float(range_end_value)) => {
+                                let range_start_validation = range_start_value < &value.as_f64().unwrap() || (*start_boundary_type == RangeBoundaryType::Inclusive && range_start_value == &value.as_f64().unwrap());
+                                let range_end_validation = range_end_value > &value.as_f64().unwrap() || (*end_boundary_type == RangeBoundaryType::Inclusive && range_end_value == &value.as_f64().unwrap());
+                                Ok(range_start_validation && range_end_validation)
+                            },
+                            _ => unreachable!("Float range can only have floats as lower and upper range boundary value")
+                        }
+                    }
+                    (Max, _) => {
+                        unreachable!("Lower range boundary value must not be max")
+                    }
+                    (_, Min) => {
+                        unreachable!("Upper range boundary value must not be min")
+                    }
+                }
+            }
+            Range::Decimal(start, end) => {
+                match (start, end) {
+                    (Min, Max) => {
+                        unreachable!("Range boundaries can not be min and max together (i.e. range::[min, max] is not allowed)")
+                    },
+                    (Min, Value(end_value, boundary_type)) => {
+                        match end_value {
+                            Decimal(decimal_end_value) => {
+                                Ok(decimal_end_value > &value.as_decimal().unwrap() || (*boundary_type == RangeBoundaryType::Inclusive && decimal_end_value == value.as_decimal().unwrap()))
+                            }
+                            _ => unreachable!("Decimal range can only have decimals as lower and upper range boundary value")
+                        }
+                    }
+                    (Value(start_value, boundary_type), Max) => {
+                        match start_value {
+                            Decimal(decimal_start_value) => {
+                                Ok(decimal_start_value < &value.as_decimal().unwrap() || (*boundary_type == RangeBoundaryType::Inclusive && decimal_start_value == value.as_decimal().unwrap()))
+                            }
+                            _ => unreachable!("Decimal range can only have decimals as lower and upper range boundary value")
+                        }
+                    },
+                    (Value(start_value, start_boundary_type), Value(end_value, end_boundary_type)) => {
+                        match (start_value, end_value) {
+                            (Decimal(range_start_value), Decimal(range_end_value)) => {
+                                let range_start_validation = range_start_value < &value.as_decimal().unwrap() || (*start_boundary_type == RangeBoundaryType::Inclusive && range_start_value == value.as_decimal().unwrap());
+                                let range_end_validation = range_end_value > &value.as_decimal().unwrap() || (*end_boundary_type == RangeBoundaryType::Inclusive && range_end_value == value.as_decimal().unwrap());
+                                Ok(range_start_validation && range_end_validation)
+                            },
+                            _ => unreachable!("Decimal range can only have decimals as lower and upper range boundary value")
+                        }
+                    }
+                    (Max, _) => {
+                        unreachable!("Lower range boundary value must not be max")
+                    }
+                    (_, Min) => {
+                        unreachable!("Upper range boundary value must not be min")
+                    }
+                }
+            }
+            Range::Timestamp(start, end) => {
+                // TODO: Implement this section once the timestamp comparator for ion-rust is implemented
+                todo!()
+            }
+        }
+    }
+
     pub fn range(start: RangeBoundaryValue, end: RangeBoundaryValue) -> IonSchemaResult<Range> {
         use RangeBoundaryValue::*;
         use RangeBoundaryValueType::*;

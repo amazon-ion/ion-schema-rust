@@ -131,6 +131,7 @@ mod isl_tests {
     use crate::result::IonSchemaResult;
     use ion_rs::types::decimal::*;
     use ion_rs::types::timestamp::Timestamp;
+    use ion_rs::value::owned::OwnedElement;
     use ion_rs::value::reader::element_reader;
     use ion_rs::value::reader::ElementReader;
     use ion_rs::value::AnyInt;
@@ -336,5 +337,136 @@ mod isl_tests {
     fn invalid_ranges(range: IonSchemaResult<Range>) {
         // determine that the range is created with an error for an invalid range
         assert_eq!(range.is_err(), true);
+    }
+
+    #[rstest(
+        range,
+        valid_values,
+        invalid_values,
+        case::int_range(
+            load_range(
+            r#"
+                range::[0, 10]
+            "#
+            ),
+            vec![5.into(), 0.into(), 10.into()],
+            vec![(-5).into(), 11.into()]
+        ),
+        case::int_range_with_min(
+            load_range(
+            r#"
+                range::[min, 10]
+            "#
+            ),
+            vec![5.into(), (-5).into(), 0.into()],
+            vec![11.into()]
+        ),
+        case::int_range_with_max(
+            load_range(
+            r#"
+                range::[0, max]
+            "#
+            ),
+            vec![5.into(), 11.into()],
+            vec![(-5).into()]
+        ),
+        case::int_range_with_exclusive(
+            load_range(
+            r#"
+                range::[exclusive::0, exclusive::10]
+            "#
+            ),
+            vec![5.into(), 9.into()],
+            vec![(-5).into(), 0.into(), 10.into()]
+        ),
+        case::decimal_range(
+            load_range(
+            r#"
+                range::[0.0, 10.0]
+            "#
+            ),
+            vec![Decimal::new(55,-1).into(), Decimal::new(0, 0).into(), Decimal::new(100, -1).into()],
+            vec![Decimal::new(-55, -1).into(), Decimal::new(115, -1).into()]
+        ),
+        case::decimal_range_with_min(
+            load_range(
+            r#"
+                range::[min, 10.0]
+            "#
+            ),
+            vec![Decimal::new(50, -1).into(), Decimal::new(-55, -1).into(), Decimal::new(0, 0).into()],
+            vec![Decimal::new(115, -1).into()]
+        ),
+        case::decimal_range_with_max(
+            load_range(
+            r#"
+                range::[0.0, max]
+            "#
+            ),
+            vec![Decimal::new(55, -1).into(), Decimal::new(115, -1).into()],
+            vec![Decimal::new(-55, -1).into()]
+        ),
+        case::decimal_range_with_exclusive(
+            load_range(
+            r#"
+                range::[exclusive::1.0, exclusive::10.0]
+            "#
+            ),
+            vec![Decimal::new(50, -1).into(), Decimal::new(95, -1).into()],
+            vec![Decimal::new(-55, -1).into(), Decimal::new(10, -1).into(), Decimal::new(100, -1).into()]
+        ),
+        case::float_range(
+            load_range(
+            r#"
+                range::[1e2, 5e2]
+            "#
+            ),
+            vec![2e2.into(), 1e2.into(), 5e2.into()],
+            vec![(-1e2).into() ,1e1.into(), 6e2.into()]
+        ),
+        case::float_range_with_min(
+            load_range(
+            r#"
+                range::[min, 2e5]
+            "#
+            ),
+            vec![2e5.into(), (-2e5).into()],
+            vec![3e5.into()]
+        ),
+        case::float_range_with_max(
+            load_range(
+            r#"
+                range::[1e5, max]
+            "#
+            ),
+            vec![1e5.into(), 5e5.into(), 1e6.into()],
+            vec![(-5e5).into(), 1e2.into()]
+        ),
+        case::float_range_with_exclusive(
+        load_range(
+            r#"
+                range::[exclusive::1e2, exclusive::5e2]
+            "#
+            ),
+            vec![2e2.into()],
+            vec![(-1e2).into() ,1e1.into(), 6e2.into(), 1e2.into(), 5e2.into()]
+        ),
+    )]
+    fn range_contains(
+        range: IonSchemaResult<Range>,
+        valid_values: Vec<OwnedElement>,
+        invalid_values: Vec<OwnedElement>,
+    ) {
+        // verify if the range contains given valid values
+        for valid_value in valid_values {
+            let range_contains_result = range.as_ref().unwrap().contains(&valid_value).unwrap();
+            assert_eq!(range_contains_result, true)
+        }
+
+        // verify that ranges doesn't contain the invalid values
+        for invalid_value in invalid_values {
+            let range_contains_result = range.as_ref().unwrap().contains(&invalid_value).unwrap();
+            assert_eq!(range_contains_result, false)
+        }
     }
 }
