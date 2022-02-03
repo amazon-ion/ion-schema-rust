@@ -248,6 +248,11 @@ mod isl_tests {
         )
     }
 
+    // helper function to return OwnedElements for range `contains` tests
+    fn elements<T: Into<OwnedElement> + std::clone::Clone>(values: &[T]) -> Vec<OwnedElement> {
+        values.iter().cloned().map(|v| v.into()).collect()
+    }
+
     #[rstest(
         range1,
         range2,
@@ -349,8 +354,8 @@ mod isl_tests {
                 range::[0, 10]
             "#
             ),
-            vec![5.into(), 0.into(), 10.into()],
-            vec![(-5).into(), 11.into()]
+            elements(&[5, 0, 10]),
+            elements(&[-5, 11])
         ),
         case::int_range_with_min(
             load_range(
@@ -358,8 +363,8 @@ mod isl_tests {
                 range::[min, 10]
             "#
             ),
-            vec![5.into(), (-5).into(), 0.into()],
-            vec![11.into()]
+            elements(&[5, -5, 0]),
+            elements(&[11])
         ),
         case::int_range_with_max(
             load_range(
@@ -367,8 +372,8 @@ mod isl_tests {
                 range::[0, max]
             "#
             ),
-            vec![5.into(), 11.into()],
-            vec![(-5).into()]
+            elements(&[5, 0, 11]),
+            elements(&[-5])
         ),
         case::int_range_with_exclusive(
             load_range(
@@ -376,8 +381,8 @@ mod isl_tests {
                 range::[exclusive::0, exclusive::10]
             "#
             ),
-            vec![5.into(), 9.into()],
-            vec![(-5).into(), 0.into(), 10.into()]
+            elements(&[5, 9]),
+            elements(&[-5, 0, 10])
         ),
         case::decimal_range(
             load_range(
@@ -385,8 +390,8 @@ mod isl_tests {
                 range::[0.0, 10.0]
             "#
             ),
-            vec![Decimal::new(55,-1).into(), Decimal::new(0, 0).into(), Decimal::new(100, -1).into()],
-            vec![Decimal::new(-55, -1).into(), Decimal::new(115, -1).into()]
+            elements(&[Decimal::new(55,-1), Decimal::new(0, 0), Decimal::new(100, -1)]),
+            elements(&[Decimal::new(-55, -1), Decimal::new(115, -1)])
         ),
         case::decimal_range_with_min(
             load_range(
@@ -394,8 +399,8 @@ mod isl_tests {
                 range::[min, 10.0]
             "#
             ),
-            vec![Decimal::new(50, -1).into(), Decimal::new(-55, -1).into(), Decimal::new(0, 0).into()],
-            vec![Decimal::new(115, -1).into()]
+            elements(&[Decimal::new(50, -1), Decimal::new(-55, -1), Decimal::new(0, 0)]),
+            elements(&[Decimal::new(115, -1)])
         ),
         case::decimal_range_with_max(
             load_range(
@@ -403,8 +408,8 @@ mod isl_tests {
                 range::[0.0, max]
             "#
             ),
-            vec![Decimal::new(55, -1).into(), Decimal::new(115, -1).into()],
-            vec![Decimal::new(-55, -1).into()]
+            elements(&[Decimal::new(55, -1), Decimal::new(115, -1)]),
+            elements(&[Decimal::new(-55, -1)])
         ),
         case::decimal_range_with_exclusive(
             load_range(
@@ -412,8 +417,8 @@ mod isl_tests {
                 range::[exclusive::1.0, exclusive::10.0]
             "#
             ),
-            vec![Decimal::new(50, -1).into(), Decimal::new(95, -1).into()],
-            vec![Decimal::new(-55, -1).into(), Decimal::new(10, -1).into(), Decimal::new(100, -1).into()]
+            elements(&[Decimal::new(50, -1), Decimal::new(95, -1)]),
+            elements(&[Decimal::new(-55, -1), Decimal::new(10, -1), Decimal::new(100, -1)])
         ),
         case::float_range(
             load_range(
@@ -421,8 +426,8 @@ mod isl_tests {
                 range::[1e2, 5e2]
             "#
             ),
-            vec![2e2.into(), 1e2.into(), 5e2.into()],
-            vec![(-1e2).into() ,1e1.into(), 6e2.into()]
+            elements(&[2e2, 1e2, 5e2]),
+            elements(&[-1e2,1e1, 6e2, f64::NAN, 0e0, -0e0])
         ),
         case::float_range_with_min(
             load_range(
@@ -430,8 +435,8 @@ mod isl_tests {
                 range::[min, 2e5]
             "#
             ),
-            vec![2e5.into(), (-2e5).into()],
-            vec![3e5.into()]
+            elements(&[f64::NEG_INFINITY, 2.2250738585072014e-308, 2e5, -2e5, 0e0, -0e0]),
+            elements(&[3e5, f64::NAN])
         ),
         case::float_range_with_max(
             load_range(
@@ -439,8 +444,8 @@ mod isl_tests {
                 range::[1e5, max]
             "#
             ),
-            vec![1e5.into(), 5e5.into(), 1e6.into()],
-            vec![(-5e5).into(), 1e2.into()]
+            elements(&[1e5, 5e5, 1e6, 1.7976931348623157e308, f64::INFINITY]),
+            elements(&[-5e5, 1e2, f64::NAN])
         ),
         case::float_range_with_exclusive(
         load_range(
@@ -448,8 +453,8 @@ mod isl_tests {
                 range::[exclusive::1e2, exclusive::5e2]
             "#
             ),
-            vec![2e2.into()],
-            vec![(-1e2).into() ,1e1.into(), 6e2.into(), 1e2.into(), 5e2.into()]
+            elements(&[2e2]),
+            elements(&[-1e2 ,1e1, 6e2, 1e2, 5e2, f64::NAN])
         ),
     )]
     fn range_contains(
@@ -463,7 +468,7 @@ mod isl_tests {
             assert_eq!(range_contains_result, true)
         }
 
-        // verify that ranges doesn't contain the invalid values
+        // verify that range doesn't contain the invalid values
         for invalid_value in invalid_values {
             let range_contains_result = range.as_ref().unwrap().contains(&invalid_value).unwrap();
             assert_eq!(range_contains_result, false)
