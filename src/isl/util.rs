@@ -1,4 +1,4 @@
-use crate::result::{invalid_schema_error, IonSchemaResult};
+use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
 use ion_rs::types::decimal::Decimal;
 use ion_rs::types::timestamp::Timestamp;
 use ion_rs::value::owned::{text_token, OwnedElement, OwnedSymbolToken};
@@ -35,12 +35,16 @@ impl Range {
         use RangeBoundaryValueType::*;
         match self {
             Range::Integer(start, end) => {
-                let unwrapped_value = value.as_any_int().unwrap();
+                let value = value.as_any_int().ok_or_else(|| {
+                    return invalid_schema_error_raw(
+                        "Integer ranges can only have integer value for validation",
+                    );
+                })?;
                 let is_in_lower_bound = match start {
                     Min => true,
                     Value(start_value, boundary_type) => match start_value {
                         Integer(min_value) => {
-                            match unwrapped_value {
+                            match value {
                                 AnyInt::I64(int_value) => { match boundary_type {
                                     RangeBoundaryType::Inclusive => &min_value.as_i64().unwrap() <= int_value,
                                     RangeBoundaryType::Exclusive => &min_value.as_i64().unwrap() < int_value,
@@ -61,7 +65,7 @@ impl Range {
                     Min => unreachable!("Cannot have 'Min' as the upper range boundary"),
                     Value(end_value, boundary_type) => match end_value {
                         Integer(max_value) => {
-                            match unwrapped_value {
+                            match value {
                                 AnyInt::I64(int_value) => { match boundary_type {
                                     RangeBoundaryType::Inclusive => &max_value.as_i64().unwrap() >= int_value,
                                     RangeBoundaryType::Exclusive => &max_value.as_i64().unwrap() > int_value,
@@ -78,15 +82,19 @@ impl Range {
                 Ok(is_in_upper_bound && is_in_lower_bound)
             }
             Range::IntegerNonNegative(start, end) => {
-                let unwrapped_value = value.as_any_int().unwrap();
+                let value = value.as_any_int().ok_or_else(|| {
+                    return invalid_schema_error_raw(
+                        "Integer ranges can only have integer value for validation",
+                    );
+                })?;
                 let is_in_lower_bound = match start {
-                    Min => match unwrapped_value {
+                    Min => match value {
                         AnyInt::I64(int_value) => &0 <= int_value,
                         AnyInt::BigInt(big_int_value) => &BigInt::zero() <= big_int_value,
                     },
                     Value(start_value, boundary_type) => match start_value {
                         Integer(min_value) => {
-                            match unwrapped_value {
+                            match value {
                                 AnyInt::I64(int_value) => { match boundary_type {
                                     RangeBoundaryType::Inclusive => &min_value.as_i64().unwrap() <= int_value,
                                     RangeBoundaryType::Exclusive => &min_value.as_i64().unwrap() < int_value,
@@ -107,7 +115,7 @@ impl Range {
                     Min => unreachable!("Cannot have 'Min' as the upper range boundary"),
                     Value(end_value, boundary_type) => match end_value {
                         Integer(max_value) => {
-                            match unwrapped_value {
+                            match value {
                                 AnyInt::I64(int_value) => { match boundary_type {
                                     RangeBoundaryType::Inclusive => &max_value.as_i64().unwrap() >= int_value,
                                     RangeBoundaryType::Exclusive => &max_value.as_i64().unwrap() > int_value,
@@ -124,13 +132,17 @@ impl Range {
                 Ok(is_in_upper_bound && is_in_lower_bound)
             }
             Range::Float(start, end) => {
-                let unwrapped_value = &value.as_f64().unwrap();
+                let value = &value.as_f64().ok_or_else(|| {
+                    return invalid_schema_error_raw(
+                        "Float ranges can only have float value for validation",
+                    );
+                })?;
                 let is_in_lower_bound = match start {
                     Min => true,
                     Value(start_value, boundary_type) => match start_value {
                         Float(min_value) => match boundary_type {
-                            RangeBoundaryType::Inclusive => min_value <= unwrapped_value,
-                            RangeBoundaryType::Exclusive => min_value < unwrapped_value,
+                            RangeBoundaryType::Inclusive => min_value <= value,
+                            RangeBoundaryType::Exclusive => min_value < value,
                         },
                         _ => unreachable!("Float range can only have floats as lower and upper range boundary value"),
                     },
@@ -142,8 +154,8 @@ impl Range {
                     Min => unreachable!("Cannot have 'Min' as the upper range boundary"),
                     Value(end_value, boundary_type) => match end_value {
                         Float(max_value) => match boundary_type {
-                            RangeBoundaryType::Inclusive => max_value >= unwrapped_value,
-                            RangeBoundaryType::Exclusive => max_value > unwrapped_value,
+                            RangeBoundaryType::Inclusive => max_value >= value,
+                            RangeBoundaryType::Exclusive => max_value > value,
                         },
                         _ => unreachable!("Float range can only have floats as lower and upper range boundary value"),
                     }
@@ -151,13 +163,17 @@ impl Range {
                 Ok(is_in_upper_bound && is_in_lower_bound)
             }
             Range::Decimal(start, end) => {
-                let unwrapped_value = &value.as_decimal().unwrap();
+                let value = &value.as_decimal().ok_or_else(|| {
+                    return invalid_schema_error_raw(
+                        "Decimal ranges can only have decimal value for validation",
+                    );
+                })?;
                 let is_in_lower_bound = match start {
                     Min => true,
                     Value(start_value, boundary_type) => match start_value {
                         Decimal(min_value) => match boundary_type {
-                            RangeBoundaryType::Inclusive => min_value <= unwrapped_value,
-                            RangeBoundaryType::Exclusive => min_value < unwrapped_value,
+                            RangeBoundaryType::Inclusive => min_value <= value,
+                            RangeBoundaryType::Exclusive => min_value < value,
                         },
                         _ => unreachable!("Decimal range can only have decimals as lower and upper range boundary value"),
                     },
@@ -169,8 +185,8 @@ impl Range {
                     Min => unreachable!("Cannot have 'Min' as the upper range boundary"),
                     Value(end_value, boundary_type) => match end_value {
                         Decimal(max_value) => match boundary_type {
-                            RangeBoundaryType::Inclusive => max_value >= unwrapped_value,
-                            RangeBoundaryType::Exclusive => max_value > unwrapped_value,
+                            RangeBoundaryType::Inclusive => max_value >= value,
+                            RangeBoundaryType::Exclusive => max_value > value,
                         },
                         _ => unreachable!("Decimal range can only have decimals as lower and upper range boundary value"),
                     }
