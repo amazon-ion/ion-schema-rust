@@ -36,9 +36,9 @@ impl Range {
         match self {
             Range::Integer(start, end) => {
                 let value = value.as_any_int().ok_or_else(|| {
-                    return invalid_schema_error_raw(
+                    invalid_schema_error_raw(
                         "Integer ranges can only have integer value for validation",
-                    );
+                    )
                 })?;
                 let is_in_lower_bound = match start {
                     Min => true,
@@ -83,9 +83,9 @@ impl Range {
             }
             Range::IntegerNonNegative(start, end) => {
                 let value = value.as_any_int().ok_or_else(|| {
-                    return invalid_schema_error_raw(
+                    invalid_schema_error_raw(
                         "Integer ranges can only have integer value for validation",
-                    );
+                    )
                 })?;
                 let is_in_lower_bound = match start {
                     Min => match value {
@@ -133,9 +133,9 @@ impl Range {
             }
             Range::Float(start, end) => {
                 let value = &value.as_f64().ok_or_else(|| {
-                    return invalid_schema_error_raw(
+                    invalid_schema_error_raw(
                         "Float ranges can only have float value for validation",
-                    );
+                    )
                 })?;
                 let is_in_lower_bound = match start {
                     Min => true,
@@ -164,9 +164,9 @@ impl Range {
             }
             Range::Decimal(start, end) => {
                 let value = &value.as_decimal().ok_or_else(|| {
-                    return invalid_schema_error_raw(
+                    invalid_schema_error_raw(
                         "Decimal ranges can only have decimal value for validation",
-                    );
+                    )
                 })?;
                 let is_in_lower_bound = match start {
                     Min => true,
