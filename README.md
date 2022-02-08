@@ -1,6 +1,8 @@
 # Amazon Ion Schema Rust
+[![Crate](https://img.shields.io/crates/v/ion-schema.svg)](https://crates.io/crates/ion-schema)
+[![Docs](https://docs.rs/ion-schema/badge.svg)](https://docs.rs/ion-schema/latest/ion_schema/)
 [![License](https://img.shields.io/hexpm/l/plug.svg)](https://github.com/amzn/ion-schema-rust/blob/main/LICENSE)
-[![Rust](https://github.com/amzn/ion-schema-rust/workflows/Rust/badge.svg)](https://github.com/amzn/ion-schema-rust/actions?query=workflow%3A%22Rust%22)
+[![Rust](https://github.com/amzn/ion-schema-rust/workflows/CI%20Build/badge.svg)](https://github.com/amzn/ion-schema-rust/actions?query=workflow%3A%22CI+Build%22)
 
 An implementation of [Amazon Ion Schema](http://amzn.github.io/ion-schema) in Rust.
 
