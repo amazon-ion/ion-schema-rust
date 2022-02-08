@@ -131,6 +131,7 @@ mod isl_tests {
     use crate::result::IonSchemaResult;
     use ion_rs::types::decimal::*;
     use ion_rs::types::timestamp::Timestamp;
+    use ion_rs::value::owned::OwnedElement;
     use ion_rs::value::reader::element_reader;
     use ion_rs::value::reader::ElementReader;
     use ion_rs::value::AnyInt;
@@ -247,6 +248,11 @@ mod isl_tests {
         )
     }
 
+    // helper function to return OwnedElements for range `contains` tests
+    fn elements<T: Into<OwnedElement> + std::clone::Clone>(values: &[T]) -> Vec<OwnedElement> {
+        values.iter().cloned().map(|v| v.into()).collect()
+    }
+
     #[rstest(
         range1,
         range2,
@@ -336,5 +342,136 @@ mod isl_tests {
     fn invalid_ranges(range: IonSchemaResult<Range>) {
         // determine that the range is created with an error for an invalid range
         assert_eq!(range.is_err(), true);
+    }
+
+    #[rstest(
+        range,
+        valid_values,
+        invalid_values,
+        case::int_range(
+            load_range(
+            r#"
+                range::[0, 10]
+            "#
+            ),
+            elements(&[5, 0, 10]),
+            elements(&[-5, 11])
+        ),
+        case::int_range_with_min(
+            load_range(
+            r#"
+                range::[min, 10]
+            "#
+            ),
+            elements(&[5, -5, 0]),
+            elements(&[11])
+        ),
+        case::int_range_with_max(
+            load_range(
+            r#"
+                range::[0, max]
+            "#
+            ),
+            elements(&[5, 0, 11]),
+            elements(&[-5])
+        ),
+        case::int_range_with_exclusive(
+            load_range(
+            r#"
+                range::[exclusive::0, exclusive::10]
+            "#
+            ),
+            elements(&[5, 9]),
+            elements(&[-5, 0, 10])
+        ),
+        case::decimal_range(
+            load_range(
+            r#"
+                range::[0.0, 10.0]
+            "#
+            ),
+            elements(&[Decimal::new(55,-1), Decimal::new(0, 0), Decimal::new(100, -1)]),
+            elements(&[Decimal::new(-55, -1), Decimal::new(115, -1)])
+        ),
+        case::decimal_range_with_min(
+            load_range(
+            r#"
+                range::[min, 10.0]
+            "#
+            ),
+            elements(&[Decimal::new(50, -1), Decimal::new(-55, -1), Decimal::new(0, 0)]),
+            elements(&[Decimal::new(115, -1)])
+        ),
+        case::decimal_range_with_max(
+            load_range(
+            r#"
+                range::[0.0, max]
+            "#
+            ),
+            elements(&[Decimal::new(55, -1), Decimal::new(115, -1)]),
+            elements(&[Decimal::new(-55, -1)])
+        ),
+        case::decimal_range_with_exclusive(
+            load_range(
+            r#"
+                range::[exclusive::1.0, exclusive::10.0]
+            "#
+            ),
+            elements(&[Decimal::new(50, -1), Decimal::new(95, -1)]),
+            elements(&[Decimal::new(-55, -1), Decimal::new(10, -1), Decimal::new(100, -1)])
+        ),
+        case::float_range(
+            load_range(
+            r#"
+                range::[1e2, 5e2]
+            "#
+            ),
+            elements(&[2e2, 1e2, 5e2]),
+            elements(&[-1e2,1e1, 6e2, f64::NAN, 0e0, -0e0])
+        ),
+        case::float_range_with_min(
+            load_range(
+            r#"
+                range::[min, 2e5]
+            "#
+            ),
+            elements(&[f64::NEG_INFINITY, 2.2250738585072014e-308, 2e5, -2e5, 0e0, -0e0]),
+            elements(&[3e5, f64::NAN])
+        ),
+        case::float_range_with_max(
+            load_range(
+            r#"
+                range::[1e5, max]
+            "#
+            ),
+            elements(&[1e5, 5e5, 1e6, 1.7976931348623157e308, f64::INFINITY]),
+            elements(&[-5e5, 1e2, f64::NAN])
+        ),
+        case::float_range_with_exclusive(
+        load_range(
+            r#"
+                range::[exclusive::1e2, exclusive::5e2]
+            "#
+            ),
+            elements(&[2e2]),
+            elements(&[-1e2 ,1e1, 6e2, 1e2, 5e2, f64::NAN])
+        ),
+    )]
+    fn range_contains(
+        range: IonSchemaResult<Range>,
+        valid_values: Vec<OwnedElement>,
+        invalid_values: Vec<OwnedElement>,
+    ) {
+        // verify if the range contains given valid values
+        for valid_value in valid_values {
+            let range_contains_result = range.as_ref().unwrap().contains(&valid_value).unwrap();
+            assert_eq!(range_contains_result, true)
+        }
+
+        // verify that range doesn't contain the invalid values
+        for invalid_value in invalid_values {
+            let range_contains_result = range.as_ref().unwrap().contains(&invalid_value).unwrap();
+            assert_eq!(range_contains_result, false)
+        }
     }
 }
