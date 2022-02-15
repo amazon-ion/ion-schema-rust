@@ -38,7 +38,10 @@ impl TypeRef {
         let type_name = match type_def {
             TypeDefinition::Named(named_type) => named_type.name().as_ref().unwrap().to_owned(),
             TypeDefinition::Anonymous(anonymous_type) => "".to_owned(),
-            TypeDefinition::Core(ion_type) => format!("{:?}", ion_type),
+            TypeDefinition::Core(core_isl_type) => match core_isl_type {
+                CoreISLTypeDefinition::IonType(ion_type) => format!("{}", ion_type),
+                CoreISLTypeDefinition::Other(other_type) => other_type.name().to_owned().unwrap(),
+            },
         };
         for constraint in type_def.constraints() {
             if let Err(violation) = constraint.validate(value, &self.type_store) {
@@ -57,12 +60,46 @@ impl TypeRef {
     }
 }
 
+/// Represents a [CoreISLTypeDefinition] which stoes a resolved core ISl type using [TypeStore]
+#[derive(Debug, Clone, PartialEq)]
+pub enum CoreISLTypeDefinition {
+    IonType(IonType),
+    Other(TypeDefinitionImpl),
+}
+
+impl CoreISLTypeDefinition {
+    pub fn parse_from_isl_type_and_update_pending_types(
+        isl_type: &IslTypeImpl,
+        type_store: &mut TypeStore,
+        pending_types: &mut PendingTypes,
+    ) -> IonSchemaResult<Self> {
+        let mut constraints = vec![];
+
+        // parses an isl_type to a TypeDefinition
+        let type_name = isl_type.name();
+
+        // convert IslConstraint to Constraint
+        for isl_constraint in isl_type.constraints() {
+            let constraint =
+                Constraint::resolve_from_isl_constraint(isl_constraint, type_store, pending_types)?;
+            constraints.push(constraint);
+        }
+
+        let core_type_def = CoreISLTypeDefinition::Other(TypeDefinitionImpl::new(
+            type_name.to_owned(),
+            constraints,
+        ));
+        pending_types.add_core_type(&core_type_def, type_store);
+        Ok(core_type_def)
+    }
+}
+
 /// Represents a [TypeDefinition] which stores a resolved ISL type using [TypeStore]
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeDefinition {
     Named(TypeDefinitionImpl),
     Anonymous(TypeDefinitionImpl),
-    Core(IonType),
+    Core(CoreISLTypeDefinition),
 }
 
 impl TypeDefinition {
@@ -101,16 +138,23 @@ impl TypeValidator for TypeDefinition {
         match self {
             TypeDefinition::Named(named_type) => named_type.validate(value, type_store),
             TypeDefinition::Anonymous(anonymous_type) => anonymous_type.validate(value, type_store),
-            TypeDefinition::Core(ion_type) => {
-                if value.ion_type() != *ion_type {
-                    return Err(Violation::new(
-                        "type_constraint",
-                        ViolationCode::TypeMismatched,
-                        &format!("expected type {:?}, found {:?}", ion_type, value.ion_type()),
-                    ));
+            TypeDefinition::Core(core_type) => match core_type {
+                CoreISLTypeDefinition::IonType(ion_type) => {
+                    if value.ion_type() != *ion_type {
+                        return Err(Violation::new(
+                            "type_constraint",
+                            ViolationCode::TypeMismatched,
+                            &format!("expected type {:?}, found {:?}", ion_type, value.ion_type()),
+                        ));
+                    }
+                    return Ok(());
                 }
-                return Ok(());
-            }
+                CoreISLTypeDefinition::Other(other_type) => {
+                    let type_id = type_store.get_core_type_id(core_type).unwrap();
+                    let type_def = type_store.get_type_by_id(*type_id).unwrap();
+                    type_def.validate(value, type_store)
+                }
+            },
         }
     }
 }
@@ -143,7 +187,7 @@ impl TypeDefinitionImpl {
     }
 
     /// Parse constraints inside an [OwnedStruct] to a schema [Type]
-    pub fn parse_from_isl_type_and_update_type_store(
+    pub fn parse_from_isl_type_and_update_pending_types(
         isl_type: &IslTypeImpl,
         type_store: &mut TypeStore,
         pending_types: &mut PendingTypes,
@@ -323,7 +367,7 @@ mod type_definition_tests {
         let pending_types = &mut PendingTypes::new();
         let this_type_def = match isl_type {
             IslType::Named(named_isl_type) => TypeDefinition::Named(
-                TypeDefinitionImpl::parse_from_isl_type_and_update_type_store(
+                TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
                     &named_isl_type,
                     type_store,
                     pending_types,
@@ -331,7 +375,7 @@ mod type_definition_tests {
                 .unwrap(),
             ),
             IslType::Anonymous(anonymous_isl_type) => TypeDefinition::Anonymous(
-                TypeDefinitionImpl::parse_from_isl_type_and_update_type_store(
+                TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
                     &anonymous_isl_type,
                     type_store,
                     pending_types,

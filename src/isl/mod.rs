@@ -168,9 +168,9 @@ mod isl_tests {
     isl_type1,isl_type2,
     case::type_constraint_with_anonymous_type(
         load_anonymous_type(r#" // For a schema with single anonymous type
-                {type: int}
+                {type: any}
             "#),
-        IslType::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer))])
+        IslType::anonymous([IslConstraint::type_constraint(IslTypeRef::core_isl_type_from_type_name("any"))])
     ),
     case::type_constraint_with_named_type(
         load_named_type(r#" // For a schema with named type

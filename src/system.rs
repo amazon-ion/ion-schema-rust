@@ -7,10 +7,9 @@ use crate::result::{
     IonSchemaResult,
 };
 use crate::schema::Schema;
-use crate::types::{TypeDefinition, TypeDefinitionImpl};
+use crate::types::{CoreISLTypeDefinition, TypeDefinition, TypeDefinitionImpl};
 use ion_rs::value::owned::{text_token, OwnedElement, OwnedSymbolToken};
 use ion_rs::value::{Element, Sequence, Struct};
-use ion_rs::IonType;
 use std::collections::HashMap;
 use std::io::ErrorKind;
 use std::rc::Rc;
@@ -30,7 +29,7 @@ use std::rc::Rc;
 /// [PendingTypes] can be promoted the [TypeStore].
 #[derive(Debug, Clone)]
 pub struct PendingTypes {
-    core_type_ids_by_ion_type: HashMap<String, TypeId>,
+    core_type_ids_by_name: HashMap<String, TypeId>,
     ids_by_name: HashMap<String, TypeId>,
     parent: Option<(String, TypeId)>,
     types_by_id: Vec<Option<TypeDefinition>>, // a None in this vector represents a not-yet-resolved type
@@ -40,7 +39,7 @@ impl PendingTypes {
     pub fn new() -> Self {
         Self {
             parent: None,
-            core_type_ids_by_ion_type: HashMap::new(),
+            core_type_ids_by_name: HashMap::new(),
             ids_by_name: HashMap::new(),
             types_by_id: Vec::new(),
         }
@@ -181,7 +180,7 @@ impl PendingTypes {
                 TypeDefinition::Anonymous(anonymous_type_def) => {
                     type_store.add_anonymous_type(anonymous_type_def)
                 }
-                TypeDefinition::Core(ion_type) => type_store.add_core_type(ion_type),
+                TypeDefinition::Core(core_type) => type_store.add_core_type(&core_type),
             };
         }
         Ok(())
@@ -227,8 +226,8 @@ impl PendingTypes {
                 TypeDefinition::Anonymous(anonymous_type_def) => {
                     type_store.add_anonymous_type(anonymous_type_def);
                 }
-                TypeDefinition::Core(ion_type) => {
-                    type_store.add_core_type(ion_type);
+                TypeDefinition::Core(core_type) => {
+                    type_store.add_core_type(&core_type);
                 }
             };
         }
@@ -272,20 +271,29 @@ impl PendingTypes {
         type_id + type_store.types_by_id.len()
     }
 
-    /// Adds the [CoreTypeDefinition] and the associated ion_type in the [PendingTypes] and returns the [TypeId] for it
+    /// Adds the [CoreISLTypeDefinition] in the [PendingTypes] and returns the [TypeId] for it
     /// If the given name already exists in the [TypeStore] or [PendingTypes] it returns the associated [TypeId]
-    pub fn add_core_type(&mut self, ion_type: IonType, type_store: &mut TypeStore) -> TypeId {
-        let core_type = &format!("{:?}", ion_type);
-        if let Some(exists) = self.core_type_ids_by_ion_type.get(core_type) {
+    pub fn add_core_type(
+        &mut self,
+        core_isl_type: &CoreISLTypeDefinition,
+        type_store: &mut TypeStore,
+    ) -> TypeId {
+        let core_type_name = match core_isl_type {
+            CoreISLTypeDefinition::IonType(ion_type) => format!("{}", ion_type),
+            CoreISLTypeDefinition::Other(other_type) => other_type.name().to_owned().unwrap(),
+        };
+
+        if let Some(exists) = self.core_type_ids_by_name.get(&core_type_name) {
             return exists.to_owned();
         }
-        if let Some(exists) = type_store.get_core_type_id_by_ion_type(&ion_type) {
+        if let Some(exists) = type_store.get_core_type_id(core_isl_type) {
             return exists.to_owned();
         }
         let type_id = self.types_by_id.len();
-        self.core_type_ids_by_ion_type
-            .insert(core_type.to_owned(), type_id);
-        self.types_by_id.push(Some(TypeDefinition::Core(ion_type)));
+        self.core_type_ids_by_name
+            .insert(core_type_name.to_owned(), type_id);
+        self.types_by_id
+            .push(Some(TypeDefinition::Core(core_isl_type.to_owned())));
         type_id + type_store.types_by_id.len()
     }
 
@@ -351,16 +359,16 @@ pub type TypeId = usize;
 /// Defines a cache that can be used to store resolved [Type]s of a [Schema]
 #[derive(Debug, Clone)]
 pub struct TypeStore {
-    core_type_ids_by_ion_type: HashMap<String, TypeId>, // stores all the core types used within this schema
+    core_type_ids_by_name: HashMap<String, TypeId>, // stores all the core types used within this schema
     imported_type_ids_by_name: HashMap<String, TypeId>, // stores all the imported types of a schema
-    ids_by_name: HashMap<String, TypeId>, // stores named types defined within the schema
+    ids_by_name: HashMap<String, TypeId>,           // stores named types defined within the schema
     types_by_id: Vec<TypeDefinition>,
 }
 
 impl TypeStore {
     pub fn new() -> Self {
         Self {
-            core_type_ids_by_ion_type: HashMap::new(),
+            core_type_ids_by_name: HashMap::new(),
             imported_type_ids_by_name: HashMap::new(),
             ids_by_name: HashMap::new(),
             types_by_id: Vec::new(),
@@ -398,11 +406,14 @@ impl TypeStore {
             .or_else(|| self.imported_type_ids_by_name.get(name))
     }
 
-    /// Provides the [TypeId] associated with given [IonType] if it exists in the [TypeStore]  
+    /// Provides the [TypeId] associated with given [CoreISLTypeDefinition] if it exists in the [TypeStore]  
     /// Otherwise returns None
-    pub fn get_core_type_id_by_ion_type(&self, ion_type: &IonType) -> Option<&TypeId> {
-        self.core_type_ids_by_ion_type
-            .get(&format!("{:?}", ion_type))
+    pub fn get_core_type_id(&self, core_isl_type: &CoreISLTypeDefinition) -> Option<&TypeId> {
+        let core_type_name = match core_isl_type {
+            CoreISLTypeDefinition::IonType(ion_type) => format!("{}", ion_type),
+            CoreISLTypeDefinition::Other(other_type) => other_type.name().to_owned().unwrap(),
+        };
+        self.core_type_ids_by_name.get(&core_type_name)
     }
 
     /// Provides the [Type] associated with given [TypeId] if it exists in the [TypeStore]  
@@ -424,17 +435,22 @@ impl TypeStore {
         type_id
     }
 
-    /// Adds the [CoreTypeDefinition] and the associated [IonType] in the [TypeStore] and returns the [TypeId] for it
+    /// Adds the [CoreISLTypeDefinition] in the [TypeStore] and returns the [TypeId] for it
     /// If the name already exists in the [TypeStore] it returns the associated [TypeId]
-    pub fn add_core_type(&mut self, ion_type: IonType) -> TypeId {
-        let core_type = &format!("{:?}", ion_type);
-        if let Some(exists) = self.core_type_ids_by_ion_type.get(core_type) {
+    pub fn add_core_type(&mut self, core_isl_type: &CoreISLTypeDefinition) -> TypeId {
+        let core_type_name = match core_isl_type {
+            CoreISLTypeDefinition::IonType(ion_type) => format!("{}", ion_type),
+            CoreISLTypeDefinition::Other(other_type) => other_type.name().to_owned().unwrap(),
+        };
+
+        if let Some(exists) = self.core_type_ids_by_name.get(&core_type_name) {
             return exists.to_owned();
         }
         let type_id = self.types_by_id.len();
-        self.core_type_ids_by_ion_type
-            .insert(core_type.to_owned(), type_id);
-        self.types_by_id.push(TypeDefinition::Core(ion_type));
+        self.core_type_ids_by_name
+            .insert(core_type_name.to_owned(), type_id);
+        self.types_by_id
+            .push(TypeDefinition::Core(core_isl_type.to_owned()));
         type_id
     }
 
@@ -494,7 +510,7 @@ impl Resolver {
             // convert [IslType] into [TypeDefinition]
             match isl_type {
                 IslType::Named(named_isl_type) => TypeDefinition::Named(
-                    TypeDefinitionImpl::parse_from_isl_type_and_update_type_store(
+                    TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
                         &named_isl_type,
                         type_store,
                         pending_types,
@@ -502,7 +518,7 @@ impl Resolver {
                     .unwrap(),
                 ),
                 IslType::Anonymous(anonymous_isl_type) => TypeDefinition::Anonymous(
-                    TypeDefinitionImpl::parse_from_isl_type_and_update_type_store(
+                    TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
                         &anonymous_isl_type,
                         type_store,
                         pending_types,
@@ -601,7 +617,7 @@ impl Resolver {
 
             // convert IslType to TypeDefinition
             let type_def: TypeDefinitionImpl =
-                TypeDefinitionImpl::parse_from_isl_type_and_update_type_store(
+                TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
                     isl_type,
                     type_store,
                     pending_types,
@@ -970,6 +986,7 @@ mod schema_system_tests {
         let schema = schema_system.load_schema("sample_number.isl");
         assert_eq!(true, schema.is_ok());
     }
+
     #[test]
     fn schema_system_map_authority_with_incorrect_inline_import_type_test() {
         // map with (id, ion content)
@@ -1022,9 +1039,67 @@ mod schema_system_tests {
         ];
         let mut schema_system =
             SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
-        // verify if the schema loads without any errors
+        // verify if the schema loads with specific errors
         let schema = schema_system.load_schema("sample_number.isl");
         assert_eq!(true, schema.is_err());
         assert!(matches!(schema.unwrap_err(), InvalidSchemaError { .. }));
+    }
+
+    #[test]
+    fn schema_system_map_authority_with_isl_core_types() {
+        // map with (id, ion content)
+        let map_authority = [
+            (
+                "sample.isl",
+                r#"
+                    schema_header::{
+                      imports: [ { id: "sample_core_types.isl" } ],
+                    }
+                    
+                    type::{
+                        name: my_number,
+                        type: number,
+                    }
+                    
+                    type::{
+                      name: my_type,
+                      one_of: [
+                        my_number,
+                        my_text,
+                        my_lob
+                      ],
+                    }
+                    
+                    schema_footer::{
+                    }
+                "#,
+            ),
+            (
+                "sample_core_types.isl",
+                r#"
+                    schema_header::{
+                      imports: [],
+                    }
+                    
+                    type::{
+                      name: my_text,
+                      type: text,
+                    }
+                    
+                    type::{
+                        name: my_lob,
+                        type: lob,
+                    }
+                    
+                    schema_footer::{
+                    }
+                "#,
+            ),
+        ];
+        let mut schema_system =
+            SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
+        // verify if the schema loads without any errors
+        let schema = schema_system.load_schema("sample.isl");
+        assert_eq!(true, schema.is_ok());
     }
 }

@@ -5,10 +5,31 @@ use crate::result::{
     invalid_schema_error, invalid_schema_error_raw, unresolvable_schema_error, IonSchemaResult,
 };
 use crate::system::{PendingTypes, TypeId, TypeStore};
-use crate::types::TypeDefinitionImpl;
+use crate::types::{CoreISLTypeDefinition, TypeDefinitionImpl};
 use ion_rs::value::owned::OwnedElement;
+use ion_rs::value::reader::{element_reader, ElementReader};
 use ion_rs::value::{Element, Struct, SymbolToken};
 use ion_rs::IonType;
+use std::collections::HashMap;
+
+/// Represents all [Core ISL types]
+/// This also includes: lob, number, text, any
+/// [Core ISL types]: https://amzn.github.io/ion-schema/docs/spec.html#core-types
+#[derive(Debug, Clone, PartialEq)]
+pub enum CoreIslType {
+    IonType(IonType),
+    Other(IslTypeImpl),
+}
+
+impl CoreIslType {
+    pub fn core_ion_type(ion_type: IonType) -> Self {
+        Self::IonType(ion_type)
+    }
+
+    pub fn other_isl_type(isl_type: IslTypeImpl) -> Self {
+        Self::Other(isl_type)
+    }
+}
 
 /// Provides an internal representation of a schema type reference.
 /// The type reference grammar is defined in the [Ion Schema Spec]
@@ -16,7 +37,7 @@ use ion_rs::IonType;
 #[derive(Debug, Clone, PartialEq)]
 pub enum IslTypeRef {
     /// Represents a reference to one of ISL's built-in core types:
-    CoreIsl(IonType),
+    CoreIsl(CoreIslType),
     /// Represents a reference to a named type (including aliases)
     Named(String),
     /// Represents a type reference defined as an inlined import of a type from another schema
@@ -29,7 +50,7 @@ pub enum IslTypeRef {
 impl IslTypeRef {
     /// Creates a [IslTypeRef::CoreIsl] using the [IonType] referenced inside it
     pub fn core(ion_type: IonType) -> IslTypeRef {
-        IslTypeRef::CoreIsl(ion_type)
+        IslTypeRef::CoreIsl(CoreIslType::IonType(ion_type))
     }
 
     /// Creates a [IslTypeRef::CoreIsl] using the [IonType] referenced inside it
@@ -40,6 +61,21 @@ impl IslTypeRef {
     /// Creates a [IslTypeRef::CoreIsl] using the [IonType] referenced inside it
     pub fn anonymous<A: Into<Vec<IslConstraint>>>(constraints: A) -> IslTypeRef {
         IslTypeRef::Anonymous(IslTypeImpl::new(None, constraints.into()))
+    }
+
+    pub fn core_isl_type_from_type_name(type_name: &str) -> IslTypeRef {
+        // get the core types map and related text value for given type_name
+        let core_types_map: HashMap<&str, &str> = include!("core_types.rs");
+        let text = core_types_map.get(type_name).unwrap().to_owned();
+        let pending_types = PendingTypes::new();
+        let isl_type = IslTypeImpl::from_owned_element(
+            &element_reader()
+                .read_one(text.as_bytes())
+                .expect("parsing failed unexpectedly"),
+            &mut vec![],
+        )
+        .unwrap();
+        IslTypeRef::CoreIsl(CoreIslType::Other(isl_type))
     }
 
     /// Tries to create an [IslTypeRef] from the given OwnedElement
@@ -58,19 +94,23 @@ impl IslTypeRef {
                     })
                     .and_then(|type_name| {
                         let ion_type = match type_name {
-                            "int" => IslTypeRef::CoreIsl(IonType::Integer),
-                            "float" => IslTypeRef::CoreIsl(IonType::Float),
-                            "decimal" => IslTypeRef::CoreIsl(IonType::Decimal),
-                            "timestamp" => IslTypeRef::CoreIsl(IonType::Timestamp),
-                            "string" => IslTypeRef::CoreIsl(IonType::String),
-                            "symbol" => IslTypeRef::CoreIsl(IonType::Symbol),
-                            "bool" => IslTypeRef::CoreIsl(IonType::Boolean),
-                            "blob" => IslTypeRef::CoreIsl(IonType::Blob),
-                            "clob" => IslTypeRef::CoreIsl(IonType::Clob),
-                            "sexp" => IslTypeRef::CoreIsl(IonType::SExpression),
-                            "list" => IslTypeRef::CoreIsl(IonType::List),
-                            "struct" => IslTypeRef::CoreIsl(IonType::Struct),
-                            // TODO: add a match for other core types like: lob, text, number, document, any
+                            "int" => IslTypeRef::core(IonType::Integer),
+                            "float" => IslTypeRef::core(IonType::Float),
+                            "decimal" => IslTypeRef::core(IonType::Decimal),
+                            "timestamp" => IslTypeRef::core(IonType::Timestamp),
+                            "string" => IslTypeRef::core(IonType::String),
+                            "symbol" => IslTypeRef::core(IonType::Symbol),
+                            "bool" => IslTypeRef::core(IonType::Boolean),
+                            "blob" => IslTypeRef::core(IonType::Blob),
+                            "clob" => IslTypeRef::core(IonType::Clob),
+                            "sexp" => IslTypeRef::core(IonType::SExpression),
+                            "list" => IslTypeRef::core(IonType::List),
+                            "struct" => IslTypeRef::core(IonType::Struct),
+                            "any" => IslTypeRef::core_isl_type_from_type_name("any"),
+                            "text" => IslTypeRef::core_isl_type_from_type_name("text"),
+                            "lob" => IslTypeRef::core_isl_type_from_type_name("lob"),
+                            "number" => IslTypeRef::core_isl_type_from_type_name("number"),
+                            // TODO: add a match for document core type
                             _ => IslTypeRef::Named(type_name.to_owned()),
                         };
                         Ok(ion_type)
@@ -111,10 +151,24 @@ impl IslTypeRef {
         pending_types: &mut PendingTypes,
     ) -> IonSchemaResult<TypeId> {
         match type_reference {
-            IslTypeRef::CoreIsl(ion_type) => {
-                // TODO: create CoreType struct for storing ISLCoreType type definition instead of Type
-                // inserts ISLCoreType as a Type into type_store
-                Ok(pending_types.add_core_type(ion_type.to_owned(), type_store))
+            IslTypeRef::CoreIsl(core_isl_type) => {
+                match core_isl_type {
+                    CoreIslType::IonType(ion_type) => Ok(pending_types.add_core_type(
+                        &CoreISLTypeDefinition::IonType(ion_type.to_owned()),
+                        type_store,
+                    )),
+                    CoreIslType::Other(isl_type) => {
+                        let type_id = pending_types.get_total_types();
+                        let type_def =
+                            CoreISLTypeDefinition::parse_from_isl_type_and_update_pending_types(
+                                isl_type,
+                                type_store,
+                                pending_types,
+                            )?;
+                        // get the last added anonymous type's type_id for given anonymous type
+                        Ok(type_id)
+                    }
+                }
             }
             IslTypeRef::Named(alias) => {
                 // verify if the AliasType actually exists in the type_store or throw an error
@@ -141,7 +195,7 @@ impl IslTypeRef {
             }
             IslTypeRef::Anonymous(isl_type) => {
                 let type_id = pending_types.get_total_types();
-                let type_def = TypeDefinitionImpl::parse_from_isl_type_and_update_type_store(
+                let type_def = TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
                     isl_type,
                     type_store,
                     pending_types,
