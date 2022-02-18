@@ -38,9 +38,12 @@ impl TypeRef {
         let type_name = match type_def {
             TypeDefinition::Named(named_type) => named_type.name().as_ref().unwrap().to_owned(),
             TypeDefinition::Anonymous(anonymous_type) => "".to_owned(),
-            TypeDefinition::Core(core_isl_type) => match core_isl_type {
-                CoreISLTypeDefinition::IonType(ion_type) => format!("{}", ion_type),
-                CoreISLTypeDefinition::Other(other_type) => other_type.name().to_owned().unwrap(),
+            TypeDefinition::BuiltIn(builtin_isl_type) => match builtin_isl_type {
+                BuiltInTypeDefinition::Atomic(ion_type, is_nullable) => match is_nullable {
+                    true => format!("${}", ion_type),
+                    false => format!("{}", ion_type),
+                },
+                BuiltInTypeDefinition::Derived(other_type) => other_type.name().to_owned().unwrap(),
             },
         };
         for constraint in type_def.constraints() {
@@ -60,15 +63,15 @@ impl TypeRef {
     }
 }
 
-/// Represents a [CoreISLTypeDefinition] which stoes a resolved core ISl type using [TypeStore]
+/// Represents a [BuiltInTypeDefinition] which stores a resolved builtin ISl type using [TypeStore]
 #[derive(Debug, Clone, PartialEq)]
-pub enum CoreISLTypeDefinition {
-    IonType(IonType),
-    Other(TypeDefinitionImpl),
+pub enum BuiltInTypeDefinition {
+    Atomic(IonType, bool), // bool represents if the atomic ion type is nullable or not
+    Derived(TypeDefinitionImpl),
 }
 
-impl CoreISLTypeDefinition {
-    pub fn parse_from_isl_type_and_update_pending_types(
+impl BuiltInTypeDefinition {
+    pub fn parse_from_isl_type(
         isl_type: &IslTypeImpl,
         type_store: &mut TypeStore,
         pending_types: &mut PendingTypes,
@@ -85,12 +88,11 @@ impl CoreISLTypeDefinition {
             constraints.push(constraint);
         }
 
-        let core_type_def = CoreISLTypeDefinition::Other(TypeDefinitionImpl::new(
+        let builtin_type_def = BuiltInTypeDefinition::Derived(TypeDefinitionImpl::new(
             type_name.to_owned(),
             constraints,
         ));
-        pending_types.add_core_type(&core_type_def, type_store);
-        Ok(core_type_def)
+        Ok(builtin_type_def)
     }
 }
 
@@ -99,7 +101,7 @@ impl CoreISLTypeDefinition {
 pub enum TypeDefinition {
     Named(TypeDefinitionImpl),
     Anonymous(TypeDefinitionImpl),
-    Core(CoreISLTypeDefinition),
+    BuiltIn(BuiltInTypeDefinition),
 }
 
 impl TypeDefinition {
@@ -138,8 +140,15 @@ impl TypeValidator for TypeDefinition {
         match self {
             TypeDefinition::Named(named_type) => named_type.validate(value, type_store),
             TypeDefinition::Anonymous(anonymous_type) => anonymous_type.validate(value, type_store),
-            TypeDefinition::Core(core_type) => match core_type {
-                CoreISLTypeDefinition::IonType(ion_type) => {
+            TypeDefinition::BuiltIn(built_in_type) => match built_in_type {
+                BuiltInTypeDefinition::Atomic(ion_type, is_nullable) => {
+                    if !*is_nullable && value.is_null() {
+                        return Err(Violation::new(
+                            "type_constraint",
+                            ViolationCode::InvalidNull,
+                            &format!("expected type {:?} doesn't allow null", ion_type),
+                        ));
+                    }
                     if value.ion_type() != *ion_type {
                         return Err(Violation::new(
                             "type_constraint",
@@ -149,10 +158,8 @@ impl TypeValidator for TypeDefinition {
                     }
                     return Ok(());
                 }
-                CoreISLTypeDefinition::Other(other_type) => {
-                    let type_id = type_store.get_core_type_id(core_type).unwrap();
-                    let type_def = type_store.get_type_by_id(*type_id).unwrap();
-                    type_def.validate(value, type_store)
+                BuiltInTypeDefinition::Derived(other_type) => {
+                    other_type.validate(value, type_store)
                 }
             },
         }
@@ -278,7 +285,6 @@ mod type_definition_tests {
     use crate::isl::isl_type::IslType;
     use crate::isl::isl_type_reference::IslTypeRef;
     use crate::system::PendingTypes;
-    use ion_rs::IonType;
     use rstest::*;
 
     #[rstest(
@@ -287,15 +293,15 @@ mod type_definition_tests {
         /* For a schema with single anonymous type as below:
             { type: int }
          */
-        IslType::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer))]),
-        TypeDefinition::anonymous([Constraint::type_constraint(1)])
+        IslType::anonymous([IslConstraint::type_constraint(IslTypeRef::named("int"))]),
+        TypeDefinition::anonymous([Constraint::type_constraint(0)])
     ),
     case::type_constraint_with_named_type(
         /* For a schema with named type as below:
             { name: my_int, type: int }
          */
-        IslType::named("my_int", [IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer))]),
-        TypeDefinition::named("my_int", [Constraint::type_constraint(1)])
+        IslType::named("my_int", [IslConstraint::type_constraint(IslTypeRef::named("int"))]),
+        TypeDefinition::named("my_int", [Constraint::type_constraint(0)])
     ),
     case::type_constraint_with_self_reference_type(
         /* For a schema with self reference type as below:
@@ -309,61 +315,61 @@ mod type_definition_tests {
             { name: my_int, type: { type: my_int } }
          */
         IslType::named("my_int", [IslConstraint::type_constraint(IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("my_int"))]))]),
-        TypeDefinition::named("my_int", [Constraint::type_constraint(1)])
+        TypeDefinition::named("my_int", [Constraint::type_constraint(33)]) // 0-31 are built-in types which are preloaded to the type_store
     ),
     case::type_constraint_with_nested_type(
         /* For a schema with nested types as below:
             { name: my_int, type: { type: int } }
          */
-        IslType::named("my_int", [IslConstraint::type_constraint(IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer))]))]),
-        TypeDefinition::named("my_int", [Constraint::type_constraint(1)])
+        IslType::named("my_int", [IslConstraint::type_constraint(IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("int"))]))]),
+        TypeDefinition::named("my_int", [Constraint::type_constraint(33)])
     ),
     case::type_constraint_with_nested_multiple_types(
         /* For a schema with nested multiple types as below:
             { name: my_int, type: { type: int }, type: { type: my_int } }
          */
-        IslType::named("my_int", [IslConstraint::type_constraint(IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer))])), IslConstraint::type_constraint(IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("my_int"))]))]),
-        TypeDefinition::named("my_int", [Constraint::type_constraint(1), Constraint::type_constraint(3)])
+        IslType::named("my_int", [IslConstraint::type_constraint(IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("int"))])), IslConstraint::type_constraint(IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("my_int"))]))]),
+        TypeDefinition::named("my_int", [Constraint::type_constraint(33), Constraint::type_constraint(34)])
     ),
     case::all_of_constraint(
         /* For a schema with all_of type as below:
             { all_of: [{ type: int }] }
         */
-        IslType::anonymous([IslConstraint::all_of([IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer))])])]),
-        TypeDefinition::anonymous([Constraint::all_of([1])])
+        IslType::anonymous([IslConstraint::all_of([IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("int"))])])]),
+        TypeDefinition::anonymous([Constraint::all_of([33])])
     ),
     case::any_of_constraint(
         /* For a schema with any_of constraint as below:
             { any_of: [{ type: int }, { type: decimal }] }
         */
-        IslType::anonymous([IslConstraint::any_of([IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer))]), IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Decimal))])])]),
-        TypeDefinition::anonymous([Constraint::any_of([1, 3])])
+        IslType::anonymous([IslConstraint::any_of([IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("int"))]), IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("decimal"))])])]),
+        TypeDefinition::anonymous([Constraint::any_of([33, 34])])
     ),
     case::one_of_constraint(
         /* For a schema with one_of constraint as below:
             { any_of: [{ type: int }, { type: decimal }] }
         */
-        IslType::anonymous([IslConstraint::one_of([IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer))]), IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Decimal))])])]),
-        TypeDefinition::anonymous([Constraint::one_of([1, 3])])
+        IslType::anonymous([IslConstraint::one_of([IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("int"))]), IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("decimal"))])])]),
+        TypeDefinition::anonymous([Constraint::one_of([33, 34])])
     ),
     case::not_constraint(
         /* For a schema with not constraint as below:
             { not: { type: int } }
         */
-        IslType::anonymous([IslConstraint::not(IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer))]))]),
-        TypeDefinition::anonymous([Constraint::not(1)])
+        IslType::anonymous([IslConstraint::not(IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("int"))]))]),
+        TypeDefinition::anonymous([Constraint::not(33)])
     ),
     case::ordered_elements_constraint(
         /* For a schema with ordered_elements constraint as below:
             { ordered_elements: [ symbol, { type: int, occurs: optional }, ] }
         */
-        IslType::anonymous([IslConstraint::ordered_elements([IslTypeRef::core(IonType::Symbol), IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer)), IslConstraint::Occurs(IslOccurs::Optional)])])]),
-        TypeDefinition::anonymous([Constraint::ordered_elements([1, 2])])
+        IslType::anonymous([IslConstraint::ordered_elements([IslTypeRef::named("symbol"), IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("int")), IslConstraint::Occurs(IslOccurs::Optional)])])]),
+        TypeDefinition::anonymous([Constraint::ordered_elements([5, 33])])
     ),
     )]
     fn isl_type_to_type_definition(isl_type: IslType, type_def: TypeDefinition) {
         // assert if both the TypeDefinition are same in terms of constraints and name
-        let type_store = &mut TypeStore::new();
+        let type_store = &mut TypeStore::new().unwrap();
         let pending_types = &mut PendingTypes::new();
         let this_type_def = match isl_type {
             IslType::Named(named_isl_type) => TypeDefinition::Named(

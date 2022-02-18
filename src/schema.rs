@@ -51,7 +51,7 @@ impl Schema {
     }
 
     /// Returns an iterator over the types in this schema.
-    /// This includes the core types and named types defined within this schema.
+    /// This includes the builtin types and named types defined within this schema.
     pub fn get_types(&self) -> SchemaTypeIterator {
         SchemaTypeIterator::new(Rc::clone(&self.types), self.types.get_types())
     }
@@ -117,7 +117,7 @@ mod schema_tests {
     fn load_schema_from_text(text: &str) -> Rc<Schema> {
         let owned_elements = load(text).into_iter();
         // create a type_store and resolver instance to be used for loading OwnedElements as schema
-        let type_store = &mut TypeStore::new();
+        let type_store = &mut TypeStore::new().unwrap();
         let mut resolver = Resolver::new(vec![]);
 
         // create a isl from owned_elements and create a schema from isl
@@ -203,7 +203,7 @@ mod schema_tests {
         total_types: usize,
     ) {
         // create a type_store and resolver instance to be used for loading OwnedElements as schema
-        let type_store = &mut TypeStore::new();
+        let type_store = &mut TypeStore::new().unwrap();
         let mut resolver = Resolver::new(vec![]);
 
         // create a isl from owned_elements and verifies if the result is `ok`
@@ -238,6 +238,43 @@ mod schema_tests {
             "#),
             "my_int"
         ),
+        case::nullable_atomic_type_constraint(
+            load(r#"
+                5
+                0
+                -2
+                null.int
+            "#),
+            load(r#"
+                false
+                "hello"
+                5.4
+            "#),
+            load_schema_from_text(r#" // For a schema with named type as below: 
+                type:: { name: my_nullable_int, type: $int }
+            "#),
+            "my_nullable_int"
+        ),
+        case::nullable_derived_type_constraint(
+            load(r#"
+                "hello"
+                hello
+                null.string
+                null.symbol
+            "#),
+            load(r#"
+                false
+                5
+                null.int
+                null.decimal
+                null.null
+                5.4
+            "#),
+            load_schema_from_text(r#" // For a schema with named type as below: 
+                    type:: { name: my_nullable_text, type: $text }
+                "#),
+            "my_nullable_text"
+        ),
         case::not_constraint(
             load(r#"
                 true
@@ -266,6 +303,7 @@ mod schema_tests {
                 false
                 "hello"
                 hey
+                null.int
             "#),
             load_schema_from_text(r#" // For a schema with one_of constraint as below: 
                 type:: { name: one_of_type, one_of: [int, decimal] }

@@ -2,43 +2,21 @@ use crate::isl::isl_constraint::IslConstraint;
 use crate::isl::isl_import::{IslImport, IslImportType};
 use crate::isl::isl_type::IslTypeImpl;
 use crate::result::{
-    invalid_schema_error, invalid_schema_error_raw, unresolvable_schema_error, IonSchemaResult,
+    invalid_schema_error, invalid_schema_error_raw, unresolvable_schema_error,
+    unresolvable_schema_error_raw, IonSchemaResult,
 };
 use crate::system::{PendingTypes, TypeId, TypeStore};
-use crate::types::{CoreISLTypeDefinition, TypeDefinitionImpl};
+use crate::types::TypeDefinitionImpl;
 use ion_rs::value::owned::OwnedElement;
-use ion_rs::value::reader::{element_reader, ElementReader};
 use ion_rs::value::{Element, Struct, SymbolToken};
 use ion_rs::IonType;
-use std::collections::HashMap;
-
-/// Represents all [Core ISL types]
-/// This also includes: lob, number, text, any
-/// [Core ISL types]: https://amzn.github.io/ion-schema/docs/spec.html#core-types
-#[derive(Debug, Clone, PartialEq)]
-pub enum CoreIslType {
-    IonType(IonType),
-    Other(IslTypeImpl),
-}
-
-impl CoreIslType {
-    pub fn core_ion_type(ion_type: IonType) -> Self {
-        Self::IonType(ion_type)
-    }
-
-    pub fn other_isl_type(isl_type: IslTypeImpl) -> Self {
-        Self::Other(isl_type)
-    }
-}
 
 /// Provides an internal representation of a schema type reference.
 /// The type reference grammar is defined in the [Ion Schema Spec]
 /// [Ion Schema spec]: https://amzn.github.io/ion-schema/docs/spec.html#grammar
 #[derive(Debug, Clone, PartialEq)]
 pub enum IslTypeRef {
-    /// Represents a reference to one of ISL's built-in core types:
-    CoreIsl(CoreIslType),
-    /// Represents a reference to a named type (including aliases)
+    /// Represents a reference to a named type (including aliases and built-in types)
     Named(String),
     /// Represents a type reference defined as an inlined import of a type from another schema
     TypeImport(IslImportType),
@@ -48,34 +26,14 @@ pub enum IslTypeRef {
 
 // TODO: add a check for nullable type reference
 impl IslTypeRef {
-    /// Creates a [IslTypeRef::CoreIsl] using the [IonType] referenced inside it
-    pub fn core(ion_type: IonType) -> IslTypeRef {
-        IslTypeRef::CoreIsl(CoreIslType::IonType(ion_type))
-    }
-
-    /// Creates a [IslTypeRef::CoreIsl] using the [IonType] referenced inside it
+    /// Creates a [IslTypeRef::Named] using the [IonType] referenced inside it
     pub fn named<A: Into<String>>(name: A) -> IslTypeRef {
         IslTypeRef::Named(name.into())
     }
 
-    /// Creates a [IslTypeRef::CoreIsl] using the [IonType] referenced inside it
+    /// Creates a [IslTypeRef::Anonymous] using the [IonType] referenced inside it
     pub fn anonymous<A: Into<Vec<IslConstraint>>>(constraints: A) -> IslTypeRef {
         IslTypeRef::Anonymous(IslTypeImpl::new(None, constraints.into()))
-    }
-
-    pub fn core_isl_type_from_type_name(type_name: &str) -> IslTypeRef {
-        // get the core types map and related text value for given type_name
-        let core_types_map: HashMap<&str, &str> = include!("core_types.rs");
-        let text = core_types_map.get(type_name).unwrap().to_owned();
-        let pending_types = PendingTypes::new();
-        let isl_type = IslTypeImpl::from_owned_element(
-            &element_reader()
-                .read_one(text.as_bytes())
-                .expect("parsing failed unexpectedly"),
-            &mut vec![],
-        )
-        .unwrap();
-        IslTypeRef::CoreIsl(CoreIslType::Other(isl_type))
     }
 
     /// Tries to create an [IslTypeRef] from the given OwnedElement
@@ -94,23 +52,6 @@ impl IslTypeRef {
                     })
                     .and_then(|type_name| {
                         let ion_type = match type_name {
-                            "int" => IslTypeRef::core(IonType::Integer),
-                            "float" => IslTypeRef::core(IonType::Float),
-                            "decimal" => IslTypeRef::core(IonType::Decimal),
-                            "timestamp" => IslTypeRef::core(IonType::Timestamp),
-                            "string" => IslTypeRef::core(IonType::String),
-                            "symbol" => IslTypeRef::core(IonType::Symbol),
-                            "bool" => IslTypeRef::core(IonType::Boolean),
-                            "blob" => IslTypeRef::core(IonType::Blob),
-                            "clob" => IslTypeRef::core(IonType::Clob),
-                            "sexp" => IslTypeRef::core(IonType::SExpression),
-                            "list" => IslTypeRef::core(IonType::List),
-                            "struct" => IslTypeRef::core(IonType::Struct),
-                            "any" => IslTypeRef::core_isl_type_from_type_name("any"),
-                            "text" => IslTypeRef::core_isl_type_from_type_name("text"),
-                            "lob" => IslTypeRef::core_isl_type_from_type_name("lob"),
-                            "number" => IslTypeRef::core_isl_type_from_type_name("number"),
-                            // TODO: add a match for document core type
                             _ => IslTypeRef::Named(type_name.to_owned()),
                         };
                         Ok(ion_type)
@@ -143,6 +84,84 @@ impl IslTypeRef {
         }
     }
 
+    /// Return TypeId for given built-in type name from type_store
+    fn get_type_id_from_built_in_type_name(
+        alias: &str,
+        type_store: &mut TypeStore,
+        pending_types: &mut PendingTypes,
+    ) -> IonSchemaResult<TypeId> {
+        use IonType::*;
+        let invalid_type_reference_error = unresolvable_schema_error_raw(format!(
+            "Could not resolve type reference: {:?} does not exist",
+            alias
+        ));
+
+        // verify if the given alias is a Built-in type and if it is then return the type id from type_store
+        // All Built-in types are preloaded into the type_store
+        // Built-in types includes all ion types and derived types like any, lob, text, number, $int, $float, ...
+        match alias {
+            "int" => type_store.get_builtin_type_id(&format!("{}", Integer)),
+            "float" => type_store.get_builtin_type_id(&format!("{}", Float)),
+            "decimal" => type_store.get_builtin_type_id(&format!("{}", Decimal)),
+            "timestamp" => type_store.get_builtin_type_id(&format!("{}", Timestamp)),
+            "string" => type_store.get_builtin_type_id(&format!("{}", String)),
+            "symbol" => type_store.get_builtin_type_id(&format!("{}", Symbol)),
+            "bool" => type_store.get_builtin_type_id(&format!("{}", Boolean)),
+            "blob" => type_store.get_builtin_type_id(&format!("{}", Blob)),
+            "clob" => type_store.get_builtin_type_id(&format!("{}", Clob)),
+            "sexp" => type_store.get_builtin_type_id(&format!("{}", SExpression)),
+            "list" => type_store.get_builtin_type_id(&format!("{}", List)),
+            "struct" => type_store.get_builtin_type_id(&format!("{}", Struct)),
+            "any" => type_store.get_builtin_type_id("any"),
+            "text" => type_store.get_builtin_type_id("text"),
+            "lob" => type_store.get_builtin_type_id("lob"),
+            "number" => type_store.get_builtin_type_id("number"),
+            "$int" => type_store.get_builtin_type_id(&format!("${}", Integer)),
+            "$float" => type_store.get_builtin_type_id(&format!("${}", Float)),
+            "$decimal" => type_store.get_builtin_type_id(&format!("${}", Decimal)),
+            "$timestamp" => type_store.get_builtin_type_id(&format!("${}", Timestamp)),
+            "$string" => type_store.get_builtin_type_id(&format!("${}", String)),
+            "$symbol" => type_store.get_builtin_type_id(&format!("${}", Symbol)),
+            "$bool" => type_store.get_builtin_type_id(&format!("${}", Boolean)),
+            "$blob" => type_store.get_builtin_type_id(&format!("${}", Blob)),
+            "$clob" => type_store.get_builtin_type_id(&format!("${}", Clob)),
+            "$sexp" => type_store.get_builtin_type_id(&format!("${}", SExpression)),
+            "$list" => type_store.get_builtin_type_id(&format!("${}", List)),
+            "$struct" => type_store.get_builtin_type_id(&format!("${}", Struct)),
+            "$any" => type_store.get_builtin_type_id("$any"),
+            "$text" => type_store.get_builtin_type_id("$text"),
+            "$lob" => type_store.get_builtin_type_id("$lob"),
+            "$number" => type_store.get_builtin_type_id("$number"),
+            // TODO: add a match for document builtin type
+            _ => {
+                // verify if the AliasType actually exists in the type_store or throw an error
+                match pending_types.get_type_id_by_name(alias, type_store) {
+                    Some(type_id) => Some(type_id.to_owned()),
+                    None => match pending_types.get_parent() {
+                        Some(parent) => {
+                            // if it is a self referencing type resolve it using parent information from type_store
+                            if parent.0.eq(alias) {
+                                Some(parent.1)
+                            } else {
+                                return unresolvable_schema_error(format!(
+                                    "Could not resolve type reference: {:?} does not exist",
+                                    alias
+                                ));
+                            }
+                        }
+                        None => {
+                            return unresolvable_schema_error(format!(
+                                "Could not resolve type reference: {:?} does not exist",
+                                alias
+                            ))
+                        }
+                    },
+                }
+            }
+        }
+        .ok_or(invalid_type_reference_error)
+    }
+
     // TODO: break match arms into helper methods as we add more constraints
     /// Resolves a type_reference into a [TypeId] using the type_store
     pub fn resolve_type_reference(
@@ -151,50 +170,11 @@ impl IslTypeRef {
         pending_types: &mut PendingTypes,
     ) -> IonSchemaResult<TypeId> {
         match type_reference {
-            IslTypeRef::CoreIsl(core_isl_type) => {
-                match core_isl_type {
-                    CoreIslType::IonType(ion_type) => Ok(pending_types.add_core_type(
-                        &CoreISLTypeDefinition::IonType(ion_type.to_owned()),
-                        type_store,
-                    )),
-                    CoreIslType::Other(isl_type) => {
-                        let type_id = pending_types.get_total_types();
-                        let type_def =
-                            CoreISLTypeDefinition::parse_from_isl_type_and_update_pending_types(
-                                isl_type,
-                                type_store,
-                                pending_types,
-                            )?;
-                        // get the last added anonymous type's type_id for given anonymous type
-                        Ok(type_id)
-                    }
-                }
-            }
             IslTypeRef::Named(alias) => {
-                // verify if the AliasType actually exists in the type_store or throw an error
-                match pending_types.get_type_id_by_name(alias, type_store) {
-                    Some(type_id) => Ok(type_id.to_owned()),
-                    None => match pending_types.get_parent() {
-                        Some(parent) => {
-                            // if it is a self referencing type resolve it using parent information from type_store
-                            if parent.0.eq(alias) {
-                                Ok(parent.1)
-                            } else {
-                                unresolvable_schema_error(format!(
-                                    "Could not resolve type reference: {:?} does not exist",
-                                    alias
-                                ))
-                            }
-                        }
-                        None => unresolvable_schema_error(format!(
-                            "Could not resolve type reference: {:?} does not exist",
-                            alias
-                        )),
-                    },
-                }
+                IslTypeRef::get_type_id_from_built_in_type_name(alias, type_store, pending_types)
             }
             IslTypeRef::Anonymous(isl_type) => {
-                let type_id = pending_types.get_total_types();
+                let type_id = pending_types.get_total_types(type_store);
                 let type_def = TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
                     isl_type,
                     type_store,

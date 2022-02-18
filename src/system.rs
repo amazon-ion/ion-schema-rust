@@ -7,9 +7,11 @@ use crate::result::{
     IonSchemaResult,
 };
 use crate::schema::Schema;
-use crate::types::{CoreISLTypeDefinition, TypeDefinition, TypeDefinitionImpl};
+use crate::types::{BuiltInTypeDefinition, TypeDefinition, TypeDefinitionImpl};
 use ion_rs::value::owned::{text_token, OwnedElement, OwnedSymbolToken};
+use ion_rs::value::reader::{element_reader, ElementReader};
 use ion_rs::value::{Element, Sequence, Struct};
+use ion_rs::IonType;
 use std::collections::HashMap;
 use std::io::ErrorKind;
 use std::rc::Rc;
@@ -29,7 +31,7 @@ use std::rc::Rc;
 /// [PendingTypes] can be promoted the [TypeStore].
 #[derive(Debug, Clone)]
 pub struct PendingTypes {
-    core_type_ids_by_name: HashMap<String, TypeId>,
+    builtin_type_ids_by_name: HashMap<String, TypeId>,
     ids_by_name: HashMap<String, TypeId>,
     parent: Option<(String, TypeId)>,
     types_by_id: Vec<Option<TypeDefinition>>, // a None in this vector represents a not-yet-resolved type
@@ -39,7 +41,7 @@ impl PendingTypes {
     pub fn new() -> Self {
         Self {
             parent: None,
-            core_type_ids_by_name: HashMap::new(),
+            builtin_type_ids_by_name: HashMap::new(),
             ids_by_name: HashMap::new(),
             types_by_id: Vec::new(),
         }
@@ -137,9 +139,9 @@ impl PendingTypes {
                             import_type_name
                         )
                     }
-                    TypeDefinition::Core(_) => {
+                    TypeDefinition::BuiltIn(_) => {
                         unreachable!(
-                            "The TypeDefinition for the imported type '{}' was a core type.",
+                            "The TypeDefinition for the imported type '{}' was a builtin type.",
                             import_type_name
                         )
                     }
@@ -153,9 +155,9 @@ impl PendingTypes {
                             import_type_name
                         )
                     }
-                    TypeDefinition::Core(_) => {
+                    TypeDefinition::BuiltIn(_) => {
                         unreachable!(
-                            "The TypeDefinition for the imported type '{}' was a core type.",
+                            "The TypeDefinition for the imported type '{}' was a builtin type.",
                             import_type_name
                         )
                     }
@@ -180,7 +182,7 @@ impl PendingTypes {
                 TypeDefinition::Anonymous(anonymous_type_def) => {
                     type_store.add_anonymous_type(anonymous_type_def)
                 }
-                TypeDefinition::Core(core_type) => type_store.add_core_type(&core_type),
+                TypeDefinition::BuiltIn(builtin_type) => type_store.add_builtin_type(&builtin_type),
             };
         }
         Ok(())
@@ -226,8 +228,8 @@ impl PendingTypes {
                 TypeDefinition::Anonymous(anonymous_type_def) => {
                     type_store.add_anonymous_type(anonymous_type_def);
                 }
-                TypeDefinition::Core(core_type) => {
-                    type_store.add_core_type(&core_type);
+                TypeDefinition::BuiltIn(builtin_type) => {
+                    type_store.add_builtin_type(&builtin_type);
                 }
             };
         }
@@ -235,8 +237,8 @@ impl PendingTypes {
     }
 
     /// Returns total number of types stored in the [TypeStore]
-    pub fn get_total_types(&self) -> usize {
-        self.types_by_id.len()
+    pub fn get_total_types(&self, type_store: &mut TypeStore) -> usize {
+        self.types_by_id.len() + type_store.types_by_id.len()
     }
 
     /// Provides the [TypeId] associated with given name if it exists in the [TypeStore] or [PendingTypes]  
@@ -271,29 +273,33 @@ impl PendingTypes {
         type_id + type_store.types_by_id.len()
     }
 
-    /// Adds the [CoreISLTypeDefinition] in the [PendingTypes] and returns the [TypeId] for it
+    /// Adds the [BuiltInTypeDefinition] in the [PendingTypes] and returns the [TypeId] for it
     /// If the given name already exists in the [TypeStore] or [PendingTypes] it returns the associated [TypeId]
-    pub fn add_core_type(
+    pub fn add_builtin_type(
         &mut self,
-        core_isl_type: &CoreISLTypeDefinition,
+        builtin_type_definition: &BuiltInTypeDefinition,
         type_store: &mut TypeStore,
     ) -> TypeId {
-        let core_type_name = match core_isl_type {
-            CoreISLTypeDefinition::IonType(ion_type) => format!("{}", ion_type),
-            CoreISLTypeDefinition::Other(other_type) => other_type.name().to_owned().unwrap(),
+        let builtin_type_name = match builtin_type_definition {
+            BuiltInTypeDefinition::Atomic(ion_type, is_nullable) => match is_nullable {
+                true => format!("${}", ion_type),
+                false => format!("{}", ion_type),
+            },
+            BuiltInTypeDefinition::Derived(other_type) => other_type.name().to_owned().unwrap(),
         };
 
-        if let Some(exists) = self.core_type_ids_by_name.get(&core_type_name) {
+        if let Some(exists) = self.builtin_type_ids_by_name.get(&builtin_type_name) {
             return exists.to_owned();
         }
-        if let Some(exists) = type_store.get_core_type_id(core_isl_type) {
+        if let Some(exists) = type_store.get_builtin_type_id(&builtin_type_name) {
             return exists.to_owned();
         }
         let type_id = self.types_by_id.len();
-        self.core_type_ids_by_name
-            .insert(core_type_name.to_owned(), type_id);
-        self.types_by_id
-            .push(Some(TypeDefinition::Core(core_isl_type.to_owned())));
+        self.builtin_type_ids_by_name
+            .insert(builtin_type_name.to_owned(), type_id);
+        self.types_by_id.push(Some(TypeDefinition::BuiltIn(
+            builtin_type_definition.to_owned(),
+        )));
         type_id + type_store.types_by_id.len()
     }
 
@@ -354,25 +360,94 @@ impl PendingTypes {
     }
 }
 
+/// Represents a hashmap of BuiltIn derived ISL types
+/// for more information: https://amzn.github.io/ion-schema/docs/spec.html#type-system
+static DERIVED_ISL_TYPES: [&str; 8] = [
+    "type::{ name: any, one_of: [ blob, bool, clob, decimal,
+                                    float, int, string, symbol, timestamp,
+                                    list, sexp, struct ] }",
+    "type::{ name: lob, one_of: [ blob, clob ] }",
+    "type::{ name: number, one_of: [ decimal, float, int ] }",
+    "type::{ name: text, one_of: [ string, symbol ] }",
+    "type::{ name: $any, one_of: [ $blob, $bool, $clob, $decimal,
+                                    $float, $int, $string, $symbol, $timestamp,
+                                    $list, $sexp, $struct ] }",
+    "type::{ name: $lob, one_of: [ $blob, $clob ] }",
+    "type::{ name: $number, one_of: [ $decimal, $float, $int ] }",
+    "type::{ name: $text, one_of: [ $string, $symbol ] }",
+];
+
 pub type TypeId = usize;
 
 /// Defines a cache that can be used to store resolved [Type]s of a [Schema]
 #[derive(Debug, Clone)]
 pub struct TypeStore {
-    core_type_ids_by_name: HashMap<String, TypeId>, // stores all the core types used within this schema
+    builtin_type_ids_by_name: HashMap<String, TypeId>, // stores all the builtin types used within this schema
     imported_type_ids_by_name: HashMap<String, TypeId>, // stores all the imported types of a schema
-    ids_by_name: HashMap<String, TypeId>,           // stores named types defined within the schema
+    ids_by_name: HashMap<String, TypeId>, // stores named types defined within the schema
     types_by_id: Vec<TypeDefinition>,
 }
 
 impl TypeStore {
-    pub fn new() -> Self {
-        Self {
-            core_type_ids_by_name: HashMap::new(),
+    pub fn new() -> IonSchemaResult<Self> {
+        let mut type_store = Self {
+            builtin_type_ids_by_name: HashMap::new(),
             imported_type_ids_by_name: HashMap::new(),
             ids_by_name: HashMap::new(),
             types_by_id: Vec::new(),
+        };
+        type_store.preload()?;
+        Ok(type_store)
+    }
+
+    /// Preloads all [builtin isl types] into the TypeStore
+    /// [builtin isl types]: https://amzn.github.io/ion-schema/docs/spec.html#type-system
+    pub fn preload(&mut self) -> IonSchemaResult<()> {
+        // add all ion types to the type store
+        // TODO: this array can be turned into an iterator implementation in ion-rust for IonType
+        use IonType::*;
+        let built_in_atomic_types: [IonType; 12] = [
+            Integer,
+            Float,
+            Decimal,
+            Timestamp,
+            String,
+            Symbol,
+            Boolean,
+            Blob,
+            Clob,
+            SExpression,
+            List,
+            Struct,
+        ];
+        // add all the atomic ion types that doesn't allow nulls [type_ids: 0 - 11]
+        for atomic_type in built_in_atomic_types {
+            self.add_builtin_type(&BuiltInTypeDefinition::Atomic(
+                atomic_type.to_owned(),
+                false,
+            ));
         }
+
+        // add all the atomic ion types that allows nulls [type_ids: 12 - 23]
+        for atomic_type in built_in_atomic_types {
+            self.add_builtin_type(&BuiltInTypeDefinition::Atomic(atomic_type.to_owned(), true));
+        }
+
+        // get the derived built in types map and related text value for given type_name [type_ids: 24 - 31]
+        let pending_types = &mut PendingTypes::new();
+        for text in DERIVED_ISL_TYPES {
+            let isl_type = IslTypeImpl::from_owned_element(
+                &element_reader()
+                    .read_one(text.as_bytes())
+                    .expect("parsing failed unexpectedly"),
+                &mut vec![],
+            )
+            .unwrap();
+            let type_def =
+                BuiltInTypeDefinition::parse_from_isl_type(&isl_type, self, pending_types)?;
+            self.add_builtin_type(&type_def);
+        }
+        Ok(())
     }
 
     /// Returns [TypeId]s stored in the [TypeStore] to be used by [SchemaTypeIterator]
@@ -406,14 +481,12 @@ impl TypeStore {
             .or_else(|| self.imported_type_ids_by_name.get(name))
     }
 
-    /// Provides the [TypeId] associated with given [CoreISLTypeDefinition] if it exists in the [TypeStore]  
+    /// Provides the [TypeId] associated with given type name if it exists in the [TypeStore]  
     /// Otherwise returns None
-    pub fn get_core_type_id(&self, core_isl_type: &CoreISLTypeDefinition) -> Option<&TypeId> {
-        let core_type_name = match core_isl_type {
-            CoreISLTypeDefinition::IonType(ion_type) => format!("{}", ion_type),
-            CoreISLTypeDefinition::Other(other_type) => other_type.name().to_owned().unwrap(),
-        };
-        self.core_type_ids_by_name.get(&core_type_name)
+    pub fn get_builtin_type_id(&self, type_name: &str) -> Option<TypeId> {
+        self.builtin_type_ids_by_name
+            .get(type_name)
+            .and_then(|t| Some(t.to_owned()))
     }
 
     /// Provides the [Type] associated with given [TypeId] if it exists in the [TypeStore]  
@@ -435,22 +508,25 @@ impl TypeStore {
         type_id
     }
 
-    /// Adds the [CoreISLTypeDefinition] in the [TypeStore] and returns the [TypeId] for it
+    /// Adds the [BuiltInTypeDefinition] in the [TypeStore] and returns the [TypeId] for it
     /// If the name already exists in the [TypeStore] it returns the associated [TypeId]
-    pub fn add_core_type(&mut self, core_isl_type: &CoreISLTypeDefinition) -> TypeId {
-        let core_type_name = match core_isl_type {
-            CoreISLTypeDefinition::IonType(ion_type) => format!("{}", ion_type),
-            CoreISLTypeDefinition::Other(other_type) => other_type.name().to_owned().unwrap(),
+    pub fn add_builtin_type(&mut self, builtin_type_definition: &BuiltInTypeDefinition) -> TypeId {
+        let builtin_type_name = match builtin_type_definition {
+            BuiltInTypeDefinition::Atomic(ion_type, is_nullable) => match is_nullable {
+                true => format!("${}", ion_type),
+                false => format!("{}", ion_type),
+            },
+            BuiltInTypeDefinition::Derived(other_type) => other_type.name().to_owned().unwrap(),
         };
 
-        if let Some(exists) = self.core_type_ids_by_name.get(&core_type_name) {
+        if let Some(exists) = self.builtin_type_ids_by_name.get(&builtin_type_name) {
             return exists.to_owned();
         }
         let type_id = self.types_by_id.len();
-        self.core_type_ids_by_name
-            .insert(core_type_name.to_owned(), type_id);
+        self.builtin_type_ids_by_name
+            .insert(builtin_type_name.to_owned(), type_id);
         self.types_by_id
-            .push(TypeDefinition::Core(core_isl_type.to_owned()));
+            .push(TypeDefinition::BuiltIn(builtin_type_definition.to_owned()));
         type_id
     }
 
@@ -504,7 +580,7 @@ impl Resolver {
         isl_types: B,
     ) -> IonSchemaResult<Schema> {
         // create type_store and pending types which will be used to create type definition
-        let type_store = &mut TypeStore::new();
+        let type_store = &mut TypeStore::new()?;
         let pending_types = &mut PendingTypes::new();
         for isl_type in isl_types.into() {
             // convert [IslType] into [TypeDefinition]
@@ -693,7 +769,7 @@ impl SchemaSystem {
     /// until one successfully resolves it.
     /// If an Authority throws an exception, resolution silently proceeds to the next Authority.
     pub fn load_schema<A: AsRef<str>>(&mut self, id: A) -> IonSchemaResult<Rc<Schema>> {
-        self.resolver.load_schema(id, &mut TypeStore::new(), None)
+        self.resolver.load_schema(id, &mut TypeStore::new()?, None)
     }
 
     /// Returns authorities associated with this [SchemaSystem]
@@ -1046,14 +1122,14 @@ mod schema_system_tests {
     }
 
     #[test]
-    fn schema_system_map_authority_with_isl_core_types() {
+    fn schema_system_map_authority_with_isl_builtin_derived_types() {
         // map with (id, ion content)
         let map_authority = [
             (
                 "sample.isl",
                 r#"
                     schema_header::{
-                      imports: [ { id: "sample_core_types.isl" } ],
+                      imports: [ { id: "sample_builtin_types.isl" } ],
                     }
                     
                     type::{
@@ -1075,7 +1151,7 @@ mod schema_system_tests {
                 "#,
             ),
             (
-                "sample_core_types.isl",
+                "sample_builtin_types.isl",
                 r#"
                     schema_header::{
                       imports: [],
@@ -1089,6 +1165,69 @@ mod schema_system_tests {
                     type::{
                         name: my_lob,
                         type: lob,
+                    }
+                    
+                    schema_footer::{
+                    }
+                "#,
+            ),
+        ];
+        let mut schema_system =
+            SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
+        // verify if the schema loads without any errors
+        let schema = schema_system.load_schema("sample.isl");
+        assert_eq!(true, schema.is_ok());
+    }
+
+    #[test]
+    fn schema_system_map_authority_with_isl_builtin_derived_nullable_types() {
+        // map with (id, ion content)
+        let map_authority = [
+            (
+                "sample.isl",
+                r#"
+                    schema_header::{
+                      imports: [ { id: "sample_builtin_nullable_types.isl" } ],
+                    }
+                    
+                    type::{
+                        name: my_number,
+                        type: $number,
+                    }
+                    
+                    type::{
+                        name: my_any,
+                        type: $any,
+                    }
+                    
+                    type::{
+                      name: my_type,
+                      one_of: [
+                        my_number,
+                        my_text,
+                        my_lob
+                      ],
+                    }
+                    
+                    schema_footer::{
+                    }
+                "#,
+            ),
+            (
+                "sample_builtin_nullable_types.isl",
+                r#"
+                    schema_header::{
+                      imports: [],
+                    }
+                    
+                    type::{
+                      name: my_text,
+                      type: $text,
+                    }
+                    
+                    type::{
+                        name: my_lob,
+                        type: $lob,
                     }
                     
                     schema_footer::{
