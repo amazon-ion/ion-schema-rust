@@ -2,8 +2,7 @@ use crate::isl::isl_constraint::IslConstraint;
 use crate::isl::isl_import::{IslImport, IslImportType};
 use crate::isl::isl_type::IslTypeImpl;
 use crate::result::{
-    invalid_schema_error, invalid_schema_error_raw, unresolvable_schema_error,
-    unresolvable_schema_error_raw, IonSchemaResult,
+    invalid_schema_error, invalid_schema_error_raw, unresolvable_schema_error, IonSchemaResult,
 };
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::types::TypeDefinitionImpl;
@@ -90,76 +89,29 @@ impl IslTypeRef {
         type_store: &mut TypeStore,
         pending_types: &mut PendingTypes,
     ) -> IonSchemaResult<TypeId> {
-        use IonType::*;
-        let invalid_type_reference_error = unresolvable_schema_error_raw(format!(
+        let invalid_type_reference_error = unresolvable_schema_error(format!(
             "Could not resolve type reference: {:?} does not exist",
             alias
         ));
 
-        // verify if the given alias is a Built-in type and if it is then return the type id from type_store
-        // All Built-in types are preloaded into the type_store
-        // Built-in types includes all ion types and derived types like any, lob, text, number, $int, $float, ...
-        match alias {
-            "int" => type_store.get_builtin_type_id(&format!("{}", Integer)),
-            "float" => type_store.get_builtin_type_id(&format!("{}", Float)),
-            "decimal" => type_store.get_builtin_type_id(&format!("{}", Decimal)),
-            "timestamp" => type_store.get_builtin_type_id(&format!("{}", Timestamp)),
-            "string" => type_store.get_builtin_type_id(&format!("{}", String)),
-            "symbol" => type_store.get_builtin_type_id(&format!("{}", Symbol)),
-            "bool" => type_store.get_builtin_type_id(&format!("{}", Boolean)),
-            "blob" => type_store.get_builtin_type_id(&format!("{}", Blob)),
-            "clob" => type_store.get_builtin_type_id(&format!("{}", Clob)),
-            "sexp" => type_store.get_builtin_type_id(&format!("{}", SExpression)),
-            "list" => type_store.get_builtin_type_id(&format!("{}", List)),
-            "struct" => type_store.get_builtin_type_id(&format!("{}", Struct)),
-            "any" => type_store.get_builtin_type_id("any"),
-            "text" => type_store.get_builtin_type_id("text"),
-            "lob" => type_store.get_builtin_type_id("lob"),
-            "number" => type_store.get_builtin_type_id("number"),
-            "$int" => type_store.get_builtin_type_id(&format!("${}", Integer)),
-            "$float" => type_store.get_builtin_type_id(&format!("${}", Float)),
-            "$decimal" => type_store.get_builtin_type_id(&format!("${}", Decimal)),
-            "$timestamp" => type_store.get_builtin_type_id(&format!("${}", Timestamp)),
-            "$string" => type_store.get_builtin_type_id(&format!("${}", String)),
-            "$symbol" => type_store.get_builtin_type_id(&format!("${}", Symbol)),
-            "$bool" => type_store.get_builtin_type_id(&format!("${}", Boolean)),
-            "$blob" => type_store.get_builtin_type_id(&format!("${}", Blob)),
-            "$clob" => type_store.get_builtin_type_id(&format!("${}", Clob)),
-            "$sexp" => type_store.get_builtin_type_id(&format!("${}", SExpression)),
-            "$list" => type_store.get_builtin_type_id(&format!("${}", List)),
-            "$struct" => type_store.get_builtin_type_id(&format!("${}", Struct)),
-            "$any" => type_store.get_builtin_type_id("$any"),
-            "$text" => type_store.get_builtin_type_id("$text"),
-            "$lob" => type_store.get_builtin_type_id("$lob"),
-            "$number" => type_store.get_builtin_type_id("$number"),
-            // TODO: add a match for document builtin type
-            _ => {
-                // verify if the AliasType actually exists in the type_store or throw an error
-                match pending_types.get_type_id_by_name(alias, type_store) {
-                    Some(type_id) => Some(type_id.to_owned()),
-                    None => match pending_types.get_parent() {
-                        Some(parent) => {
-                            // if it is a self referencing type resolve it using parent information from type_store
-                            if parent.0.eq(alias) {
-                                Some(parent.1)
-                            } else {
-                                return unresolvable_schema_error(format!(
-                                    "Could not resolve type reference: {:?} does not exist",
-                                    alias
-                                ));
-                            }
-                        }
-                        None => {
-                            return unresolvable_schema_error(format!(
-                                "Could not resolve type reference: {:?} does not exist",
-                                alias
-                            ))
-                        }
-                    },
-                }
+        return if let Some(type_id) = type_store.get_builtin_type_id(alias) {
+            // verify if the given alias is a Built-in type and if it is then return the type id from type_store
+            // All Built-in types are preloaded into the type_store
+            // Built-in types includes all ion types and derived types like any, lob, text, number, $int, $float, ...
+            Ok(type_id)
+        } else if let Some(type_id) = pending_types.get_type_id_by_name(alias, type_store) {
+            // verify if the AliasType actually exists in the type_store or throw an error
+            Ok(type_id)
+        } else if let Some(parent) = pending_types.get_parent() {
+            // if it is a self referencing type resolve it using parent information from type_store
+            if parent.0.eq(alias) {
+                Ok(parent.1)
+            } else {
+                invalid_type_reference_error
             }
-        }
-        .ok_or(invalid_type_reference_error)
+        } else {
+            invalid_type_reference_error
+        };
     }
 
     // TODO: break match arms into helper methods as we add more constraints

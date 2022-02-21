@@ -50,7 +50,7 @@ impl fmt::Display for Violation {
 #[derive(Debug, Clone)]
 pub enum ViolationCode {
     NoTypesMatched,
-    InvalidNull,
+    InvalidNull, // if the value is a null for type references that doesn't allow null
     MoreThanOneTypeMatched,
     TypeMatched,
     AllTypesNotMatched,

@@ -402,6 +402,7 @@ impl TypeStore {
 
     /// Preloads all [builtin isl types] into the TypeStore
     /// [builtin isl types]: https://amzn.github.io/ion-schema/docs/spec.html#type-system
+    /// TODO: add document builtin type
     pub fn preload(&mut self) -> IonSchemaResult<()> {
         // add all ion types to the type store
         // TODO: this array can be turned into an iterator implementation in ion-rust for IonType
@@ -484,6 +485,13 @@ impl TypeStore {
     /// Provides the [TypeId] associated with given type name if it exists in the [TypeStore]  
     /// Otherwise returns None
     pub fn get_builtin_type_id(&self, type_name: &str) -> Option<TypeId> {
+        let type_name = match type_name {
+            "int" => "integer",
+            "bool" => "boolean",
+            "$int" => "$integer",
+            "$bool" => "$boolean",
+            _ => type_name,
+        };
         self.builtin_type_ids_by_name
             .get(type_name)
             .and_then(|t| Some(t.to_owned()))
