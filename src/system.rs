@@ -7,7 +7,7 @@ use crate::result::{
     IonSchemaResult,
 };
 use crate::schema::Schema;
-use crate::types::{BuiltInTypeDefinition, TypeDefinition, TypeDefinitionImpl};
+use crate::types::{BuiltInTypeDefinition, Nullability, TypeDefinition, TypeDefinitionImpl};
 use ion_rs::value::owned::{text_token, OwnedElement, OwnedSymbolToken};
 use ion_rs::value::reader::{element_reader, ElementReader};
 use ion_rs::value::{Element, Sequence, Struct};
@@ -282,8 +282,8 @@ impl PendingTypes {
     ) -> TypeId {
         let builtin_type_name = match builtin_type_definition {
             BuiltInTypeDefinition::Atomic(ion_type, is_nullable) => match is_nullable {
-                true => format!("${}", ion_type),
-                false => format!("{}", ion_type),
+                Nullability::Nullable => format!("${}", ion_type),
+                Nullability::NotNullable => format!("{}", ion_type),
             },
             BuiltInTypeDefinition::Derived(other_type) => other_type.name().to_owned().unwrap(),
         };
@@ -360,7 +360,7 @@ impl PendingTypes {
     }
 }
 
-/// Represents a hashmap of BuiltIn derived ISL types
+/// Represents an array of BuiltIn derived ISL types
 /// for more information: https://amzn.github.io/ion-schema/docs/spec.html#type-system
 static DERIVED_ISL_TYPES: [&str; 8] = [
     "type::{ name: any, one_of: [ blob, bool, clob, decimal,
@@ -389,15 +389,17 @@ pub struct TypeStore {
 }
 
 impl TypeStore {
-    pub fn new() -> IonSchemaResult<Self> {
+    pub fn new() -> Self {
         let mut type_store = Self {
             builtin_type_ids_by_name: HashMap::new(),
             imported_type_ids_by_name: HashMap::new(),
             ids_by_name: HashMap::new(),
             types_by_id: Vec::new(),
         };
-        type_store.preload()?;
-        Ok(type_store)
+        type_store
+            .preload()
+            .expect("The type store didn't preload with built-in types correctly");
+        type_store
     }
 
     /// Preloads all [builtin isl types] into the TypeStore
@@ -425,13 +427,16 @@ impl TypeStore {
         for atomic_type in built_in_atomic_types {
             self.add_builtin_type(&BuiltInTypeDefinition::Atomic(
                 atomic_type.to_owned(),
-                false,
+                Nullability::NotNullable,
             ));
         }
 
         // add all the atomic ion types that allows nulls [type_ids: 12 - 23]
         for atomic_type in built_in_atomic_types {
-            self.add_builtin_type(&BuiltInTypeDefinition::Atomic(atomic_type.to_owned(), true));
+            self.add_builtin_type(&BuiltInTypeDefinition::Atomic(
+                atomic_type.to_owned(),
+                Nullability::Nullable,
+            ));
         }
 
         // get the derived built in types map and related text value for given type_name [type_ids: 24 - 31]
@@ -521,8 +526,8 @@ impl TypeStore {
     pub fn add_builtin_type(&mut self, builtin_type_definition: &BuiltInTypeDefinition) -> TypeId {
         let builtin_type_name = match builtin_type_definition {
             BuiltInTypeDefinition::Atomic(ion_type, is_nullable) => match is_nullable {
-                true => format!("${}", ion_type),
-                false => format!("{}", ion_type),
+                Nullability::Nullable => format!("${}", ion_type),
+                Nullability::NotNullable => format!("{}", ion_type),
             },
             BuiltInTypeDefinition::Derived(other_type) => other_type.name().to_owned().unwrap(),
         };
@@ -588,7 +593,7 @@ impl Resolver {
         isl_types: B,
     ) -> IonSchemaResult<Schema> {
         // create type_store and pending types which will be used to create type definition
-        let type_store = &mut TypeStore::new()?;
+        let type_store = &mut TypeStore::new();
         let pending_types = &mut PendingTypes::new();
         for isl_type in isl_types.into() {
             // convert [IslType] into [TypeDefinition]
@@ -777,7 +782,7 @@ impl SchemaSystem {
     /// until one successfully resolves it.
     /// If an Authority throws an exception, resolution silently proceeds to the next Authority.
     pub fn load_schema<A: AsRef<str>>(&mut self, id: A) -> IonSchemaResult<Rc<Schema>> {
-        self.resolver.load_schema(id, &mut TypeStore::new()?, None)
+        self.resolver.load_schema(id, &mut TypeStore::new(), None)
     }
 
     /// Returns authorities associated with this [SchemaSystem]

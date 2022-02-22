@@ -89,12 +89,7 @@ impl IslTypeRef {
         type_store: &mut TypeStore,
         pending_types: &mut PendingTypes,
     ) -> IonSchemaResult<TypeId> {
-        let invalid_type_reference_error = unresolvable_schema_error(format!(
-            "Could not resolve type reference: {:?} does not exist",
-            alias
-        ));
-
-        return if let Some(type_id) = type_store.get_builtin_type_id(alias) {
+        if let Some(type_id) = type_store.get_builtin_type_id(alias) {
             // verify if the given alias is a Built-in type and if it is then return the type id from type_store
             // All Built-in types are preloaded into the type_store
             // Built-in types includes all ion types and derived types like any, lob, text, number, $int, $float, ...
@@ -107,11 +102,17 @@ impl IslTypeRef {
             if parent.0.eq(alias) {
                 Ok(parent.1)
             } else {
-                invalid_type_reference_error
+                unresolvable_schema_error(format!(
+                    "Could not resolve type reference: {:?} does not exist",
+                    alias
+                ))
             }
         } else {
-            invalid_type_reference_error
-        };
+            unresolvable_schema_error(format!(
+                "Could not resolve type reference: {:?} does not exist",
+                alias
+            ))
+        }
     }
 
     // TODO: break match arms into helper methods as we add more constraints

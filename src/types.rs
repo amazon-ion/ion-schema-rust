@@ -40,8 +40,8 @@ impl TypeRef {
             TypeDefinition::Anonymous(anonymous_type) => "".to_owned(),
             TypeDefinition::BuiltIn(builtin_isl_type) => match builtin_isl_type {
                 BuiltInTypeDefinition::Atomic(ion_type, is_nullable) => match is_nullable {
-                    true => format!("${}", ion_type),
-                    false => format!("{}", ion_type),
+                    Nullability::Nullable => format!("${}", ion_type),
+                    Nullability::NotNullable => format!("{}", ion_type),
                 },
                 BuiltInTypeDefinition::Derived(other_type) => other_type.name().to_owned().unwrap(),
             },
@@ -66,8 +66,15 @@ impl TypeRef {
 /// Represents a [BuiltInTypeDefinition] which stores a resolved builtin ISl type using [TypeStore]
 #[derive(Debug, Clone, PartialEq)]
 pub enum BuiltInTypeDefinition {
-    Atomic(IonType, bool), // bool represents if the atomic ion type is nullable or not
+    Atomic(IonType, Nullability),
     Derived(TypeDefinitionImpl),
+}
+
+/// Represents whether an atomic built-in type is nullable or not
+#[derive(Debug, Clone, PartialEq)]
+pub enum Nullability {
+    Nullable,
+    NotNullable,
 }
 
 impl BuiltInTypeDefinition {
@@ -142,7 +149,7 @@ impl TypeValidator for TypeDefinition {
             TypeDefinition::Anonymous(anonymous_type) => anonymous_type.validate(value, type_store),
             TypeDefinition::BuiltIn(built_in_type) => match built_in_type {
                 BuiltInTypeDefinition::Atomic(ion_type, is_nullable) => {
-                    if !*is_nullable && value.is_null() {
+                    if *is_nullable == Nullability::NotNullable && value.is_null() {
                         return Err(Violation::new(
                             "type_constraint",
                             ViolationCode::InvalidNull,
@@ -369,7 +376,7 @@ mod type_definition_tests {
     )]
     fn isl_type_to_type_definition(isl_type: IslType, type_def: TypeDefinition) {
         // assert if both the TypeDefinition are same in terms of constraints and name
-        let type_store = &mut TypeStore::new().unwrap();
+        let type_store = &mut TypeStore::new();
         let pending_types = &mut PendingTypes::new();
         let this_type_def = match isl_type {
             IslType::Named(named_isl_type) => TypeDefinition::Named(

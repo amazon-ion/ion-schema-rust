@@ -117,7 +117,7 @@ mod schema_tests {
     fn load_schema_from_text(text: &str) -> Rc<Schema> {
         let owned_elements = load(text).into_iter();
         // create a type_store and resolver instance to be used for loading OwnedElements as schema
-        let type_store = &mut TypeStore::new().unwrap();
+        let type_store = &mut TypeStore::new();
         let mut resolver = Resolver::new(vec![]);
 
         // create a isl from owned_elements and create a schema from isl
@@ -203,7 +203,7 @@ mod schema_tests {
         total_types: usize,
     ) {
         // create a type_store and resolver instance to be used for loading OwnedElements as schema
-        let type_store = &mut TypeStore::new().unwrap();
+        let type_store = &mut TypeStore::new();
         let mut resolver = Resolver::new(vec![]);
 
         // create a isl from owned_elements and verifies if the result is `ok`
