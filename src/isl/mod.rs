@@ -38,7 +38,7 @@
 //!         vec![
 //!             // represents the `type: int` constraint
 //!             IslConstraint::type_constraint(
-//!                 IslTypeRef::core(IonType::Integer)
+//!                 IslTypeRef::named("int")
 //!             ),
 //!             // represents `all_of` with anonymous type `{ type: bool }` constraint
 //!             IslConstraint::all_of(
@@ -46,7 +46,7 @@
 //!                     IslTypeRef::anonymous(
 //!                         vec![
 //!                             IslConstraint::type_constraint(
-//!                                 IslTypeRef::core(IonType::Boolean)
+//!                                 IslTypeRef::named("bool")
 //!                             )
 //!                         ]
 //!                     )
@@ -135,7 +135,6 @@ mod isl_tests {
     use ion_rs::value::reader::element_reader;
     use ion_rs::value::reader::ElementReader;
     use ion_rs::value::AnyInt;
-    use ion_rs::IonType;
     use rstest::*;
 
     // helper function to create NamedIslType for isl tests
@@ -168,15 +167,21 @@ mod isl_tests {
     isl_type1,isl_type2,
     case::type_constraint_with_anonymous_type(
         load_anonymous_type(r#" // For a schema with single anonymous type
-                {type: int}
+                {type: any}
             "#),
-        IslType::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer))])
+        IslType::anonymous([IslConstraint::type_constraint(IslTypeRef::named("any"))])
     ),
     case::type_constraint_with_named_type(
         load_named_type(r#" // For a schema with named type
                 type:: { name: my_int, type: int }
             "#),
-        IslType::named("my_int", [IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer))])
+        IslType::named("my_int", [IslConstraint::type_constraint(IslTypeRef::named("int"))])
+    ),
+    case::type_constraint_with_named_nullable_type(
+        load_named_type(r#" // For a schema with named type
+                type:: { name: my_nullable_int, type: $int }
+            "#),
+        IslType::named("my_nullable_int", [IslConstraint::type_constraint(IslTypeRef::named("$int"))])
     ),
     case::type_constraint_with_self_reference_type(
         load_named_type(r#" // For a schema with self reference type
@@ -194,43 +199,43 @@ mod isl_tests {
         load_named_type(r#" // For a schema with nested types
                 type:: { name: my_int, type: { type: int } }
             "#),
-        IslType::named("my_int", [IslConstraint::type_constraint(IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer))]))])
+        IslType::named("my_int", [IslConstraint::type_constraint(IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("int"))]))])
     ),
     case::type_constraint_with_nested_multiple_types(
         load_named_type(r#" // For a schema with nested multiple types
                 type:: { name: my_int, type: { type: int }, type: { type: my_int } }
             "#),
-        IslType::named("my_int", [IslConstraint::type_constraint(IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer))])), IslConstraint::type_constraint(IslTypeRef::anonymous([IslConstraint::Type(IslTypeRef::named("my_int"))]))])
+        IslType::named("my_int", [IslConstraint::type_constraint(IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("int"))])), IslConstraint::type_constraint(IslTypeRef::anonymous([IslConstraint::Type(IslTypeRef::named("my_int"))]))])
     ),
     case::all_of_constraint(
         load_anonymous_type(r#" // For a schema with all_of type as below:
                 { all_of: [{ type: int }] }
             "#),
-        IslType::anonymous([IslConstraint::all_of([IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer))])])])
+        IslType::anonymous([IslConstraint::all_of([IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("int"))])])])
     ),
     case::any_of_constraint(
         load_anonymous_type(r#" // For a schema with any_of constraint as below:
                     { any_of: [{ type: int }, { type: decimal }] }
                 "#),
-        IslType::anonymous([IslConstraint::any_of([IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer))]), IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Decimal))])])])
+        IslType::anonymous([IslConstraint::any_of([IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("int"))]), IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("decimal"))])])])
     ),
     case::one_of_constraint(
         load_anonymous_type(r#" // For a schema with one_of constraint as below:
                     { one_of: [{ type: int }, { type: decimal }] }
                 "#),
-        IslType::anonymous([IslConstraint::one_of([IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer))]), IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Decimal))])])])
+        IslType::anonymous([IslConstraint::one_of([IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("int"))]), IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("decimal"))])])])
     ),
     case::not_constraint(
         load_anonymous_type(r#" // For a schema with not constraint as below:
                     { not: { type: int } }
                 "#),
-        IslType::anonymous([IslConstraint::not(IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer))]))])
+        IslType::anonymous([IslConstraint::not(IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("int"))]))])
     ),
     case::ordered_elements_constraint(
         load_anonymous_type(r#" // For a schema with ordered_elements constraint as below:
                     { ordered_elements: [  symbol, { type: int, occurs: optional },  ] }
                 "#),
-        IslType::anonymous([IslConstraint::ordered_elements([IslTypeRef::core(IonType::Symbol), IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::core(IonType::Integer)), IslConstraint::Occurs(IslOccurs::Optional)])])])
+        IslType::anonymous([IslConstraint::ordered_elements([IslTypeRef::named("symbol"), IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("int")), IslConstraint::Occurs(IslOccurs::Optional)])])])
     ),
     )]
     fn owned_struct_to_isl_type(isl_type1: IslType, isl_type2: IslType) {

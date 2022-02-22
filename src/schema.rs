@@ -51,7 +51,7 @@ impl Schema {
     }
 
     /// Returns an iterator over the types in this schema.
-    /// This includes the core types and named types defined within this schema.
+    /// This includes the builtin types and named types defined within this schema.
     pub fn get_types(&self) -> SchemaTypeIterator {
         SchemaTypeIterator::new(Rc::clone(&self.types), self.types.get_types())
     }
@@ -132,7 +132,7 @@ mod schema_tests {
     owned_elements, total_types,
     case::type_constraint_with_named_type(
         load(r#" // For a schema with named type as below:
-            type:: { name: my_int, type: int }
+            type:: { name: my_type, type: any }
         "#).into_iter(),
         1 // this includes the named type my_int
     ),
@@ -221,7 +221,7 @@ mod schema_tests {
     }
 
     #[rstest(
-        valid_values, invalid_values, schema,
+        valid_values, invalid_values, schema, type_name,
         case::type_constraint(
             load(r#"
                 5
@@ -236,6 +236,44 @@ mod schema_tests {
             load_schema_from_text(r#" // For a schema with named type as below: 
                 type:: { name: my_int, type: int }
             "#),
+            "my_int"
+        ),
+        case::nullable_atomic_type_constraint(
+            load(r#"
+                5
+                0
+                -2
+                null.int
+            "#),
+            load(r#"
+                false
+                "hello"
+                5.4
+            "#),
+            load_schema_from_text(r#" // For a schema with named type as below: 
+                type:: { name: my_nullable_int, type: $int }
+            "#),
+            "my_nullable_int"
+        ),
+        case::nullable_derived_type_constraint(
+            load(r#"
+                "hello"
+                hello
+                null.string
+                null.symbol
+            "#),
+            load(r#"
+                false
+                5
+                null.int
+                null.decimal
+                null.null
+                5.4
+            "#),
+            load_schema_from_text(r#" // For a schema with named type as below: 
+                    type:: { name: my_nullable_text, type: $text }
+                "#),
+            "my_nullable_text"
         ),
         case::not_constraint(
             load(r#"
@@ -252,6 +290,7 @@ mod schema_tests {
             load_schema_from_text(r#" // For a schema with not constraint as below: 
                 type:: { name: not_type, not: { type: int } }
             "#),
+            "not_type"
         ),
         case::one_of_constraint(
             load(r#"
@@ -264,10 +303,12 @@ mod schema_tests {
                 false
                 "hello"
                 hey
+                null.int
             "#),
             load_schema_from_text(r#" // For a schema with one_of constraint as below: 
                 type:: { name: one_of_type, one_of: [int, decimal] }
             "#),
+            "one_of_type"
         ),
         // TODO: add a test case for all_of constraint
         case::any_of_constraint(
@@ -284,14 +325,16 @@ mod schema_tests {
             load_schema_from_text(r#" // For a schema with any_of constraint as below: 
                 type:: { name: any_of_type, any_of: [int, decimal, bool] }
             "#),
+            "any_of_type"
         ),
     )]
     fn type_validation(
         valid_values: Vec<OwnedElement>,
         invalid_values: Vec<OwnedElement>,
         schema: Rc<Schema>,
+        type_name: &str,
     ) {
-        let type_ref: TypeRef = schema.get_types().next().expect("Loaded schema was empty.");
+        let type_ref: TypeRef = schema.get_type(type_name).unwrap();
         // check for validation without any violations
         for valid_value in valid_values.iter() {
             // there is only a single type in each schema defined above hence validate with that type
