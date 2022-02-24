@@ -78,12 +78,7 @@ impl IslTypeImpl {
             None => None, // If there is no name field then it is an anonymous type
         };
 
-        if contains_annotations && type_name.is_none() {
-            // If a named type doesn't have name field return an error
-            return Err(invalid_schema_error_raw(
-                "Top level types must have a name field in its definition",
-            ));
-        } else if !contains_annotations && type_name.is_some() {
+        if !contains_annotations && type_name.is_some() {
             // For named types if it does not have the `type::` annotation return an error
             return Err(invalid_schema_error_raw(
                 "Top level types must have `type::` annotation in their definition",

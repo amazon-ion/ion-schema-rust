@@ -42,6 +42,11 @@ impl IslTypeRef {
     ) -> IonSchemaResult<Self> {
         match value.ion_type() {
             IonType::Symbol => {
+                if value.is_null() {
+                    return invalid_schema_error(
+                        "a base or alias type reference can not be null.symbol",
+                    )
+                }
                 value.as_sym().unwrap()
                     .text()
                     .ok_or_else(|| {
@@ -50,13 +55,15 @@ impl IslTypeRef {
                         )
                     })
                     .and_then(|type_name| {
-                        let ion_type = match type_name {
-                            _ => IslTypeRef::Named(type_name.to_owned()),
-                        };
-                        Ok(ion_type)
+                        Ok(IslTypeRef::Named(type_name.to_owned()))
                     })
             }
             IonType::Struct => {
+                if value.is_null() {
+                    return invalid_schema_error(
+                        "a base or alias type reference can not be null.struct",
+                    )
+                }
                 let value_struct = try_to!(value.as_struct());
                 // if the struct doesn't have an id field then it must be an anonymous type
                 if value_struct.get("id").is_none() {

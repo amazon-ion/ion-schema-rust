@@ -64,6 +64,7 @@ impl IslConstraint {
                 let types: Vec<IslTypeRef> = IslConstraint::isl_type_references_from_ion_element(
                     value,
                     inline_imported_types,
+                    "all_of",
                 )?;
                 Ok(IslConstraint::AllOf(types))
             }
@@ -71,6 +72,7 @@ impl IslConstraint {
                 let types: Vec<IslTypeRef> = IslConstraint::isl_type_references_from_ion_element(
                     value,
                     inline_imported_types,
+                    "any_of",
                 )?;
                 Ok(IslConstraint::AnyOf(types))
             }
@@ -78,6 +80,7 @@ impl IslConstraint {
                 let types: Vec<IslTypeRef> = IslConstraint::isl_type_references_from_ion_element(
                     value,
                     inline_imported_types,
+                    "one_of",
                 )?;
                 Ok(IslConstraint::OneOf(types))
             }
@@ -108,6 +111,7 @@ impl IslConstraint {
                 let types: Vec<IslTypeRef> = IslConstraint::isl_type_references_from_ion_element(
                     value,
                     inline_imported_types,
+                    "ordered_elements",
                 )?;
                 Ok(IslConstraint::OrderedElements(types))
             }
@@ -127,11 +131,19 @@ impl IslConstraint {
     fn isl_type_references_from_ion_element(
         value: &OwnedElement,
         inline_imported_types: &mut Vec<IslImportType>,
+        constraint_name: &str,
     ) -> IonSchemaResult<Vec<IslTypeRef>> {
         //TODO: create a method/macro for this ion type check which can be reused
+        if value.is_null() {
+            return Err(invalid_schema_error_raw(format!(
+                "{} constraint was a null instead of a list",
+                constraint_name
+            )));
+        }
         if value.ion_type() != IonType::List {
             return Err(invalid_schema_error_raw(format!(
-                "all_of constraint was a {:?} instead of a list",
+                "{} constraint was a {:?} instead of a list",
+                constraint_name,
                 value.ion_type()
             )));
         }
