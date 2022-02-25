@@ -31,3 +31,4 @@ chrono = "0.4"
 [dev-dependencies]
 rstest = "0.9"
 clap = {version = "2.33.3", features = ["yaml"]}
+test-generator = "0.3.0"
