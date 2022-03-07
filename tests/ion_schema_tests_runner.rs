@@ -42,6 +42,7 @@ const SKIP_LIST: &[&str] = &[
 #[test_resources("ion-schema-tests/constraints/type/*.isl")]
 // `test_resources` breaks for test-case names containing `$` and it doesn't allow
 // to rename test-case names hence using `rstest` for `$*.isl` test files
+// For more information: https://github.com/frehberg/test-generator/issues/11
 #[rstest(
     path,
     case::nullable_any_type("ion-schema-tests/ion_types/$any.isl"),
@@ -75,11 +76,17 @@ fn validation_tests(path: &str) {
     let mut schema_system = SchemaSystem::new(vec![Box::new(authority)]);
 
     // get the schema content from given schema file path
-    let ion_content = fs::read(path).unwrap();
-    let iterator = element_reader().iterate_over(&ion_content).unwrap();
+    let ion_content = fs::read(path).expect(&format!("Could not read from given file {}", path));
+    let iterator = element_reader().iterate_over(&ion_content).expect(&format!(
+        "Could not get owned elements from scehma file: {}",
+        path
+    ));
     let schema_content = iterator
         .collect::<Result<Vec<OwnedElement>, IonError>>()
-        .unwrap();
+        .expect(&format!(
+            "Could not get owned elements from scehma file: {}",
+            path
+        ));
 
     let type_store = &mut TypeStore::new();
     let mut invalid_values: Vec<OwnedElement> = vec![];
@@ -101,7 +108,7 @@ fn validation_tests(path: &str) {
             // get invalid values to validate
             invalid_values = element
                 .as_sequence()
-                .unwrap()
+                .expect("The `invalid` annotation can only appear on a list or s-expression.")
                 .iter()
                 .map(|v| v.to_owned())
                 .collect();
@@ -109,7 +116,7 @@ fn validation_tests(path: &str) {
             // get valid values to validate
             valid_values = element
                 .as_sequence()
-                .unwrap()
+                .expect("The `valid` annotation can only appear on a list or s-expression.")
                 .iter()
                 .map(|v| v.to_owned())
                 .collect();
@@ -118,7 +125,10 @@ fn validation_tests(path: &str) {
             type_def = Some(
                 schema_system
                     .schema_type_from_element(&element, type_store)
-                    .unwrap(),
+                    .expect(&format!(
+                        "Could not get schema type from owned element {:?}",
+                        element
+                    )),
             );
         } else {
             continue;
