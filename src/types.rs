@@ -1,10 +1,11 @@
 use crate::constraint::Constraint;
+use crate::isl::isl_constraint::IslConstraint;
 use crate::isl::isl_type::IslTypeImpl;
 use crate::result::{IonSchemaResult, ValidationResult};
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::violation::{Violation, ViolationCode};
-use ion_rs::value::owned::OwnedElement;
-use ion_rs::value::Element;
+use ion_rs::value::owned::{text_token, OwnedElement};
+use ion_rs::value::{Builder, Element};
 use ion_rs::IonType;
 use std::rc::Rc;
 
@@ -220,9 +221,38 @@ impl TypeDefinitionImpl {
         let type_id = pending_types.add_type(type_store);
 
         // convert IslConstraint to Constraint
+        let mut found_type_constraint = false;
         for isl_constraint in isl_type.constraints() {
+            match isl_constraint {
+                IslConstraint::Type(_) => {
+                    found_type_constraint = true;
+                }
+                _ => {}
+            }
             let constraint =
                 Constraint::resolve_from_isl_constraint(isl_constraint, type_store, pending_types)?;
+            constraints.push(constraint);
+        }
+
+        // add `type: any` as a default type constraint if there is no type constraint found
+        if !found_type_constraint {
+            // set the isl type name for any error that is returned while parsing its constraints
+            let isl_type_name = match type_name.to_owned() {
+                Some(name) => name,
+                None => "".to_owned(),
+            };
+
+            let isl_constraint = IslConstraint::from_ion_element(
+                "type",
+                &OwnedElement::new_symbol(text_token("any")),
+                &isl_type_name,
+                &mut vec![],
+            )?;
+            let constraint = Constraint::resolve_from_isl_constraint(
+                &isl_constraint,
+                type_store,
+                pending_types,
+            )?;
             constraints.push(constraint);
         }
 
@@ -322,56 +352,56 @@ mod type_definition_tests {
             { name: my_int, type: { type: my_int } }
          */
         IslType::named("my_int", [IslConstraint::type_constraint(IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("my_int"))]))]),
-        TypeDefinition::named("my_int", [Constraint::type_constraint(33)]) // 0-31 are built-in types which are preloaded to the type_store
+        TypeDefinition::named("my_int", [Constraint::type_constraint(34)]) // 0-32 are built-in types which are preloaded to the type_store
     ),
     case::type_constraint_with_nested_type(
         /* For a schema with nested types as below:
             { name: my_int, type: { type: int } }
          */
         IslType::named("my_int", [IslConstraint::type_constraint(IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("int"))]))]),
-        TypeDefinition::named("my_int", [Constraint::type_constraint(33)])
+        TypeDefinition::named("my_int", [Constraint::type_constraint(34)])
     ),
     case::type_constraint_with_nested_multiple_types(
         /* For a schema with nested multiple types as below:
             { name: my_int, type: { type: int }, type: { type: my_int } }
          */
         IslType::named("my_int", [IslConstraint::type_constraint(IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("int"))])), IslConstraint::type_constraint(IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("my_int"))]))]),
-        TypeDefinition::named("my_int", [Constraint::type_constraint(33), Constraint::type_constraint(34)])
+        TypeDefinition::named("my_int", [Constraint::type_constraint(34), Constraint::type_constraint(35)])
     ),
     case::all_of_constraint(
         /* For a schema with all_of type as below:
             { all_of: [{ type: int }] }
         */
         IslType::anonymous([IslConstraint::all_of([IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("int"))])])]),
-        TypeDefinition::anonymous([Constraint::all_of([33])])
+        TypeDefinition::anonymous([Constraint::all_of([34]), Constraint::type_constraint(25)])
     ),
     case::any_of_constraint(
         /* For a schema with any_of constraint as below:
             { any_of: [{ type: int }, { type: decimal }] }
         */
         IslType::anonymous([IslConstraint::any_of([IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("int"))]), IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("decimal"))])])]),
-        TypeDefinition::anonymous([Constraint::any_of([33, 34])])
+        TypeDefinition::anonymous([Constraint::any_of([34, 35]), Constraint::type_constraint(25)])
     ),
     case::one_of_constraint(
         /* For a schema with one_of constraint as below:
             { any_of: [{ type: int }, { type: decimal }] }
         */
         IslType::anonymous([IslConstraint::one_of([IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("int"))]), IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("decimal"))])])]),
-        TypeDefinition::anonymous([Constraint::one_of([33, 34])])
+        TypeDefinition::anonymous([Constraint::one_of([34, 35]), Constraint::type_constraint(25)])
     ),
     case::not_constraint(
         /* For a schema with not constraint as below:
             { not: { type: int } }
         */
         IslType::anonymous([IslConstraint::not(IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("int"))]))]),
-        TypeDefinition::anonymous([Constraint::not(33)])
+        TypeDefinition::anonymous([Constraint::not(34), Constraint::type_constraint(25)])
     ),
     case::ordered_elements_constraint(
         /* For a schema with ordered_elements constraint as below:
             { ordered_elements: [ symbol, { type: int, occurs: optional }, ] }
         */
         IslType::anonymous([IslConstraint::ordered_elements([IslTypeRef::named("symbol"), IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("int")), IslConstraint::Occurs(IslOccurs::Optional)])])]),
-        TypeDefinition::anonymous([Constraint::ordered_elements([5, 33])])
+        TypeDefinition::anonymous([Constraint::ordered_elements([5, 34]), Constraint::type_constraint(25)])
     ),
     )]
     fn isl_type_to_type_definition(isl_type: IslType, type_def: TypeDefinition) {

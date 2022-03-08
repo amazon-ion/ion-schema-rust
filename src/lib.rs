@@ -22,5 +22,5 @@ pub mod isl;
 pub mod result;
 pub mod schema;
 pub mod system;
-mod types;
+pub mod types;
 mod violation;

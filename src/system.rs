@@ -371,7 +371,7 @@ static DERIVED_ISL_TYPES: [&str; 8] = [
     "type::{ name: text, one_of: [ string, symbol ] }",
     "type::{ name: $any, one_of: [ $blob, $bool, $clob, $decimal,
                                     $float, $int, $string, $symbol, $timestamp,
-                                    $list, $sexp, $struct ] }",
+                                    $list, $sexp, $struct, $null ] }",
     "type::{ name: $lob, one_of: [ $blob, $clob ] }",
     "type::{ name: $number, one_of: [ $decimal, $float, $int ] }",
     "type::{ name: $text, one_of: [ $string, $symbol ] }",
@@ -439,7 +439,10 @@ impl TypeStore {
             ));
         }
 
-        // get the derived built in types map and related text value for given type_name [type_ids: 24 - 31]
+        // add $null to the built-in types [type_id: 24]
+        self.add_builtin_type(&BuiltInTypeDefinition::Atomic(Null, Nullability::Nullable));
+
+        // get the derived built in types map and related text value for given type_name [type_ids: 25 - 32]
         let pending_types = &mut PendingTypes::new();
         for text in DERIVED_ISL_TYPES {
             let isl_type = IslTypeImpl::from_owned_element(
@@ -814,6 +817,45 @@ impl SchemaSystem {
         isl_types: B,
     ) -> IonSchemaResult<Schema> {
         self.resolver.schema_from_isl_types(id, isl_types)
+    }
+
+    /// Creates a type from given OwnedElement using type_store
+    pub fn schema_type_from_element(
+        &mut self,
+        type_content: &OwnedElement,
+        type_store: &mut TypeStore,
+    ) -> IonSchemaResult<TypeDefinitionImpl> {
+        // convert to isl_type
+        let mut isl_inline_imported_types = vec![];
+        let isl_type =
+            IslTypeImpl::from_owned_element(type_content, &mut isl_inline_imported_types)?;
+
+        // Resolve all inline import types if there are any
+        // this will help resolve all inline imports before they are used as a reference to another type
+        for isl_inline_imported_type in isl_inline_imported_types {
+            let import_id = isl_inline_imported_type.id();
+            let inline_imported_type = self.resolver.load_schema(
+                import_id,
+                type_store,
+                Some(&IslImport::Type(isl_inline_imported_type.to_owned())),
+            )?;
+        }
+
+        // convert to type_def
+        let pending_types = &mut PendingTypes::new();
+
+        // convert IslType to TypeDefinition
+        let type_def: TypeDefinitionImpl =
+            TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
+                &isl_type,
+                type_store,
+                pending_types,
+            )?;
+
+        // add all types from context to type_store
+        pending_types.update_type_store(type_store, None)?;
+
+        Ok(type_def)
     }
 }
 
