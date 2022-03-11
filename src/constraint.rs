@@ -467,6 +467,17 @@ impl ConstraintValidator for OrderedElementsConstraint {
     fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
         let mut violations: Vec<Violation> = vec![];
         let mut valid_types = vec![];
+
+        // Check for null sequence
+        if value.is_null() {
+            return Err(Violation::with_violations(
+                "ordered_elements",
+                ViolationCode::TypeMismatched,
+                &format!("Null List/S-Expression not allowed for ordered_elements constraint"),
+                violations,
+            ));
+        }
+
         let values: Vec<&OwnedElement> = match value.as_sequence() {
             None => {
                 return Err(Violation::with_violations(
