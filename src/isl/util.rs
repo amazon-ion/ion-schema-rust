@@ -93,7 +93,7 @@ impl Range {
                         AnyInt::BigInt(big_int_value) => &BigInt::zero() <= big_int_value,
                     },
                     Value(start_value, boundary_type) => match start_value {
-                        Integer(min_value) => {
+                        IntegerNonNegative(min_value) => {
                             match value {
                                 AnyInt::I64(int_value) => { match boundary_type {
                                     RangeBoundaryType::Inclusive => &min_value.as_i64().unwrap() <= int_value,
@@ -114,7 +114,7 @@ impl Range {
                     Max => true,
                     Min => unreachable!("Cannot have 'Min' as the upper range boundary"),
                     Value(end_value, boundary_type) => match end_value {
-                        Integer(max_value) => {
+                        IntegerNonNegative(max_value) => {
                             match value {
                                 AnyInt::I64(int_value) => { match boundary_type {
                                     RangeBoundaryType::Inclusive => &max_value.as_i64().unwrap() >= int_value,

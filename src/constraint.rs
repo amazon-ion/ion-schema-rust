@@ -1,10 +1,13 @@
 use crate::isl::isl_constraint::{IslConstraint, IslOccurs};
 use crate::isl::isl_type_reference::IslTypeRef;
+use crate::isl::util::{Range, RangeBoundaryType, RangeBoundaryValue, RangeBoundaryValueType};
 use crate::result::{IonSchemaResult, ValidationResult};
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::types::TypeValidator;
 use crate::violation::{Violation, ViolationCode};
 use ion_rs::value::owned::OwnedElement;
+use ion_rs::value::{AnyInt, Element, IntAccess, Sequence};
+use num_traits::ToPrimitive;
 
 /// Provides validation for schema Constraint
 pub trait ConstraintValidator {
@@ -57,6 +60,14 @@ impl Constraint {
     /// Creates a [Constraint::OrderedElements] referring to the types represented by the provided [TypeId]s.
     pub fn ordered_elements<A: Into<Vec<TypeId>>>(type_ids: A) -> Constraint {
         Constraint::OrderedElements(OrderedElementsConstraint::new(type_ids.into()))
+    }
+
+    /// Returns a boolean value indicating if the constraint is occurs constraint or not
+    fn is_occurs(&self) -> bool {
+        match *self {
+            Constraint::Occurs(_) => true,
+            _ => false,
+        }
     }
 
     /// Parse an [IslConstraint] to a [Constraint]
@@ -380,11 +391,49 @@ impl OccursConstraint {
     pub fn new(isl_occurs: IslOccurs) -> Self {
         Self { isl_occurs }
     }
+
+    /// Convert occurs to a range to be used for validation
+    pub fn to_range(&self) -> IonSchemaResult<Range> {
+        match &self.isl_occurs {
+            IslOccurs::Int(int_value) => Range::range(
+                RangeBoundaryValue::int_non_negative_value(
+                    int_value.to_owned(),
+                    RangeBoundaryType::Inclusive,
+                ),
+                RangeBoundaryValue::int_non_negative_value(
+                    int_value.to_owned(),
+                    RangeBoundaryType::Inclusive,
+                ),
+            ),
+            IslOccurs::Range(range) => Ok(range.to_owned()),
+            IslOccurs::Optional => Range::range(
+                RangeBoundaryValue::int_non_negative_value(
+                    AnyInt::I64(0),
+                    RangeBoundaryType::Inclusive,
+                ),
+                RangeBoundaryValue::int_non_negative_value(
+                    AnyInt::I64(1),
+                    RangeBoundaryType::Inclusive,
+                ),
+            ),
+            IslOccurs::Required => Range::range(
+                RangeBoundaryValue::int_non_negative_value(
+                    AnyInt::I64(1),
+                    RangeBoundaryType::Inclusive,
+                ),
+                RangeBoundaryValue::int_non_negative_value(
+                    AnyInt::I64(1),
+                    RangeBoundaryType::Inclusive,
+                ),
+            ),
+        }
+    }
 }
 
 impl ConstraintValidator for OccursConstraint {
     fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
-        todo!()
+        // No op
+        return Ok(());
     }
 }
 
@@ -416,7 +465,115 @@ impl OrderedElementsConstraint {
 
 impl ConstraintValidator for OrderedElementsConstraint {
     fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
-        // this will be implemented with this issue: https://github.com/amzn/ion-schema-rust/issues/9
-        todo!()
+        let mut violations: Vec<Violation> = vec![];
+        let mut valid_types = vec![];
+        let values: Vec<&OwnedElement> = match value.as_sequence() {
+            None => {
+                return Err(Violation::with_violations(
+                    "ordered_elements",
+                    ViolationCode::TypeMismatched,
+                    &format!("expected List/S-Expression found {}", value.ion_type()),
+                    violations,
+                ));
+            }
+            Some(sequence) => sequence.iter().collect(),
+        };
+
+        // count of minimum expected number of types in ordered_elements
+        let mut min_expected_types = 0;
+
+        let mut i = 0;
+        let mut j = 0;
+        while i < self.type_ids.len() {
+            let type_def = type_store.get_type_by_id(self.type_ids[i]).unwrap();
+
+            // filter out types that contain occurs constraint
+            let constraints: Vec<&Constraint> = type_def
+                .constraints()
+                .iter()
+                .filter(|c| c.is_occurs())
+                .collect();
+
+            if let Some(Constraint::Occurs(occurs)) = constraints.first() {
+                let range = &occurs.to_range().expect("Unable to parse occurs to range");
+
+                // Returns minimum occurs count required by occurs constraint
+                min_expected_types += match range {
+                    Range::IntegerNonNegative(min_value, _) => match min_value {
+                        RangeBoundaryValue::Max => {
+                            unreachable!("Minimum value of a range can not be MAX")
+                        }
+                        RangeBoundaryValue::Min => {
+                            unreachable!("Occurs can not have min as minimum value of it's range")
+                        }
+                        RangeBoundaryValue::Value(min_value, _) => match min_value {
+                            RangeBoundaryValueType::IntegerNonNegative(value) => {
+                                value.as_i64().unwrap().to_usize().unwrap()
+                            }
+                            _ => unreachable!("Occurs can not have non integer value as a range"),
+                        },
+                    },
+                    _ => unreachable!("Occurs can not have non integer value as a range"),
+                };
+
+                // Check see if the values satisfy the occurs constraint
+                let mut v: i64 = 0;
+                while j < values.len() {
+                    match type_def.validate(values[j], type_store) {
+                        Ok(_) => valid_types.push(self.type_ids[i]),
+                        Err(_) => break,
+                    }
+                    j += 1;
+                    v += 1;
+                }
+
+                if !range.contains(&v.into()).unwrap() {
+                    return Err(Violation::with_violations(
+                        "ordered_elements",
+                        ViolationCode::AllTypesNotMatched,
+                        &format!("type: {:?} didn't satisfy occurs constraint", type_def),
+                        violations,
+                    ));
+                }
+            } else {
+                min_expected_types += 1;
+                if j < values.len() {
+                    match type_def.validate(values[j], type_store) {
+                        Ok(_) => valid_types.push(self.type_ids[i]),
+                        Err(violation) => violations.push(violation),
+                    }
+                    j += 1;
+                }
+            }
+            i += 1;
+        }
+
+        // Check if the values are less than the minimum expected types in the ordered_elements constraint
+        if values.len() < min_expected_types {
+            return Err(Violation::with_violations(
+                "ordered_elements",
+                ViolationCode::AllTypesNotMatched,
+                &format!(
+                    "expected {} types, found {} types",
+                    min_expected_types,
+                    values.len()
+                ),
+                violations,
+            ));
+        }
+
+        if !violations.is_empty() {
+            return Err(Violation::with_violations(
+                "ordered_elements",
+                ViolationCode::AllTypesNotMatched,
+                &format!(
+                    "value matches {} types, expected {}",
+                    valid_types.len(),
+                    self.type_ids.len()
+                ),
+                violations,
+            ));
+        }
+        return Ok(());
     }
 }

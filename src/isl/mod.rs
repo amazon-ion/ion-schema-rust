@@ -80,7 +80,7 @@ pub mod isl_constraint;
 pub mod isl_import;
 pub mod isl_type;
 pub mod isl_type_reference;
-mod util;
+pub mod util;
 
 /// Provides an internal representation of an schema file
 #[derive(Debug, Clone)]
