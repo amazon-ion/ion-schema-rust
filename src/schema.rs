@@ -327,7 +327,7 @@ mod schema_tests {
             "#),
             "any_of_type"
         ),
-        case::oredered_elements_constraint(
+        case::ordered_elements_constraint(
                load(r#"
                     [true, 5, 6, 7, "hey"]
                     [false, 5, 6, 7]
@@ -351,7 +351,7 @@ mod schema_tests {
                "#),
                "ordered_elements_type"
         ),
-        case::oredered_elements_constraint_for_overlapping_types(
+        case::ordered_elements_constraint_for_overlapping_types(
                 load(r#"
                      [1, 2, 3]
                      [1, 2, foo]
