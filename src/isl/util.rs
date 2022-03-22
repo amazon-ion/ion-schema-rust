@@ -1,4 +1,7 @@
-use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
+use crate::isl::isl_constraint::IslOccurs;
+use crate::result::{
+    invalid_schema_error, invalid_schema_error_raw, IonSchemaError, IonSchemaResult,
+};
 use ion_rs::types::decimal::Decimal;
 use ion_rs::types::timestamp::Timestamp;
 use ion_rs::value::owned::{text_token, OwnedElement, OwnedSymbolToken};
@@ -7,6 +10,7 @@ use ion_rs::IonType;
 use num_bigint::BigInt;
 use num_traits::Signed;
 use num_traits::Zero;
+use std::convert::{TryFrom, TryInto};
 
 /// Represents ISL [Range]s where some constraints can be defined by a range
 /// <RANGE<RANGE_TYPE>> ::= range::[ <EXCLUSIVITY><RANGE_TYPE>, <EXCLUSIVITY><RANGE_TYPE> ]
@@ -296,6 +300,68 @@ impl Range {
                     }
                 }
             },
+        }
+    }
+
+    /// Provides required non negative integer range
+    /// required range: `range::[1,1]`
+    pub fn required() -> IonSchemaResult<Range> {
+        Range::range(
+            RangeBoundaryValue::int_non_negative_value(
+                AnyInt::I64(1),
+                RangeBoundaryType::Inclusive,
+            ),
+            RangeBoundaryValue::int_non_negative_value(
+                AnyInt::I64(1),
+                RangeBoundaryType::Inclusive,
+            ),
+        )
+    }
+
+    /// Provides optional non negative integer range
+    /// optional range: `range::[0,1]`
+    pub fn optional() -> IonSchemaResult<Range> {
+        Range::range(
+            RangeBoundaryValue::int_non_negative_value(
+                AnyInt::I64(0),
+                RangeBoundaryType::Inclusive,
+            ),
+            RangeBoundaryValue::int_non_negative_value(
+                AnyInt::I64(1),
+                RangeBoundaryType::Inclusive,
+            ),
+        )
+    }
+}
+
+/// Provides `Range` for given `AnyInt`
+impl TryFrom<&AnyInt> for Range {
+    type Error = IonSchemaError;
+
+    fn try_from(int_value: &AnyInt) -> IonSchemaResult<Self> {
+        Range::range(
+            RangeBoundaryValue::int_non_negative_value(
+                int_value.to_owned(),
+                RangeBoundaryType::Inclusive,
+            ),
+            RangeBoundaryValue::int_non_negative_value(
+                int_value.to_owned(),
+                RangeBoundaryType::Inclusive,
+            ),
+        )
+    }
+}
+
+/// Provides `Range` for given ISL `occurs` constraint
+impl TryFrom<&IslOccurs> for Range {
+    type Error = IonSchemaError;
+
+    fn try_from(isl_occurs: &IslOccurs) -> IonSchemaResult<Self> {
+        match isl_occurs {
+            IslOccurs::Int(int_value) => int_value.try_into(),
+            IslOccurs::Range(range) => Ok(range.to_owned()),
+            IslOccurs::Required => Range::required(),
+            IslOccurs::Optional => Range::optional(),
         }
     }
 }

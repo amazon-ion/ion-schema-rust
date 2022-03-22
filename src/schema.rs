@@ -351,6 +351,22 @@ mod schema_tests {
                "#),
                "ordered_elements_type"
         ),
+        case::oredered_elements_constraint_for_overlapping_types(
+                load(r#"
+                     [1, 2, 3]
+                     [1, 2, foo]
+                     [1.0, foo]
+                     [1, 2.0, 3]
+                "#),
+                load(r#"
+                     [1, 2]
+                     [1, foo]
+                "#),
+                load_schema_from_text(r#" // For a schema with ordered_elements constraint as below:
+                        type:: { name: ordered_elements_type, ordered_elements:[{ type: int, occurs: optional }, { type: number, occurs: required }, { type: any, occurs: required }] }
+                "#),
+                "ordered_elements_type"
+        ),
     )]
     fn type_validation(
         valid_values: Vec<OwnedElement>,

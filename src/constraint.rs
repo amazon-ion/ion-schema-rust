@@ -1,13 +1,13 @@
 use crate::isl::isl_constraint::{IslConstraint, IslOccurs};
 use crate::isl::isl_type_reference::IslTypeRef;
-use crate::isl::util::{Range, RangeBoundaryType, RangeBoundaryValue, RangeBoundaryValueType};
+use crate::isl::util::Range;
 use crate::result::{IonSchemaResult, ValidationResult};
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::types::TypeValidator;
 use crate::violation::{Violation, ViolationCode};
 use ion_rs::value::owned::OwnedElement;
-use ion_rs::value::{AnyInt, Element, IntAccess, Sequence};
-use num_traits::ToPrimitive;
+use ion_rs::value::{Element, Sequence};
+use std::convert::TryInto;
 
 /// Provides validation for schema Constraint
 pub trait ConstraintValidator {
@@ -392,41 +392,8 @@ impl OccursConstraint {
         Self { isl_occurs }
     }
 
-    /// Convert occurs to a range to be used for validation
-    pub fn to_range(&self) -> IonSchemaResult<Range> {
-        match &self.isl_occurs {
-            IslOccurs::Int(int_value) => Range::range(
-                RangeBoundaryValue::int_non_negative_value(
-                    int_value.to_owned(),
-                    RangeBoundaryType::Inclusive,
-                ),
-                RangeBoundaryValue::int_non_negative_value(
-                    int_value.to_owned(),
-                    RangeBoundaryType::Inclusive,
-                ),
-            ),
-            IslOccurs::Range(range) => Ok(range.to_owned()),
-            IslOccurs::Optional => Range::range(
-                RangeBoundaryValue::int_non_negative_value(
-                    AnyInt::I64(0),
-                    RangeBoundaryType::Inclusive,
-                ),
-                RangeBoundaryValue::int_non_negative_value(
-                    AnyInt::I64(1),
-                    RangeBoundaryType::Inclusive,
-                ),
-            ),
-            IslOccurs::Required => Range::range(
-                RangeBoundaryValue::int_non_negative_value(
-                    AnyInt::I64(1),
-                    RangeBoundaryType::Inclusive,
-                ),
-                RangeBoundaryValue::int_non_negative_value(
-                    AnyInt::I64(1),
-                    RangeBoundaryType::Inclusive,
-                ),
-            ),
-        }
+    pub fn isl_occurs(&self) -> &IslOccurs {
+        &self.isl_occurs
     }
 }
 
@@ -465,126 +432,120 @@ impl OrderedElementsConstraint {
 
 impl ConstraintValidator for OrderedElementsConstraint {
     fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
-        let mut violations: Vec<Violation> = vec![];
-        let mut valid_types = vec![];
+        let violations: Vec<Violation> = vec![];
 
         // Check for null sequence
         if value.is_null() {
             return Err(Violation::with_violations(
                 "ordered_elements",
                 ViolationCode::TypeMismatched,
-                &format!("Null List/S-Expression not allowed for ordered_elements constraint"),
+                &format!("Null list/sexp not allowed for ordered_elements constraint"),
                 violations,
             ));
         }
 
-        let values: Vec<&OwnedElement> = match value.as_sequence() {
+        // Create a peekable iterator for given sequence
+        let mut values_iter = match value.as_sequence() {
             None => {
                 return Err(Violation::with_violations(
                     "ordered_elements",
                     ViolationCode::TypeMismatched,
-                    &format!("expected List/S-Expression found {}", value.ion_type()),
+                    &format!("expected list/sexp ion found {}", value.ion_type()),
                     violations,
                 ));
             }
-            Some(sequence) => sequence.iter().collect(),
+            Some(sequence) => sequence.iter().peekable(),
         };
 
-        // count of minimum expected number of types in ordered_elements
-        let mut min_expected_types = 0;
+        for type_id in &self.type_ids {
+            let type_def = type_store.get_type_by_id(*type_id).unwrap();
 
-        let mut i = 0;
-        let mut j = 0;
-        while i < self.type_ids.len() {
-            let type_def = type_store.get_type_by_id(self.type_ids[i]).unwrap();
-
-            // filter out types that contain occurs constraint
+            // verify if the type_def contains `occurs` constraint and collect it
             let constraints: Vec<&Constraint> = type_def
                 .constraints()
                 .iter()
                 .filter(|c| c.is_occurs())
                 .collect();
 
+            let occurs_range: Range;
+
             if let Some(Constraint::Occurs(occurs)) = constraints.first() {
-                let range = &occurs.to_range().expect("Unable to parse occurs to range");
+                occurs_range = occurs
+                    .isl_occurs()
+                    .try_into()
+                    .expect("Unable to parse occurs to range");
+            } else {
+                // by default, if there is no `occurs` constraint for given type_def then use `range::required`
+                occurs_range = Range::required().expect("Unable to parse occurs to range");
+            }
 
-                // Returns minimum occurs count required by occurs constraint
-                min_expected_types += match range {
-                    Range::IntegerNonNegative(min_value, _) => match min_value {
-                        RangeBoundaryValue::Max => {
-                            unreachable!("Minimum value of a range can not be MAX")
-                        }
-                        RangeBoundaryValue::Min => {
-                            unreachable!("Occurs can not have min as minimum value of it's range")
-                        }
-                        RangeBoundaryValue::Value(min_value, _) => match min_value {
-                            RangeBoundaryValueType::IntegerNonNegative(value) => {
-                                value.as_i64().unwrap().to_usize().unwrap()
-                            }
-                            _ => unreachable!("Occurs can not have non integer value as a range"),
-                        },
-                    },
-                    _ => unreachable!("Occurs can not have non integer value as a range"),
-                };
+            // use this counter to keep track of valid values for given type_def
+            let mut count: i64 = 0;
 
-                // Check see if the values satisfy the occurs constraint
-                let mut v: i64 = 0;
-                while j < values.len() {
-                    match type_def.validate(values[j], type_store) {
-                        Ok(_) => valid_types.push(self.type_ids[i]),
-                        Err(_) => break,
-                    }
-                    j += 1;
-                    v += 1;
-                }
-
-                if !range.contains(&v.into()).unwrap() {
+            // consume elements to reach the minimum required values for this type
+            while let Some(value) =
+                values_iter.next_if(|v| !occurs_range.contains(&count.into()).unwrap())
+            {
+                if type_def.is_valid(value, type_store) {
+                    count += 1;
+                } else {
+                    // there's not enough values of this expected type
                     return Err(Violation::with_violations(
                         "ordered_elements",
-                        ViolationCode::AllTypesNotMatched,
-                        &format!("type: {:?} didn't satisfy occurs constraint", type_def),
+                        ViolationCode::TypeMismatched,
+                        &format!(
+                            "Expected {:?} of type {:?}: found {}",
+                            occurs_range, type_def, count
+                        ),
                         violations,
                     ));
                 }
-            } else {
-                min_expected_types += 1;
-                if j < values.len() {
-                    match type_def.validate(values[j], type_store) {
-                        Ok(_) => valid_types.push(self.type_ids[i]),
-                        Err(violation) => violations.push(violation),
+            }
+
+            // greedily take as many values as we can of this type without going out
+            // of the maximum of the range
+            while values_iter.peek() != None && occurs_range.contains(&(count + 1).into()).unwrap()
+            {
+                // don't consume it until we know it's valid for the type
+                if let Some(value) = values_iter.peek() {
+                    if type_def.is_valid(value, type_store) {
+                        values_iter.next();
+                        count += 1;
+                    } else {
+                        // if the value doesn't match this type_def, then we'll break out of the while
+                        // loop and check the value against the next type_def.
+                        break;
                     }
-                    j += 1;
                 }
             }
-            i += 1;
+
+            // verify if there is no values left to validate and if it follows `occurs` constraint for this expected type
+            if values_iter.peek() == None && !occurs_range.contains(&count.into()).unwrap() {
+                // there's not enough values of this expected type
+                return Err(Violation::with_violations(
+                    "ordered_elements",
+                    ViolationCode::TypeMismatched,
+                    &format!(
+                        "Expected {:?} of type {:?}: found {}",
+                        occurs_range, type_def, count
+                    ),
+                    violations,
+                ));
+            }
         }
 
-        // Check if the values are less than the minimum expected types in the ordered_elements constraint
-        if values.len() < min_expected_types {
-            return Err(Violation::with_violations(
+        return if values_iter.peek() != None {
+            // check if there still values left at the end of sequence (list/sexp), when we have already
+            // completed visiting through all of the ordered elements type_defs
+            Err(Violation::with_violations(
                 "ordered_elements",
-                ViolationCode::AllTypesNotMatched,
-                &format!(
-                    "expected {} types, found {} types",
-                    min_expected_types,
-                    values.len()
-                ),
+                ViolationCode::TypeMismatched,
+                // unwrap as we already verified with peek that there is a value
+                &format!("Unexpected type found {:?}", values_iter.next().unwrap()),
                 violations,
-            ));
-        }
-
-        if !violations.is_empty() {
-            return Err(Violation::with_violations(
-                "ordered_elements",
-                ViolationCode::AllTypesNotMatched,
-                &format!(
-                    "value matches {} types, expected {}",
-                    valid_types.len(),
-                    self.type_ids.len()
-                ),
-                violations,
-            ));
-        }
-        return Ok(());
+            ))
+        } else {
+            Ok(())
+        };
     }
 }
