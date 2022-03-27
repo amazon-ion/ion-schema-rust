@@ -327,6 +327,46 @@ mod schema_tests {
             "#),
             "any_of_type"
         ),
+        case::ordered_elements_constraint(
+               load(r#"
+                    [true, 5, 6, 7, "hey"]
+                    [false, 5, 6, 7]
+                    [false, 7, 8, "hello"]
+                    [true, 7, "hi"]
+                    [true, 8]
+               "#), 
+               load(r#"
+                    [true]
+                    [5, true, "hey"]
+                    [null.bool, 5]
+                    ["hello", 5]
+                    [true, "hey"]
+                    "hello"
+                    hey
+                    6e10
+                    null.list
+               "#),
+               load_schema_from_text(r#" // For a schema with ordered_elements constraint as below: 
+                    type:: { name: ordered_elements_type, ordered_elements: [bool, { type: int, occurs: range::[1, 3] }, { type: string, occurs: optional } ] }
+               "#),
+               "ordered_elements_type"
+        ),
+        case::ordered_elements_constraint_for_overlapping_types(
+                load(r#"
+                     [1, 2, 3]
+                     [1, 2, foo]
+                     [1.0, foo]
+                     [1, 2.0, 3]
+                "#),
+                load(r#"
+                     [1, 2]
+                     [1, foo]
+                "#),
+                load_schema_from_text(r#" // For a schema with ordered_elements constraint as below:
+                        type:: { name: ordered_elements_type, ordered_elements:[{ type: int, occurs: optional }, { type: number, occurs: required }, { type: any, occurs: required }] }
+                "#),
+                "ordered_elements_type"
+        ),
     )]
     fn type_validation(
         valid_values: Vec<OwnedElement>,

@@ -177,10 +177,10 @@ impl IslOccurs {
             List => {
                 let value_annotations: Vec<&OwnedSymbolToken> = value.annotations().collect();
                 if value_annotations.contains(&&text_token("range")) {
-                    let is_non_negative = false; // for integer range is_non_negative is false
+                    let is_non_negative = true; // for occurs range is_non_negative is true
                     let range = Range::from_ion_element(value, is_non_negative)?;
                     match range {
-                        Range::Integer(_, _) => {}
+                        Range::IntegerNonNegative(_, _) => {}
                         _ => {
                             return invalid_schema_error(
                                 "only integer ranges are supported for occurs constraint",
