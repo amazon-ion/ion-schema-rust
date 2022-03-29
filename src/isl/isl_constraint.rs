@@ -3,15 +3,17 @@ use crate::isl::isl_type_reference::IslTypeRef;
 use crate::isl::util::Range;
 use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
 use ion_rs::value::owned::{text_token, OwnedElement, OwnedSymbolToken};
-use ion_rs::value::SymbolToken;
 use ion_rs::value::{AnyInt, Element, Sequence};
+use ion_rs::value::{Struct, SymbolToken};
 use ion_rs::IonType;
+use std::collections::HashMap;
 
 /// Represents a public facing API for schema constraints [IslConstraint] which stores IslTypeRef
 #[derive(Debug, Clone, PartialEq)]
 pub enum IslConstraint {
     AllOf(Vec<IslTypeRef>),
     AnyOf(Vec<IslTypeRef>),
+    Fields(HashMap<String, IslTypeRef>),
     Not(IslTypeRef),
     Occurs(IslOccurs),
     OneOf(Vec<IslTypeRef>),
@@ -46,6 +48,14 @@ impl IslConstraint {
         IslConstraint::OrderedElements(isl_types.into())
     }
 
+    /// Creates a [IslConstraint::Fields] using the field names and [IslTypeRef]s referenced inside it
+    pub fn fields<I>(fields: I) -> IslConstraint
+    where
+        I: Iterator<Item = (String, IslTypeRef)>,
+    {
+        IslConstraint::Fields(fields.collect())
+    }
+
     /// Creates a [IslConstraint::Not] using the [IslTypeRef] referenced inside it
     pub fn not(isl_type: IslTypeRef) -> IslConstraint {
         IslConstraint::Not(isl_type)
@@ -75,6 +85,11 @@ impl IslConstraint {
                     "any_of",
                 )?;
                 Ok(IslConstraint::AnyOf(types))
+            }
+            "fields" => {
+                let fields: HashMap<String, IslTypeRef> =
+                    IslConstraint::isl_fields_from_ion_element(value, inline_imported_types)?;
+                Ok(IslConstraint::Fields(fields))
             }
             "one_of" => {
                 let types: Vec<IslTypeRef> = IslConstraint::isl_type_references_from_ion_element(
@@ -153,6 +168,28 @@ impl IslConstraint {
             .iter()
             .map(|e| IslTypeRef::from_ion_element(e, inline_imported_types))
             .collect::<IonSchemaResult<Vec<IslTypeRef>>>()?)
+    }
+
+    // helper method for from_ion_element to get isl fields from given ion element
+    fn isl_fields_from_ion_element(
+        value: &OwnedElement,
+        inline_imported_types: &mut Vec<IslImportType>,
+    ) -> IonSchemaResult<HashMap<String, IslTypeRef>> {
+        if value.ion_type() != IonType::Struct {
+            return Err(invalid_schema_error_raw(format!(
+                "fields constraint was a {:?} instead of a struct",
+                value.ion_type()
+            )));
+        }
+        Ok(value
+            .as_struct()
+            .unwrap()
+            .iter()
+            .map(|(f, v)| {
+                IslTypeRef::from_ion_element(v, inline_imported_types)
+                    .and_then(|t| Ok((f.text().unwrap().to_owned(), t)))
+            })
+            .collect::<IonSchemaResult<HashMap<String, IslTypeRef>>>()?)
     }
 }
 
