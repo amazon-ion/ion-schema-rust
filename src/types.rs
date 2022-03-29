@@ -404,8 +404,8 @@ mod type_definition_tests {
         IslType::anonymous([IslConstraint::ordered_elements([IslTypeRef::named("symbol"), IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("int")), IslConstraint::Occurs(IslOccurs::Optional)])])]),
         TypeDefinition::anonymous([Constraint::ordered_elements([5, 34]), Constraint::type_constraint(25)])
     ),
-    case::ordered_elements_constraint(
-        /* For a schema with ordered_elements constraint as below:
+    case::fieldss_constraint(
+        /* For a schema with fields constraint as below:
             { fields: { name: string, id: int} }
         */
         IslType::anonymous([IslConstraint::fields(vec![("name".to_owned(), IslTypeRef::named("string")), ("id".to_owned(), IslTypeRef::named("int"))].into_iter())]),

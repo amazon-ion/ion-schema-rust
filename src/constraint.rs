@@ -215,7 +215,7 @@ impl ConstraintValidator for AllOfConstraint {
 }
 
 /// Implements an `any_of` constraint of Ion Schema
-/// [all_of]: https://amzn.github.io/ion-schema/docs/spec.html#any_of
+/// [any_of]: https://amzn.github.io/ion-schema/docs/spec.html#any_of
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnyOfConstraint {
     type_ids: Vec<TypeId>,
@@ -265,7 +265,7 @@ impl ConstraintValidator for AnyOfConstraint {
 }
 
 /// Implements an `one_of` constraint of Ion Schema
-/// [all_of]: https://amzn.github.io/ion-schema/docs/spec.html#one_of
+/// [one_of]: https://amzn.github.io/ion-schema/docs/spec.html#one_of
 #[derive(Debug, Clone, PartialEq)]
 pub struct OneOfConstraint {
     type_ids: Vec<TypeId>,
@@ -421,7 +421,7 @@ impl ConstraintValidator for OccursConstraint {
 }
 
 /// Implements an `ordered_elements` constraint of Ion Schema
-/// [ordered_elements]: https://amzn.github.io/ion-schema/docs/spec.html#all_of
+/// [ordered_elements]: https://amzn.github.io/ion-schema/docs/spec.html#ordered_elements
 #[derive(Debug, Clone, PartialEq)]
 pub struct OrderedElementsConstraint {
     type_ids: Vec<TypeId>,
@@ -578,8 +578,8 @@ impl ConstraintValidator for OrderedElementsConstraint {
     }
 }
 
-/// Implements an `all_of` constraint of Ion Schema
-/// [all_of]: https://amzn.github.io/ion-schema/docs/spec.html#all_of
+/// Implements an `fields` constraint of Ion Schema
+/// [fields]: https://amzn.github.io/ion-schema/docs/spec.html#fields
 #[derive(Debug, Clone, PartialEq)]
 pub struct FieldsConstraint {
     fields: HashMap<String, TypeId>,
