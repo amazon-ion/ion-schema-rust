@@ -65,7 +65,7 @@ impl Constraint {
         Constraint::OrderedElements(OrderedElementsConstraint::new(type_ids.into()))
     }
 
-    /// Creates a [Constraint::fields] referring to the fields represented by the provided field name and [TypeId]s.
+    /// Creates a [Constraint::Fields] referring to the fields represented by the provided field name and [TypeId]s.
     pub fn fields<I>(fields: I) -> Constraint
     where
         I: Iterator<Item = (String, TypeId)>,
