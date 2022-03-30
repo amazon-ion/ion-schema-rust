@@ -324,6 +324,7 @@ mod type_definition_tests {
     use crate::system::PendingTypes;
     use rstest::*;
 
+    // TODO: Remove type ids for assertion to make tests more readable
     #[rstest(
     isl_type, type_def,
     case::type_constraint_with_anonymous_type(
@@ -402,6 +403,13 @@ mod type_definition_tests {
         */
         IslType::anonymous([IslConstraint::ordered_elements([IslTypeRef::named("symbol"), IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("int")), IslConstraint::Occurs(IslOccurs::Optional)])])]),
         TypeDefinition::anonymous([Constraint::ordered_elements([5, 34]), Constraint::type_constraint(25)])
+    ),
+    case::fields_constraint(
+        /* For a schema with fields constraint as below:
+            { fields: { name: string, id: int} }
+        */
+        IslType::anonymous([IslConstraint::fields(vec![("name".to_owned(), IslTypeRef::named("string")), ("id".to_owned(), IslTypeRef::named("int"))].into_iter())]),
+        TypeDefinition::anonymous([Constraint::fields(vec![("name".to_owned(), 4), ("id".to_owned(), 0)].into_iter()), Constraint::type_constraint(25)])
     ),
     )]
     fn isl_type_to_type_definition(isl_type: IslType, type_def: TypeDefinition) {

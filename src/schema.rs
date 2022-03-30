@@ -197,6 +197,12 @@ mod schema_tests {
             "#).into_iter(),
         1 // this includes named type ordered_elements_type
     ),
+    case::fields_constraint(
+        load(r#" // For a schema with fields constraint as below:
+                type:: { name: fields_type, fields: { name: string, id: int} }
+            "#).into_iter(),
+        1 // this includes named type fields_type
+    ),
     )]
     fn owned_elements_to_schema<'a, I: Iterator<Item = OwnedElement>>(
         owned_elements: I,

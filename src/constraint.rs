@@ -7,6 +7,7 @@ use crate::types::{TypeDefinition, TypeValidator};
 use crate::violation::{Violation, ViolationCode};
 use ion_rs::value::owned::OwnedElement;
 use ion_rs::value::{Element, Sequence};
+use std::collections::HashMap;
 use std::convert::TryInto;
 use std::iter::Peekable;
 
@@ -25,6 +26,7 @@ pub trait ConstraintValidator {
 pub enum Constraint {
     AllOf(AllOfConstraint),
     AnyOf(AnyOfConstraint),
+    Fields(FieldsConstraint),
     Not(NotConstraint),
     OneOf(OneOfConstraint),
     OrderedElements(OrderedElementsConstraint),
@@ -63,6 +65,14 @@ impl Constraint {
         Constraint::OrderedElements(OrderedElementsConstraint::new(type_ids.into()))
     }
 
+    /// Creates a [Constraint::Fields] referring to the fields represented by the provided field name and [TypeId]s.
+    pub fn fields<I>(fields: I) -> Constraint
+    where
+        I: Iterator<Item = (String, TypeId)>,
+    {
+        Constraint::Fields(FieldsConstraint::new(fields.collect()))
+    }
+
     /// Parse an [IslConstraint] to a [Constraint]
     pub fn resolve_from_isl_constraint(
         isl_constraint: &IslConstraint,
@@ -86,6 +96,15 @@ impl Constraint {
                     pending_types,
                 )?;
                 Ok(Constraint::AnyOf(any_of))
+            }
+            IslConstraint::Fields(fields) => {
+                let fields_constraint: FieldsConstraint =
+                    FieldsConstraint::resolve_from_isl_constraint(
+                        fields,
+                        type_store,
+                        pending_types,
+                    )?;
+                Ok(Constraint::Fields(fields_constraint))
             }
             IslConstraint::OneOf(type_references) => {
                 let one_of: OneOfConstraint = OneOfConstraint::resolve_from_isl_constraint(
@@ -130,6 +149,7 @@ impl Constraint {
         match self {
             Constraint::AllOf(all_of) => all_of.validate(value, type_store),
             Constraint::AnyOf(any_of) => any_of.validate(value, type_store),
+            Constraint::Fields(fields) => fields.validate(value, type_store),
             Constraint::Not(not) => not.validate(value, type_store),
             Constraint::OneOf(one_of) => one_of.validate(value, type_store),
             Constraint::Type(type_constraint) => type_constraint.validate(value, type_store),
@@ -195,7 +215,7 @@ impl ConstraintValidator for AllOfConstraint {
 }
 
 /// Implements an `any_of` constraint of Ion Schema
-/// [all_of]: https://amzn.github.io/ion-schema/docs/spec.html#any_of
+/// [any_of]: https://amzn.github.io/ion-schema/docs/spec.html#any_of
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnyOfConstraint {
     type_ids: Vec<TypeId>,
@@ -245,7 +265,7 @@ impl ConstraintValidator for AnyOfConstraint {
 }
 
 /// Implements an `one_of` constraint of Ion Schema
-/// [all_of]: https://amzn.github.io/ion-schema/docs/spec.html#one_of
+/// [one_of]: https://amzn.github.io/ion-schema/docs/spec.html#one_of
 #[derive(Debug, Clone, PartialEq)]
 pub struct OneOfConstraint {
     type_ids: Vec<TypeId>,
@@ -401,7 +421,7 @@ impl ConstraintValidator for OccursConstraint {
 }
 
 /// Implements an `ordered_elements` constraint of Ion Schema
-/// [ordered_elements]: https://amzn.github.io/ion-schema/docs/spec.html#all_of
+/// [ordered_elements]: https://amzn.github.io/ion-schema/docs/spec.html#ordered_elements
 #[derive(Debug, Clone, PartialEq)]
 pub struct OrderedElementsConstraint {
     type_ids: Vec<TypeId>,
@@ -555,5 +575,40 @@ impl ConstraintValidator for OrderedElementsConstraint {
         } else {
             Ok(())
         };
+    }
+}
+
+/// Implements an `fields` constraint of Ion Schema
+/// [fields]: https://amzn.github.io/ion-schema/docs/spec.html#fields
+#[derive(Debug, Clone, PartialEq)]
+pub struct FieldsConstraint {
+    fields: HashMap<String, TypeId>,
+}
+
+impl FieldsConstraint {
+    pub fn new(fields: HashMap<String, TypeId>) -> Self {
+        Self { fields }
+    }
+
+    /// Tries to create an [Fields] constraint from the given OwnedElement
+    pub fn resolve_from_isl_constraint(
+        fields: &HashMap<String, IslTypeRef>,
+        type_store: &mut TypeStore,
+        pending_types: &mut PendingTypes,
+    ) -> IonSchemaResult<Self> {
+        let resolved_fields: HashMap<String, TypeId> = fields
+            .iter()
+            .map(|(f, t)| {
+                IslTypeRef::resolve_type_reference(t, type_store, pending_types)
+                    .and_then(|type_id| Ok((f.to_owned(), type_id)))
+            })
+            .collect::<IonSchemaResult<HashMap<String, TypeId>>>()?;
+        Ok(FieldsConstraint::new(resolved_fields))
+    }
+}
+
+impl ConstraintValidator for FieldsConstraint {
+    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
+        todo!()
     }
 }
