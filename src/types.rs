@@ -1,12 +1,15 @@
 use crate::constraint::Constraint;
 use crate::isl::isl_constraint::IslConstraint;
 use crate::isl::isl_type::IslTypeImpl;
+use crate::isl::util::Range;
 use crate::result::{IonSchemaResult, ValidationResult};
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::violation::{Violation, ViolationCode};
 use ion_rs::value::owned::{text_token, OwnedElement};
 use ion_rs::value::{Builder, Element};
 use ion_rs::IonType;
+use std::convert::TryInto;
+use std::iter::Peekable;
 use std::rc::Rc;
 
 /// Provides validation for Type
@@ -128,6 +131,7 @@ impl TypeDefinition {
     pub fn anonymous<A: Into<Vec<Constraint>>>(constraints: A) -> TypeDefinition {
         TypeDefinition::Anonymous(TypeDefinitionImpl::new(None, constraints.into()))
     }
+
     /// Provides the underlying constraints of [TypeDefinitionImpl]
     pub fn constraints(&self) -> &[Constraint] {
         match &self {
@@ -135,6 +139,93 @@ impl TypeDefinition {
             TypeDefinition::Anonymous(anonymous_type) => anonymous_type.constraints(),
             _ => &[],
         }
+    }
+
+    /// Returns an occurs constraint as range if it exists in the [TypeDefinition] otherwise returns `occurs: required`
+    fn get_occurs_constraint(&self, validation_constraint_name: &str) -> IonSchemaResult<Range> {
+        // verify if the type_def contains `occurs` constraint and fill occurs_range
+        // Otherwise if there is no `occurs` constraint specified then use `occurs: required`
+        if let Some(Constraint::Occurs(occurs)) = self
+            .constraints()
+            .iter()
+            .filter(|c| matches!(c, Constraint::Occurs(_)))
+            .next()
+        {
+            return occurs.isl_occurs().try_into();
+        }
+        // by default, if there is no `occurs` constraint for given type_def
+        // then use `occurs:optional` if its `fields` constraint validation
+        // otherwise, use `occurs: required` if its `ordered_elements` constraint validation
+        if validation_constraint_name == "fields" {
+            return Range::optional();
+        }
+        Range::required()
+    }
+
+    /// Validates a [TypeDefinition] for occurs constraint using values_iter
+    pub fn occurs_validation<'a>(
+        &self,
+        validation_constraint_name: &str, // represents the constraint name for which occurs validation is performed
+        values_iter: &mut Peekable<Box<dyn Iterator<Item = &OwnedElement> + 'a>>,
+        type_store: &TypeStore,
+    ) -> ValidationResult {
+        let occurs_range: Range = self
+            .get_occurs_constraint(validation_constraint_name)
+            .expect("Unable to parse occurs to range");
+
+        // use this counter to keep track of valid values for given type_def
+        let mut count: i64 = 0;
+
+        // consume elements to reach the minimum required values for this type
+        while let Some(value) =
+            values_iter.next_if(|v| !occurs_range.contains(&count.into()).unwrap())
+        {
+            if self.is_valid(value, type_store) {
+                count += 1;
+            } else {
+                // there's not enough values of this expected type
+                return Err(Violation::new(
+                    validation_constraint_name,
+                    ViolationCode::TypeMismatched,
+                    &format!(
+                        "Expected {:?} of type {:?}: found {}",
+                        occurs_range, self, count
+                    ),
+                ));
+            }
+        }
+
+        // greedily take as many values as we can of this type without going out
+        // of the maximum of the range
+        while values_iter.peek() != None && occurs_range.contains(&(count + 1).into()).unwrap() {
+            // don't consume it until we know it's valid for the type
+            if let Some(value) = values_iter.peek() {
+                if self.is_valid(value, type_store) {
+                    let _ = values_iter.next(); // consume it as it is valid
+                    count += 1;
+                } else {
+                    // if the value doesn't match this type_def, then we'll break out of the while
+                    // loop and check the value against the next type_def.
+                    break;
+                }
+            }
+        }
+
+        // verify if there is no values left to validate and if it follows `occurs` constraint for this expected type
+        if values_iter.peek() == None && !occurs_range.contains(&count.into()).unwrap() {
+            // there's not enough values of this expected type
+            return Err(Violation::new(
+                validation_constraint_name,
+                ViolationCode::TypeMismatched,
+                &format!(
+                    "Expected {:?} of type {:?}: found {}",
+                    occurs_range, self, count
+                ),
+            ));
+        }
+
+        // if the type_def validation passes all the above checks return Ok(())
+        Ok(())
     }
 }
 

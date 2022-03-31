@@ -18,6 +18,11 @@ const SKIP_LIST: &[&str] = &[
     "ion-schema-tests/constraints/all_of/inlined_types.isl",
     "ion-schema-tests/constraints/all_of/inlined_type_import.isl",
     "ion-schema-tests/constraints/all_of/validation.isl",
+    "ion-schema-tests/constraints/fields/inlined_type_import.isl",
+    "ion-schema-tests/constraints/fields/validation_base.isl",
+    "ion-schema-tests/constraints/fields/validation_complex.isl",
+    "ion-schema-tests/constraints/fields/validation_inlined_type.isl",
+    "ion-schema-tests/constraints/fields/validation_nested.isl",
     "ion-schema-tests/constraints/any_of/inlined_types.isl",
     "ion-schema-tests/constraints/any_of/inlined_type_import.isl",
     "ion-schema-tests/constraints/any_of/validation.isl",
@@ -35,6 +40,7 @@ const SKIP_LIST: &[&str] = &[
 #[test_resources("ion-schema-tests/core_types/*.isl")]
 #[test_resources("ion-schema-tests/constraints/all_of/*.isl")]
 #[test_resources("ion-schema-tests/constraints/any_of/*.isl")]
+#[test_resources("ion-schema-tests/constraints/fields/*.isl")]
 #[test_resources("ion-schema-tests/constraints/not/invalid.isl")]
 #[test_resources("ion-schema-tests/constraints/not/nested.isl")]
 #[test_resources("ion-schema-tests/constraints/not/string.isl")]
