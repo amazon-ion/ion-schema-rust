@@ -553,9 +553,8 @@ impl ConstraintValidator for FieldsConstraint {
         };
 
         // get the values corresponding to the field_name and perform occurs_validation based on the type_def
-        for (field_name, element) in &self.fields {
-            let type_id = &self.fields.get(field_name).unwrap();
-            let type_def = type_store.get_type_by_id(**type_id).unwrap();
+        for (field_name, type_id) in &self.fields {
+            let type_def = type_store.get_type_by_id(*type_id).unwrap();
             let mut values = ion_struct.get_all(field_name).peekable();
 
             // perform occurs validation for type_def for all values of the given field_name
