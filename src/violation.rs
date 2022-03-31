@@ -55,6 +55,7 @@ pub enum ViolationCode {
     TypeMatched,
     AllTypesNotMatched,
     TypeMismatched,
+    FieldsNotMatched,
     TypeConstraintsUnsatisfied,
 }
 
@@ -71,6 +72,7 @@ impl fmt::Display for ViolationCode {
                 ViolationCode::TypeMismatched => "type_mismatched",
                 ViolationCode::TypeConstraintsUnsatisfied => "type_constraints_unsatisfied",
                 ViolationCode::InvalidNull => "invalid_null",
+                ViolationCode::FieldsNotMatched => "fields_not_matched",
             }
         )
     }
