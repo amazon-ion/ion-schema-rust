@@ -13,6 +13,7 @@ use std::collections::HashMap;
 pub enum IslConstraint {
     AllOf(Vec<IslTypeRef>),
     AnyOf(Vec<IslTypeRef>),
+    ContentClosed,
     Fields(HashMap<String, IslTypeRef>),
     Not(IslTypeRef),
     Occurs(IslOccurs),
@@ -86,6 +87,7 @@ impl IslConstraint {
                 )?;
                 Ok(IslConstraint::AnyOf(types))
             }
+            "content" => Ok(IslConstraint::ContentClosed),
             "fields" => {
                 let fields: HashMap<String, IslTypeRef> =
                     IslConstraint::isl_fields_from_ion_element(value, inline_imported_types)?;

@@ -6,7 +6,7 @@ use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::types::{TypeDefinition, TypeValidator};
 use crate::violation::{Violation, ViolationCode};
 use ion_rs::value::owned::OwnedElement;
-use ion_rs::value::{Element, Sequence, Struct};
+use ion_rs::value::{Element, Sequence, Struct, SymbolToken};
 use std::collections::HashMap;
 use std::iter::Peekable;
 
@@ -16,7 +16,12 @@ pub trait ConstraintValidator {
     /// adding [Violation]s and/or [ViolationChild]ren to `Err(violation)`
     /// if the constraint is violated.
     /// Otherwise, if the value passes the validation against the constraint then returns `Ok(())`.
-    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult;
+    fn validate(
+        &self,
+        value: &OwnedElement,
+        type_store: &TypeStore,
+        open_content: bool,
+    ) -> ValidationResult;
 }
 
 /// Defines schema Constraints
@@ -25,6 +30,7 @@ pub trait ConstraintValidator {
 pub enum Constraint {
     AllOf(AllOfConstraint),
     AnyOf(AnyOfConstraint),
+    ContentClosed,
     Fields(FieldsConstraint),
     Not(NotConstraint),
     OneOf(OneOfConstraint),
@@ -96,6 +102,7 @@ impl Constraint {
                 )?;
                 Ok(Constraint::AnyOf(any_of))
             }
+            IslConstraint::ContentClosed => Ok(Constraint::ContentClosed),
             IslConstraint::Fields(fields) => {
                 let fields_constraint: FieldsConstraint =
                     FieldsConstraint::resolve_from_isl_constraint(
@@ -144,17 +151,31 @@ impl Constraint {
         }
     }
 
-    pub fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
+    pub fn validate(
+        &self,
+        value: &OwnedElement,
+        type_store: &TypeStore,
+        open_content: bool,
+    ) -> ValidationResult {
         match self {
-            Constraint::AllOf(all_of) => all_of.validate(value, type_store),
-            Constraint::AnyOf(any_of) => any_of.validate(value, type_store),
-            Constraint::Fields(fields) => fields.validate(value, type_store),
-            Constraint::Not(not) => not.validate(value, type_store),
-            Constraint::OneOf(one_of) => one_of.validate(value, type_store),
-            Constraint::Type(type_constraint) => type_constraint.validate(value, type_store),
-            Constraint::Occurs(occurs) => occurs.validate(value, type_store),
+            Constraint::AllOf(all_of) => all_of.validate(value, type_store, open_content),
+            Constraint::AnyOf(any_of) => any_of.validate(value, type_store, open_content),
+            Constraint::ContentClosed => {
+                // No op
+                // `content: closed` does not work as a constraint by its own, it needs to be used with other container constraints
+                // e.g. `fields`
+                // the validation for `content: closed` is done within these other constraints
+                Ok(())
+            }
+            Constraint::Fields(fields) => fields.validate(value, type_store, open_content),
+            Constraint::Not(not) => not.validate(value, type_store, open_content),
+            Constraint::OneOf(one_of) => one_of.validate(value, type_store, open_content),
+            Constraint::Type(type_constraint) => {
+                type_constraint.validate(value, type_store, open_content)
+            }
+            Constraint::Occurs(occurs) => occurs.validate(value, type_store, open_content),
             Constraint::OrderedElements(ordered_elements) => {
-                ordered_elements.validate(value, type_store)
+                ordered_elements.validate(value, type_store, open_content)
             }
         }
     }
@@ -187,7 +208,12 @@ impl AllOfConstraint {
 }
 
 impl ConstraintValidator for AllOfConstraint {
-    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
+    fn validate(
+        &self,
+        value: &OwnedElement,
+        type_store: &TypeStore,
+        open_open_content: bool,
+    ) -> ValidationResult {
         let mut violations: Vec<Violation> = vec![];
         let mut valid_types = vec![];
         for type_id in &self.type_ids {
@@ -240,7 +266,12 @@ impl AnyOfConstraint {
 }
 
 impl ConstraintValidator for AnyOfConstraint {
-    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
+    fn validate(
+        &self,
+        value: &OwnedElement,
+        type_store: &TypeStore,
+        open_open_content: bool,
+    ) -> ValidationResult {
         let mut violations: Vec<Violation> = vec![];
         let mut valid_types = vec![];
         for type_id in &self.type_ids {
@@ -290,7 +321,12 @@ impl OneOfConstraint {
 }
 
 impl ConstraintValidator for OneOfConstraint {
-    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
+    fn validate(
+        &self,
+        value: &OwnedElement,
+        type_store: &TypeStore,
+        open_content: bool,
+    ) -> ValidationResult {
         let mut violations: Vec<Violation> = vec![];
         let mut valid_types = vec![];
         for type_id in &self.type_ids {
@@ -344,7 +380,12 @@ impl NotConstraint {
 }
 
 impl ConstraintValidator for NotConstraint {
-    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
+    fn validate(
+        &self,
+        value: &OwnedElement,
+        type_store: &TypeStore,
+        open_content: bool,
+    ) -> ValidationResult {
         let type_def = type_store.get_type_by_id(self.type_id).unwrap();
         let violation = type_def.validate(value, type_store);
         match violation {
@@ -386,7 +427,12 @@ impl TypeConstraint {
 }
 
 impl ConstraintValidator for TypeConstraint {
-    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
+    fn validate(
+        &self,
+        value: &OwnedElement,
+        type_store: &TypeStore,
+        open_content: bool,
+    ) -> ValidationResult {
         let type_def = type_store.get_type_by_id(self.type_id).unwrap();
         type_def.validate(value, type_store)
     }
@@ -410,7 +456,12 @@ impl OccursConstraint {
 }
 
 impl ConstraintValidator for OccursConstraint {
-    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
+    fn validate(
+        &self,
+        value: &OwnedElement,
+        type_store: &TypeStore,
+        open_content: bool,
+    ) -> ValidationResult {
         // No op
         // `occurs` does not work as a constraint by its own, it needs to be used with other constraints
         // e.g. `ordered_elements`, `fields`, etc.
@@ -511,7 +562,12 @@ impl OrderedElementsConstraint {
 }
 
 impl ConstraintValidator for OrderedElementsConstraint {
-    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
+    fn validate(
+        &self,
+        value: &OwnedElement,
+        type_store: &TypeStore,
+        open_content: bool,
+    ) -> ValidationResult {
         let violations: Vec<Violation> = vec![];
 
         // Check for null sequence
@@ -592,7 +648,12 @@ impl FieldsConstraint {
 }
 
 impl ConstraintValidator for FieldsConstraint {
-    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
+    fn validate(
+        &self,
+        value: &OwnedElement,
+        type_store: &TypeStore,
+        open_open_content: bool,
+    ) -> ValidationResult {
         let mut violations: Vec<Violation> = vec![];
 
         // Check for null struct
@@ -617,6 +678,22 @@ impl ConstraintValidator for FieldsConstraint {
             }
             Some(ion_struct) => ion_struct,
         };
+
+        // Verify if open content exists in the struct fields
+        if !open_open_content {
+            for (field_name, value) in ion_struct.iter() {
+                if !self.fields.contains_key(field_name.text().unwrap()) {
+                    violations.push(Violation::new(
+                        "fields",
+                        ViolationCode::InvalidOpenContent,
+                        &format!(
+                            "Found open open_content in the struct: {:?}: {:?}",
+                            field_name, value
+                        ),
+                    ));
+                }
+            }
+        }
 
         // get the values corresponding to the field_name and perform occurs_validation based on the type_def
         for (field_name, type_id) in &self.fields {

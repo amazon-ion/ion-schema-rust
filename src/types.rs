@@ -50,7 +50,9 @@ impl TypeRef {
             },
         };
         for constraint in type_def.constraints() {
-            if let Err(violation) = constraint.validate(value, &self.type_store) {
+            if let Err(violation) =
+                constraint.validate(value, &self.type_store, type_def.open_content())
+            {
                 violations.push(violation);
             }
         }
@@ -140,6 +142,18 @@ impl TypeDefinition {
         }
     }
 
+    /// Verifies if the [TypeDefinition] allows open content or not
+    pub fn open_content(&self) -> bool {
+        match &self {
+            TypeDefinition::Named(named_type) => named_type.open_content(),
+            TypeDefinition::Anonymous(anonymous_type) => anonymous_type.open_content(),
+            TypeDefinition::BuiltIn(_) => {
+                // By default open content is supported for Ion Schema
+                true
+            }
+        }
+    }
+
     /// Returns an occurs constraint as range if it exists in the [TypeDefinition] otherwise returns `occurs: required`
     pub fn get_occurs_constraint(
         &self,
@@ -226,6 +240,14 @@ impl TypeDefinitionImpl {
 
     pub fn constraints(&self) -> &[Constraint] {
         &self.constraints
+    }
+
+    pub fn open_content(&self) -> bool {
+        let mut open_content = true;
+        if self.constraints.contains(&Constraint::ContentClosed) {
+            open_content = false;
+        }
+        open_content
     }
 
     /// Parse constraints inside an [OwnedStruct] to a schema [Type]
@@ -324,7 +346,7 @@ impl TypeValidator for TypeDefinitionImpl {
             Some(name) => name,
         };
         for constraint in self.constraints() {
-            if let Err(violation) = constraint.validate(value, type_store) {
+            if let Err(violation) = constraint.validate(value, type_store, self.open_content()) {
                 violations.push(violation);
             }
         }
