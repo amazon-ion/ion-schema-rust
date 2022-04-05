@@ -87,7 +87,31 @@ impl IslConstraint {
                 )?;
                 Ok(IslConstraint::AnyOf(types))
             }
-            "content" => Ok(IslConstraint::ContentClosed),
+            "content" => {
+                if value.is_null() {
+                    return Err(invalid_schema_error_raw(format!(
+                        "content constraint was a null instead of a symbol `closed`"
+                    )));
+                }
+
+                if value.ion_type() != IonType::Symbol {
+                    return Err(invalid_schema_error_raw(format!(
+                        "content constraint was a {:?} instead of a symbol `closed`",
+                        value.ion_type()
+                    )));
+                }
+
+                if let Some(closed) = value.as_sym().unwrap().text() {
+                    if closed != "closed" {
+                        return Err(invalid_schema_error_raw(format!(
+                            "content constraint was a {} instead of a symbol `closed`",
+                            closed
+                        )));
+                    }
+                }
+
+                Ok(IslConstraint::ContentClosed)
+            }
             "fields" => {
                 let fields: HashMap<String, IslTypeRef> =
                     IslConstraint::isl_fields_from_ion_element(value, inline_imported_types)?;
