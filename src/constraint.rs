@@ -6,9 +6,8 @@ use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::types::{TypeDefinition, TypeValidator};
 use crate::violation::{Violation, ViolationCode};
 use ion_rs::value::owned::OwnedElement;
-use ion_rs::value::{Element, Sequence};
+use ion_rs::value::{Element, Sequence, Struct, SymbolToken};
 use std::collections::HashMap;
-use std::convert::TryInto;
 use std::iter::Peekable;
 
 /// Provides validation for schema Constraint
@@ -26,6 +25,7 @@ pub trait ConstraintValidator {
 pub enum Constraint {
     AllOf(AllOfConstraint),
     AnyOf(AnyOfConstraint),
+    ContentClosed,
     Fields(FieldsConstraint),
     Not(NotConstraint),
     OneOf(OneOfConstraint),
@@ -66,11 +66,12 @@ impl Constraint {
     }
 
     /// Creates a [Constraint::Fields] referring to the fields represented by the provided field name and [TypeId]s.
+    /// By default, fields created using this method will allow open content
     pub fn fields<I>(fields: I) -> Constraint
     where
         I: Iterator<Item = (String, TypeId)>,
     {
-        Constraint::Fields(FieldsConstraint::new(fields.collect()))
+        Constraint::Fields(FieldsConstraint::new(fields.collect(), true))
     }
 
     /// Parse an [IslConstraint] to a [Constraint]
@@ -78,6 +79,7 @@ impl Constraint {
         isl_constraint: &IslConstraint,
         type_store: &mut TypeStore,
         pending_types: &mut PendingTypes,
+        open_content: bool, // this will be used by Fields constraint to verify if open content is allowed or not
     ) -> IonSchemaResult<Constraint> {
         // TODO: add more constraints below
         match isl_constraint {
@@ -97,12 +99,14 @@ impl Constraint {
                 )?;
                 Ok(Constraint::AnyOf(any_of))
             }
+            IslConstraint::ContentClosed => Ok(Constraint::ContentClosed),
             IslConstraint::Fields(fields) => {
                 let fields_constraint: FieldsConstraint =
                     FieldsConstraint::resolve_from_isl_constraint(
                         fields,
                         type_store,
                         pending_types,
+                        open_content,
                     )?;
                 Ok(Constraint::Fields(fields_constraint))
             }
@@ -149,6 +153,13 @@ impl Constraint {
         match self {
             Constraint::AllOf(all_of) => all_of.validate(value, type_store),
             Constraint::AnyOf(any_of) => any_of.validate(value, type_store),
+            Constraint::ContentClosed => {
+                // No op
+                // `content: closed` does not work as a constraint by its own, it needs to be used with other container constraints
+                // e.g. `fields`
+                // the validation for `content: closed` is done within these other constraints
+                Ok(())
+            }
             Constraint::Fields(fields) => fields.validate(value, type_store),
             Constraint::Not(not) => not.validate(value, type_store),
             Constraint::OneOf(one_of) => one_of.validate(value, type_store),
@@ -445,29 +456,14 @@ impl OrderedElementsConstraint {
         Ok(OrderedElementsConstraint::new(resolved_types))
     }
 
-    /// Returns an occurs constraint as range if it exists in the type_def otherwise returns `occurs: required`
-    fn get_occurs_constraint(type_def: &TypeDefinition) -> IonSchemaResult<Range> {
-        // verify if the type_def contains `occurs` constraint and fill occurs_range
-        // Otherwise if there is no `occurs` constraint specified then use `occurs: required`
-        if let Some(Constraint::Occurs(occurs)) = type_def
-            .constraints()
-            .iter()
-            .filter(|c| matches!(c, Constraint::Occurs(_)))
-            .next()
-        {
-            return occurs.isl_occurs().try_into();
-        }
-        // by default, if there is no `occurs` constraint for given type_def then use `occurs: required`
-        Range::required()
-    }
-
     /// Validates a type_def for occurs constraint using values_iter
     fn type_def_occurs_validation<'a>(
         type_def: &TypeDefinition,
         values_iter: &mut Peekable<Box<dyn Iterator<Item = &OwnedElement> + 'a>>,
         type_store: &TypeStore,
     ) -> ValidationResult {
-        let occurs_range: Range = OrderedElementsConstraint::get_occurs_constraint(type_def)
+        let occurs_range: Range = type_def
+            .get_occurs_constraint("ordered_elements")
             .expect("Unable to parse occurs to range");
 
         // use this counter to keep track of valid values for given type_def
@@ -583,11 +579,20 @@ impl ConstraintValidator for OrderedElementsConstraint {
 #[derive(Debug, Clone, PartialEq)]
 pub struct FieldsConstraint {
     fields: HashMap<String, TypeId>,
+    open_content: bool,
 }
 
 impl FieldsConstraint {
-    pub fn new(fields: HashMap<String, TypeId>) -> Self {
-        Self { fields }
+    pub fn new(fields: HashMap<String, TypeId>, open_content: bool) -> Self {
+        Self {
+            fields,
+            open_content,
+        }
+    }
+
+    /// Provides boolean value indicating whether open content is allowed or not for the fields
+    pub fn open_content(&self) -> bool {
+        self.open_content
     }
 
     /// Tries to create an [Fields] constraint from the given OwnedElement
@@ -595,6 +600,7 @@ impl FieldsConstraint {
         fields: &HashMap<String, IslTypeRef>,
         type_store: &mut TypeStore,
         pending_types: &mut PendingTypes,
+        open_content: bool, // Indicates if open content is allowed or not for the fields in the container
     ) -> IonSchemaResult<Self> {
         let resolved_fields: HashMap<String, TypeId> = fields
             .iter()
@@ -603,12 +609,97 @@ impl FieldsConstraint {
                     .and_then(|type_id| Ok((f.to_owned(), type_id)))
             })
             .collect::<IonSchemaResult<HashMap<String, TypeId>>>()?;
-        Ok(FieldsConstraint::new(resolved_fields))
+        Ok(FieldsConstraint::new(resolved_fields, open_content))
     }
 }
 
 impl ConstraintValidator for FieldsConstraint {
     fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
-        todo!()
+        let mut violations: Vec<Violation> = vec![];
+
+        // Check for null struct
+        if value.is_null() {
+            return Err(Violation::with_violations(
+                "fields",
+                ViolationCode::TypeMismatched,
+                &format!("Null struct not allowed for fields constraint"),
+                violations,
+            ));
+        }
+
+        // Create a peekable iterator for given struct
+        let ion_struct = match value.as_struct() {
+            None => {
+                return Err(Violation::with_violations(
+                    "fields",
+                    ViolationCode::TypeMismatched,
+                    &format!("expected struct ion found {}", value.ion_type()),
+                    violations,
+                ));
+            }
+            Some(ion_struct) => ion_struct,
+        };
+
+        // Verify if open content exists in the struct fields
+        if !self.open_content() {
+            for (field_name, value) in ion_struct.iter() {
+                if !self.fields.contains_key(field_name.text().unwrap()) {
+                    violations.push(Violation::new(
+                        "fields",
+                        ViolationCode::InvalidOpenContent,
+                        &format!(
+                            "Found open content in the struct: {:?}: {:?}",
+                            field_name, value
+                        ),
+                    ));
+                }
+            }
+        }
+
+        // get the values corresponding to the field_name and perform occurs_validation based on the type_def
+        for (field_name, type_id) in &self.fields {
+            let type_def = type_store.get_type_by_id(*type_id).unwrap();
+            let values: Vec<&OwnedElement> = ion_struct.get_all(field_name).collect();
+
+            // perform occurs validation for type_def for all values of the given field_name
+            let occurs_range: Range = type_def
+                .get_occurs_constraint("fields")
+                .expect("Unable to parse occurs to range");
+
+            // verify if values follow occurs_range constraint
+            if !occurs_range
+                .contains(&(values.len() as i64).into())
+                .unwrap()
+            {
+                violations.push(Violation::new(
+                    "fields",
+                    ViolationCode::TypeMismatched,
+                    &format!(
+                        "Expected {:?} of field {:?}: found {}",
+                        occurs_range,
+                        field_name,
+                        values.len()
+                    ),
+                ));
+            }
+
+            // verify if all the values for this field name are valid according to type_def
+            for value in values {
+                if let Err(violation) = type_def.validate(value, type_store) {
+                    violations.push(violation);
+                }
+            }
+        }
+
+        // return error if there were any violation found during validation
+        if !violations.is_empty() {
+            return Err(Violation::with_violations(
+                "fields",
+                ViolationCode::FieldsNotMatched,
+                &format!("value didn't satisfy fields constraint"),
+                violations,
+            ));
+        }
+        Ok(())
     }
 }

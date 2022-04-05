@@ -13,6 +13,7 @@ use std::collections::HashMap;
 pub enum IslConstraint {
     AllOf(Vec<IslTypeRef>),
     AnyOf(Vec<IslTypeRef>),
+    ContentClosed,
     Fields(HashMap<String, IslTypeRef>),
     Not(IslTypeRef),
     Occurs(IslOccurs),
@@ -86,9 +87,40 @@ impl IslConstraint {
                 )?;
                 Ok(IslConstraint::AnyOf(types))
             }
+            "content" => {
+                if value.is_null() {
+                    return Err(invalid_schema_error_raw(format!(
+                        "content constraint was a null instead of a symbol `closed`"
+                    )));
+                }
+
+                if value.ion_type() != IonType::Symbol {
+                    return Err(invalid_schema_error_raw(format!(
+                        "content constraint was a {:?} instead of a symbol `closed`",
+                        value.ion_type()
+                    )));
+                }
+
+                if let Some(closed) = value.as_sym().unwrap().text() {
+                    if closed != "closed" {
+                        return Err(invalid_schema_error_raw(format!(
+                            "content constraint was a {} instead of a symbol `closed`",
+                            closed
+                        )));
+                    }
+                }
+
+                Ok(IslConstraint::ContentClosed)
+            }
             "fields" => {
                 let fields: HashMap<String, IslTypeRef> =
                     IslConstraint::isl_fields_from_ion_element(value, inline_imported_types)?;
+
+                if fields.is_empty() {
+                    return Err(invalid_schema_error_raw(
+                        "fields constraint can not be empty",
+                    ));
+                }
                 Ok(IslConstraint::Fields(fields))
             }
             "one_of" => {
@@ -175,12 +207,19 @@ impl IslConstraint {
         value: &OwnedElement,
         inline_imported_types: &mut Vec<IslImportType>,
     ) -> IonSchemaResult<HashMap<String, IslTypeRef>> {
+        if value.is_null() {
+            return Err(invalid_schema_error_raw(
+                "fields constraint was a null instead of a struct",
+            ));
+        }
+
         if value.ion_type() != IonType::Struct {
             return Err(invalid_schema_error_raw(format!(
                 "fields constraint was a {:?} instead of a struct",
                 value.ion_type()
             )));
         }
+
         Ok(value
             .as_struct()
             .unwrap()

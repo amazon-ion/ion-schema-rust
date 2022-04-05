@@ -29,6 +29,14 @@ impl IslType {
             IslType::Anonymous(anonymous_type) => anonymous_type.constraints(),
         }
     }
+
+    /// Verifies if the [IslType] allows open content or not
+    pub fn open_content(&self) -> bool {
+        match &self {
+            IslType::Named(named_type) => named_type.open_content(),
+            IslType::Anonymous(anonymous_type) => anonymous_type.open_content(),
+        }
+    }
 }
 
 /// Represents both named and anonymous [IslType]s and can be converted to a solid [TypeDefinition] using TypeStore
@@ -51,6 +59,14 @@ impl IslTypeImpl {
 
     pub fn constraints(&self) -> &[IslConstraint] {
         &self.constraints
+    }
+
+    pub fn open_content(&self) -> bool {
+        let mut open_content = true;
+        if self.constraints.contains(&IslConstraint::ContentClosed) {
+            open_content = false;
+        }
+        open_content
     }
 
     /// Parse constraints inside an [OwnedElement] to an [IslTypeImpl]

@@ -1,12 +1,14 @@
 use crate::constraint::Constraint;
 use crate::isl::isl_constraint::IslConstraint;
 use crate::isl::isl_type::IslTypeImpl;
+use crate::isl::util::Range;
 use crate::result::{IonSchemaResult, ValidationResult};
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::violation::{Violation, ViolationCode};
 use ion_rs::value::owned::{text_token, OwnedElement};
 use ion_rs::value::{Builder, Element};
 use ion_rs::IonType;
+use std::convert::TryInto;
 use std::rc::Rc;
 
 /// Provides validation for Type
@@ -91,8 +93,13 @@ impl BuiltInTypeDefinition {
 
         // convert IslConstraint to Constraint
         for isl_constraint in isl_type.constraints() {
-            let constraint =
-                Constraint::resolve_from_isl_constraint(isl_constraint, type_store, pending_types)?;
+            // For built in types, open_content is set as true as Ion Schema by default allows open content
+            let constraint = Constraint::resolve_from_isl_constraint(
+                isl_constraint,
+                type_store,
+                pending_types,
+                true,
+            )?;
             constraints.push(constraint);
         }
 
@@ -128,6 +135,7 @@ impl TypeDefinition {
     pub fn anonymous<A: Into<Vec<Constraint>>>(constraints: A) -> TypeDefinition {
         TypeDefinition::Anonymous(TypeDefinitionImpl::new(None, constraints.into()))
     }
+
     /// Provides the underlying constraints of [TypeDefinitionImpl]
     pub fn constraints(&self) -> &[Constraint] {
         match &self {
@@ -135,6 +143,30 @@ impl TypeDefinition {
             TypeDefinition::Anonymous(anonymous_type) => anonymous_type.constraints(),
             _ => &[],
         }
+    }
+
+    /// Returns an occurs constraint as range if it exists in the [TypeDefinition] otherwise returns `occurs: required`
+    pub fn get_occurs_constraint(
+        &self,
+        validation_constraint_name: &str,
+    ) -> IonSchemaResult<Range> {
+        // verify if the type_def contains `occurs` constraint and fill occurs_range
+        // Otherwise if there is no `occurs` constraint specified then use `occurs: required`
+        if let Some(Constraint::Occurs(occurs)) = self
+            .constraints()
+            .iter()
+            .filter(|c| matches!(c, Constraint::Occurs(_)))
+            .next()
+        {
+            return occurs.isl_occurs().try_into();
+        }
+        // by default, if there is no `occurs` constraint for given type_def
+        // then use `occurs:optional` if its `fields` constraint validation
+        // otherwise, use `occurs: required` if its `ordered_elements` constraint validation
+        if validation_constraint_name == "fields" {
+            return Range::optional();
+        }
+        Range::required()
     }
 }
 
@@ -229,8 +261,12 @@ impl TypeDefinitionImpl {
                 }
                 _ => {}
             }
-            let constraint =
-                Constraint::resolve_from_isl_constraint(isl_constraint, type_store, pending_types)?;
+            let constraint = Constraint::resolve_from_isl_constraint(
+                isl_constraint,
+                type_store,
+                pending_types,
+                isl_type.open_content(),
+            )?;
             constraints.push(constraint);
         }
 
@@ -252,6 +288,7 @@ impl TypeDefinitionImpl {
                 &isl_constraint,
                 type_store,
                 pending_types,
+                true, // by default Ion Schema allows open content
             )?;
             constraints.push(constraint);
         }
