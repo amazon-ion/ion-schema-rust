@@ -50,9 +50,7 @@ impl TypeRef {
             },
         };
         for constraint in type_def.constraints() {
-            if let Err(violation) =
-                constraint.validate(value, &self.type_store, type_def.open_content())
-            {
+            if let Err(violation) = constraint.validate(value, &self.type_store) {
                 violations.push(violation);
             }
         }
@@ -95,8 +93,13 @@ impl BuiltInTypeDefinition {
 
         // convert IslConstraint to Constraint
         for isl_constraint in isl_type.constraints() {
-            let constraint =
-                Constraint::resolve_from_isl_constraint(isl_constraint, type_store, pending_types)?;
+            // For built in types, open_content is set as true as Ion Schema by default allows open content
+            let constraint = Constraint::resolve_from_isl_constraint(
+                isl_constraint,
+                type_store,
+                pending_types,
+                true,
+            )?;
             constraints.push(constraint);
         }
 
@@ -139,18 +142,6 @@ impl TypeDefinition {
             TypeDefinition::Named(named_type) => named_type.constraints(),
             TypeDefinition::Anonymous(anonymous_type) => anonymous_type.constraints(),
             _ => &[],
-        }
-    }
-
-    /// Verifies if the [TypeDefinition] allows open content or not
-    pub fn open_content(&self) -> bool {
-        match &self {
-            TypeDefinition::Named(named_type) => named_type.open_content(),
-            TypeDefinition::Anonymous(anonymous_type) => anonymous_type.open_content(),
-            TypeDefinition::BuiltIn(_) => {
-                // By default open content is supported for Ion Schema
-                true
-            }
         }
     }
 
@@ -242,14 +233,6 @@ impl TypeDefinitionImpl {
         &self.constraints
     }
 
-    pub fn open_content(&self) -> bool {
-        let mut open_content = true;
-        if self.constraints.contains(&Constraint::ContentClosed) {
-            open_content = false;
-        }
-        open_content
-    }
-
     /// Parse constraints inside an [OwnedStruct] to a schema [Type]
     pub fn parse_from_isl_type_and_update_pending_types(
         isl_type: &IslTypeImpl,
@@ -278,8 +261,12 @@ impl TypeDefinitionImpl {
                 }
                 _ => {}
             }
-            let constraint =
-                Constraint::resolve_from_isl_constraint(isl_constraint, type_store, pending_types)?;
+            let constraint = Constraint::resolve_from_isl_constraint(
+                isl_constraint,
+                type_store,
+                pending_types,
+                isl_type.open_content(),
+            )?;
             constraints.push(constraint);
         }
 
@@ -301,6 +288,7 @@ impl TypeDefinitionImpl {
                 &isl_constraint,
                 type_store,
                 pending_types,
+                true, // by default Ion Schema allows open content
             )?;
             constraints.push(constraint);
         }
@@ -346,7 +334,7 @@ impl TypeValidator for TypeDefinitionImpl {
             Some(name) => name,
         };
         for constraint in self.constraints() {
-            if let Err(violation) = constraint.validate(value, type_store, self.open_content()) {
+            if let Err(violation) = constraint.validate(value, type_store) {
                 violations.push(violation);
             }
         }
