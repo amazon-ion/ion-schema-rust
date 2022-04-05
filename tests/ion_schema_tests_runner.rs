@@ -36,7 +36,7 @@ const SKIP_LIST: &[&str] = &[
     "ion-schema-tests/core_types/nothing.isl",
     "ion-schema-tests/core_types/document.isl",
     "ion-schema-tests/constraints/content/validation_closed.isl",
-    "ion-schema-tests/constraints/content/validation_mixed.isl"
+    "ion-schema-tests/constraints/content/validation_mixed.isl",
 ];
 
 #[test_resources("ion-schema-tests/core_types/*.isl")]
