@@ -203,6 +203,12 @@ mod schema_tests {
             "#).into_iter(),
         1 // this includes named type fields_type
     ),
+    case::contains_constraint(
+        load(r#" // For a schema with contains constraint as below:
+                type:: { name: contains_type, contains: [true, 1, "hello"] }
+            "#).into_iter(),
+        1 // this includes named type contains_type
+    ),
     )]
     fn owned_elements_to_schema<'a, I: Iterator<Item = OwnedElement>>(
         owned_elements: I,
@@ -410,6 +416,25 @@ mod schema_tests {
                         type:: { name: fields_type,  content: closed, fields: { name: { type: string, occurs: range::[0,2] }, id: int } }
                 "#),
                 "fields_type"
+        ),
+        case::contains_constraint(
+                load(r#"
+                    [[5], '3', {a: 7}, true, 2.0, "4", (6), 1, extra_value]
+                    ([5]  '3'  {a: 7}  true  2.0  "4"  (6)  1 extra_value)
+                "#),
+                load(r#"
+                    null
+                    null.null
+                    null.int
+                    null.list
+                    null.sexp
+                    null.struct
+                    [true, 1, 2.0, '3', "4", [5], (6)]
+                "#),
+                load_schema_from_text(r#" // For a schema with fields constraint as below:
+                        type::{ name: contains_type, contains: [true, 1, 2.0, '3', "4", [5], (6), {a: 7} ] }
+                "#),
+                "contains_type"
         ),
     )]
     fn type_validation(

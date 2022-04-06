@@ -448,6 +448,13 @@ mod type_definition_tests {
         IslType::anonymous([IslConstraint::fields(vec![("name".to_owned(), IslTypeRef::named("string")), ("id".to_owned(), IslTypeRef::named("int"))].into_iter())]),
         TypeDefinition::anonymous([Constraint::fields(vec![("name".to_owned(), 4), ("id".to_owned(), 0)].into_iter()), Constraint::type_constraint(25)])
     ),
+    case::contains_constraint(
+        /* For a schema with contains constraint as below:
+            { contains: [true, 1, "hello"] }
+        */
+        IslType::anonymous([IslConstraint::contains([true.into(), 1.into(), "hello".to_owned().into()])]),
+        TypeDefinition::anonymous([Constraint::contains([true.into(), 1.into(), "hello".to_owned().into()]), Constraint::type_constraint(25)])
+        ),
     )]
     fn isl_type_to_type_definition(isl_type: IslType, type_def: TypeDefinition) {
         // assert if both the TypeDefinition are same in terms of constraints and name
