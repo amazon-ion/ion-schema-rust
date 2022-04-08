@@ -716,7 +716,7 @@ impl ConstraintValidator for FieldsConstraint {
     }
 }
 
-/// Implements an `contains` constraint of Ion Schema
+/// Implements Ion Schema's `contains` constraint
 /// [contains]: https://amzn.github.io/ion-schema/docs/spec.html#contains
 #[derive(Debug, Clone, PartialEq)]
 pub struct ContainsConstraint {
@@ -734,7 +734,7 @@ impl ContainsConstraint {
 impl ConstraintValidator for ContainsConstraint {
     fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
         // get the expected values from the contains constraint
-        let mut expected_values = self.values.clone();
+        let mut expected_values = self.values.iter();
 
         // Check for null sequence
         if value.is_null() {
@@ -745,31 +745,26 @@ impl ConstraintValidator for ContainsConstraint {
             ));
         }
 
-        let values: Vec<&OwnedElement> = match value.as_sequence() {
+        match value.as_sequence() {
             None => {
+                // return Violation if value is not an Ion sequence
                 return Err(Violation::new(
                     "contains",
                     ViolationCode::TypeMismatched,
                     &format!("expected list found {}", value.ion_type()),
                 ));
             }
-            Some(ion_sequence) => ion_sequence.iter().collect(),
-        };
-
-        for value in values {
-            if let Some(pos) = expected_values.iter().position(|v| v == value) {
-                expected_values.remove(pos);
+            Some(ion_sequence) => {
+                // if any of our expected values are not in the Ion sequence then return Violation
+                if !expected_values.all(|ev| ion_sequence.iter().find(|v| v == &ev).is_some()) {
+                    return Err(Violation::new(
+                        "contains",
+                        ViolationCode::MissingValue,
+                        &format!("{:?} has missing value(s): {:?}", value, expected_values),
+                    ));
+                }
             }
-        }
-
-        // return error if there were any values left in the expected values vector
-        if !expected_values.is_empty() {
-            return Err(Violation::new(
-                "contains",
-                ViolationCode::MissingValue,
-                &format!("{:?} has missing value(s): {:?}", value, expected_values),
-            ));
-        }
+        };
 
         Ok(())
     }
