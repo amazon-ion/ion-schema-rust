@@ -733,9 +733,6 @@ impl ContainsConstraint {
 
 impl ConstraintValidator for ContainsConstraint {
     fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
-        // get the expected values from the contains constraint
-        let mut expected_values = self.values.to_owned();
-
         // Check for null sequence
         if value.is_null() {
             return Err(Violation::new(
@@ -755,20 +752,23 @@ impl ConstraintValidator for ContainsConstraint {
                 ));
             }
             Some(ion_sequence) => {
-                // for each value in ion sequence if it exists in the expected values
-                // then remove it from expected values to keep track of missing values
-                for value in ion_sequence.iter() {
-                    if let Some(pos) = expected_values.iter().position(|v| v == value) {
-                        expected_values.remove(pos);
+                // add all the missing values found during validation
+                let mut missing_values = vec![];
+
+                // for each value in expected values if it does not exist in ion sequence
+                // then add it to missing_values to keep track of missing values
+                for expected_value in self.values.iter() {
+                    if ion_sequence.iter().find(|v| v == &expected_value).is_none() {
+                        missing_values.push(expected_value);
                     }
                 }
 
-                // return Violation if there were any values left in the expected values vector
-                if !expected_values.is_empty() {
+                // return Violation if there were any values added to the missing values vector
+                if !missing_values.is_empty() {
                     return Err(Violation::new(
                         "contains",
                         ViolationCode::MissingValue,
-                        &format!("{:?} has missing value(s): {:?}", value, expected_values),
+                        &format!("{:?} has missing value(s): {:?}", value, missing_values),
                     ));
                 }
             }
