@@ -243,6 +243,12 @@ mod isl_tests {
                 "#),
         IslType::anonymous([IslConstraint::fields(vec![("name".to_owned(), IslTypeRef::named("string")), ("id".to_owned(), IslTypeRef::named("int"))].into_iter())]),
     ),
+    case::contains_constraint(
+        load_anonymous_type(r#" // For a schema with contains constraint as below:
+                    { contains: [true, 1, "hello"] }
+                "#),
+        IslType::anonymous([IslConstraint::contains([true.into(), 1.into(), "hello".to_owned().into()])])
+    ),
     )]
     fn owned_struct_to_isl_type(isl_type1: IslType, isl_type2: IslType) {
         // assert if both the IslType are same in terms of constraints and name

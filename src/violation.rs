@@ -55,6 +55,7 @@ pub enum ViolationCode {
     TypeMatched,
     AllTypesNotMatched,
     TypeMismatched,
+    MissingValue, // if the ion value is missing for a particular constraint
     FieldsNotMatched,
     InvalidOpenContent, // if a container contains open content when `content: closed` is specified
     TypeConstraintsUnsatisfied,
@@ -73,6 +74,7 @@ impl fmt::Display for ViolationCode {
                 ViolationCode::TypeMismatched => "type_mismatched",
                 ViolationCode::TypeConstraintsUnsatisfied => "type_constraints_unsatisfied",
                 ViolationCode::InvalidNull => "invalid_null",
+                ViolationCode::MissingValue => "missing_value",
                 ViolationCode::FieldsNotMatched => "fields_not_matched",
                 ViolationCode::InvalidOpenContent => "invalid_open_content",
             }

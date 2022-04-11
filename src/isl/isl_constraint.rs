@@ -13,6 +13,7 @@ use std::collections::HashMap;
 pub enum IslConstraint {
     AllOf(Vec<IslTypeRef>),
     AnyOf(Vec<IslTypeRef>),
+    Contains(Vec<OwnedElement>),
     ContentClosed,
     Fields(HashMap<String, IslTypeRef>),
     Not(IslTypeRef),
@@ -62,6 +63,11 @@ impl IslConstraint {
         IslConstraint::Not(isl_type)
     }
 
+    /// Creates a [IslConstraint::Contains] using the [OwnedElement] specified inside it
+    pub fn contains<A: Into<Vec<OwnedElement>>>(values: A) -> IslConstraint {
+        IslConstraint::Contains(values.into())
+    }
+
     /// Parse constraints inside an [OwnedElement] to an [IslConstraint]
     pub fn from_ion_element(
         constraint_name: &str,
@@ -86,6 +92,28 @@ impl IslConstraint {
                     "any_of",
                 )?;
                 Ok(IslConstraint::AnyOf(types))
+            }
+            "contains" => {
+                if value.is_null() {
+                    return Err(invalid_schema_error_raw(format!(
+                        "contains constraint was a null instead of a list"
+                    )));
+                }
+
+                if value.ion_type() != IonType::List {
+                    return Err(invalid_schema_error_raw(format!(
+                        "contains constraint was a {:?} instead of a list",
+                        value.ion_type()
+                    )));
+                }
+
+                let values: Vec<OwnedElement> = value
+                    .as_sequence()
+                    .unwrap()
+                    .iter()
+                    .map(|e| e.to_owned())
+                    .collect();
+                Ok(IslConstraint::Contains(values))
             }
             "content" => {
                 if value.is_null() {

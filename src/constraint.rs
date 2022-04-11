@@ -25,6 +25,7 @@ pub trait ConstraintValidator {
 pub enum Constraint {
     AllOf(AllOfConstraint),
     AnyOf(AnyOfConstraint),
+    Contains(ContainsConstraint),
     ContentClosed,
     Fields(FieldsConstraint),
     Not(NotConstraint),
@@ -65,6 +66,11 @@ impl Constraint {
         Constraint::OrderedElements(OrderedElementsConstraint::new(type_ids.into()))
     }
 
+    /// Creates a [Constraint::Contains] referring to [OwnedElements] specified inside it
+    pub fn contains<A: Into<Vec<OwnedElement>>>(values: A) -> Constraint {
+        Constraint::Contains(ContainsConstraint::new(values.into()))
+    }
+
     /// Creates a [Constraint::Fields] referring to the fields represented by the provided field name and [TypeId]s.
     /// By default, fields created using this method will allow open content
     pub fn fields<I>(fields: I) -> Constraint
@@ -98,6 +104,11 @@ impl Constraint {
                     pending_types,
                 )?;
                 Ok(Constraint::AnyOf(any_of))
+            }
+            IslConstraint::Contains(values) => {
+                let contains_constraint: ContainsConstraint =
+                    ContainsConstraint::new(values.to_owned());
+                Ok(Constraint::Contains(contains_constraint))
             }
             IslConstraint::ContentClosed => Ok(Constraint::ContentClosed),
             IslConstraint::Fields(fields) => {
@@ -153,6 +164,7 @@ impl Constraint {
         match self {
             Constraint::AllOf(all_of) => all_of.validate(value, type_store),
             Constraint::AnyOf(any_of) => any_of.validate(value, type_store),
+            Constraint::Contains(contains) => contains.validate(value, type_store),
             Constraint::ContentClosed => {
                 // No op
                 // `content: closed` does not work as a constraint by its own, it needs to be used with other container constraints
@@ -700,6 +712,68 @@ impl ConstraintValidator for FieldsConstraint {
                 violations,
             ));
         }
+        Ok(())
+    }
+}
+
+/// Implements Ion Schema's `contains` constraint
+/// [contains]: https://amzn.github.io/ion-schema/docs/spec.html#contains
+#[derive(Debug, Clone, PartialEq)]
+pub struct ContainsConstraint {
+    // TODO: convert this into a HashSet once we have an implementation of Hash for OwnedElement in ion-rust
+    // Reference ion-rust issue: https://github.com/amzn/ion-rust/issues/220
+    values: Vec<OwnedElement>,
+}
+
+impl ContainsConstraint {
+    pub fn new(values: Vec<OwnedElement>) -> Self {
+        Self { values }
+    }
+}
+
+impl ConstraintValidator for ContainsConstraint {
+    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
+        // Check for null sequence
+        if value.is_null() {
+            return Err(Violation::new(
+                "contains",
+                ViolationCode::TypeMismatched,
+                &format!("expected a sequence found {:?}", value),
+            ));
+        }
+
+        match value.as_sequence() {
+            None => {
+                // return Violation if value is not an Ion sequence
+                return Err(Violation::new(
+                    "contains",
+                    ViolationCode::TypeMismatched,
+                    &format!("expected list/sexp found {}", value.ion_type()),
+                ));
+            }
+            Some(ion_sequence) => {
+                // add all the missing values found during validation
+                let mut missing_values = vec![];
+
+                // for each value in expected values if it does not exist in ion sequence
+                // then add it to missing_values to keep track of missing values
+                for expected_value in self.values.iter() {
+                    if ion_sequence.iter().find(|v| v == &expected_value).is_none() {
+                        missing_values.push(expected_value);
+                    }
+                }
+
+                // return Violation if there were any values added to the missing values vector
+                if !missing_values.is_empty() {
+                    return Err(Violation::new(
+                        "contains",
+                        ViolationCode::MissingValue,
+                        &format!("{:?} has missing value(s): {:?}", value, missing_values),
+                    ));
+                }
+            }
+        };
+
         Ok(())
     }
 }
