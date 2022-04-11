@@ -124,6 +124,7 @@ impl IslSchema {
 #[cfg(test)]
 mod isl_tests {
     use crate::isl::isl_constraint::IslConstraint;
+    use crate::isl::isl_constraint::IslLength;
     use crate::isl::isl_constraint::IslOccurs;
     use crate::isl::isl_type::{IslType, IslTypeImpl};
     use crate::isl::isl_type_reference::IslTypeRef;
@@ -248,6 +249,12 @@ mod isl_tests {
                     { contains: [true, 1, "hello"] }
                 "#),
         IslType::anonymous([IslConstraint::contains([true.into(), 1.into(), "hello".to_owned().into()])])
+    ),
+    case::container_length_constraint(
+        load_anonymous_type(r#" // For a schema with container_length constraint as below:
+                    { container_length: 3 }
+                "#),
+        IslType::anonymous([IslConstraint::container_length(IslLength::Int(AnyInt::I64(3)))])
     ),
     )]
     fn owned_struct_to_isl_type(isl_type1: IslType, isl_type2: IslType) {

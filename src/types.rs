@@ -355,10 +355,12 @@ mod type_definition_tests {
     use super::*;
     use crate::constraint::Constraint;
     use crate::isl::isl_constraint::IslConstraint;
+    use crate::isl::isl_constraint::IslLength;
     use crate::isl::isl_constraint::IslOccurs;
     use crate::isl::isl_type::IslType;
     use crate::isl::isl_type_reference::IslTypeRef;
     use crate::system::PendingTypes;
+    use ion_rs::value::AnyInt;
     use rstest::*;
 
     // TODO: Remove type ids for assertion to make tests more readable
@@ -455,6 +457,13 @@ mod type_definition_tests {
         IslType::anonymous([IslConstraint::contains([true.into(), 1.into(), "hello".to_owned().into()])]),
         TypeDefinition::anonymous([Constraint::contains([true.into(), 1.into(), "hello".to_owned().into()]), Constraint::type_constraint(25)])
         ),
+    case::container_length_constraint(
+        /* For a schema with container_length constraint as below:
+            { container_length: 3 }
+        */
+        IslType::anonymous([IslConstraint::container_length(IslLength::Int(AnyInt::I64(3)))]),
+        TypeDefinition::anonymous([Constraint::container_length(IslLength::Int(AnyInt::I64(3))), Constraint::type_constraint(25)])
+    ),
     )]
     fn isl_type_to_type_definition(isl_type: IslType, type_def: TypeDefinition) {
         // assert if both the TypeDefinition are same in terms of constraints and name

@@ -1,4 +1,4 @@
-use crate::isl::isl_constraint::IslOccurs;
+use crate::isl::isl_constraint::{IslLength, IslOccurs};
 use crate::result::{
     invalid_schema_error, invalid_schema_error_raw, IonSchemaError, IonSchemaResult,
 };
@@ -273,7 +273,9 @@ impl Range {
     }
 
     // helper method to which validates a non negative integer range boundary value
-    fn validate_non_negative_integer_range_boundary_value(value: &AnyInt) -> IonSchemaResult<()> {
+    pub fn validate_non_negative_integer_range_boundary_value(
+        value: &AnyInt,
+    ) -> IonSchemaResult<()> {
         match value.as_i64() {
             Some(v) => {
                 if v >= 0 {
@@ -362,6 +364,18 @@ impl TryFrom<&IslOccurs> for Range {
             IslOccurs::Range(range) => Ok(range.to_owned()),
             IslOccurs::Required => Range::required(),
             IslOccurs::Optional => Range::optional(),
+        }
+    }
+}
+
+/// Provides `Range` for given ISL length related constraint
+impl TryFrom<&IslLength> for Range {
+    type Error = IonSchemaError;
+
+    fn try_from(isl_length: &IslLength) -> IonSchemaResult<Self> {
+        match isl_length {
+            IslLength::Int(int_value) => int_value.try_into(),
+            IslLength::Range(range) => Ok(range.to_owned()),
         }
     }
 }

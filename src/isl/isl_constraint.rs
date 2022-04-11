@@ -15,6 +15,7 @@ pub enum IslConstraint {
     AnyOf(Vec<IslTypeRef>),
     Contains(Vec<OwnedElement>),
     ContentClosed,
+    ContainerLength(IslLength),
     Fields(HashMap<String, IslTypeRef>),
     Not(IslTypeRef),
     Occurs(IslOccurs),
@@ -66,6 +67,11 @@ impl IslConstraint {
     /// Creates a [IslConstraint::Contains] using the [OwnedElement] specified inside it
     pub fn contains<A: Into<Vec<OwnedElement>>>(values: A) -> IslConstraint {
         IslConstraint::Contains(values.into())
+    }
+
+    /// Creates a [IslConstraint::ContainerLength] using the [IslLength] referring to integer or range specified in it
+    pub fn container_length(values: IslLength) -> IslConstraint {
+        IslConstraint::ContainerLength(values)
     }
 
     /// Parse constraints inside an [OwnedElement] to an [IslConstraint]
@@ -140,6 +146,10 @@ impl IslConstraint {
 
                 Ok(IslConstraint::ContentClosed)
             }
+            "container_length" => Ok(IslConstraint::ContainerLength(IslLength::from_ion_element(
+                value,
+                "container_length",
+            )?)),
             "fields" => {
                 let fields: HashMap<String, IslTypeRef> =
                     IslConstraint::isl_fields_from_ion_element(value, inline_imported_types)?;
@@ -276,8 +286,18 @@ pub enum IslOccurs {
 impl IslOccurs {
     pub fn from_ion_element(value: &OwnedElement) -> IonSchemaResult<IslOccurs> {
         use IonType::*;
+        if value.is_null() {
+            return invalid_schema_error(
+                "expected integer/integer ranges for occurs constraint found null",
+            );
+        }
         match value.ion_type() {
-            Integer => Ok(IslOccurs::Int(value.as_any_int().unwrap().to_owned())),
+            Integer => {
+                // Non negative integer value/range is expected for occurs constraint
+                let integer_value = value.as_any_int().unwrap();
+                Range::validate_non_negative_integer_range_boundary_value(integer_value)?;
+                Ok(IslOccurs::Int(value.as_any_int().unwrap().to_owned()))
+            }
             List => {
                 let value_annotations: Vec<&OwnedSymbolToken> = value.annotations().collect();
                 if value_annotations.contains(&&text_token("range")) {
@@ -313,6 +333,68 @@ impl IslOccurs {
                 return invalid_schema_error(format!(
                     "ion type: {:?} is not supported with occurs constraint",
                     value.ion_type()
+                ))
+            }
+        }
+    }
+}
+
+/// Represents ISL length where some length related constraint may use this enum
+/// This is used by byte_length, codepoint_length, container_length constraints
+/// Grammar: <LENGTH> ::=  <INT>| <RANGE<INT>>
+#[derive(Debug, Clone, PartialEq)]
+pub enum IslLength {
+    Int(AnyInt),
+    Range(Range),
+}
+
+impl IslLength {
+    // TODO: some of the method logic here is similar to IslOccurs create a reusable function for both of these implementation
+    pub fn from_ion_element(
+        value: &OwnedElement,
+        constraint_name: &str,
+    ) -> IonSchemaResult<IslLength> {
+        use IonType::*;
+        if value.is_null() {
+            return invalid_schema_error(format!(
+                "expected integer/ integer ranges for {} constraint found null",
+                constraint_name
+            ));
+        }
+        match value.ion_type() {
+            Integer => {
+                // Non negative integer value/range is expected for occurs constraint
+                let integer_value = value.as_any_int().unwrap();
+                Range::validate_non_negative_integer_range_boundary_value(integer_value)?;
+                Ok(IslLength::Int(integer_value.to_owned()))
+            }
+            List => {
+                let value_annotations: Vec<&OwnedSymbolToken> = value.annotations().collect();
+                if value_annotations.contains(&&text_token("range")) {
+                    let is_non_negative = true; // for all length constraint related ranges is_non_negative is true
+                    let range = Range::from_ion_element(value, is_non_negative)?;
+                    match range {
+                        Range::IntegerNonNegative(_, _) => {}
+                        _ => {
+                            return invalid_schema_error(format!(
+                                "only integer ranges are supported for {} constraint",
+                                constraint_name
+                            ))
+                        }
+                    };
+                    return Ok(IslLength::Range(range));
+                } else {
+                    return invalid_schema_error(format!(
+                        "range annotation missing for {} constraint",
+                        constraint_name
+                    ));
+                }
+            }
+            _ => {
+                return invalid_schema_error(format!(
+                    "ion type: {:?} is not supported with {} constraint",
+                    value.ion_type(),
+                    constraint_name
                 ))
             }
         }
