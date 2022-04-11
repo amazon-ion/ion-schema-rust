@@ -734,14 +734,14 @@ impl ContainsConstraint {
 impl ConstraintValidator for ContainsConstraint {
     fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
         // get the expected values from the contains constraint
-        let mut expected_values = self.values.iter();
+        let mut expected_values = self.values.to_owned();
 
         // Check for null sequence
         if value.is_null() {
             return Err(Violation::new(
                 "contains",
                 ViolationCode::TypeMismatched,
-                &format!("Null sequence not allowed for contains constraint"),
+                &format!("expected a sequence found {:?}", value),
             ));
         }
 
@@ -751,12 +751,20 @@ impl ConstraintValidator for ContainsConstraint {
                 return Err(Violation::new(
                     "contains",
                     ViolationCode::TypeMismatched,
-                    &format!("expected list found {}", value.ion_type()),
+                    &format!("expected list/sexp found {}", value.ion_type()),
                 ));
             }
             Some(ion_sequence) => {
-                // if any of our expected values are not in the Ion sequence then return Violation
-                if !expected_values.all(|ev| ion_sequence.iter().find(|v| v == &ev).is_some()) {
+                // for each value in ion sequence if it exists in the expected values
+                // then remove it from expected values to keep track of missing values
+                for value in ion_sequence.iter() {
+                    if let Some(pos) = expected_values.iter().position(|v| v == value) {
+                        expected_values.remove(pos);
+                    }
+                }
+
+                // return Violation if there were any values left in the expected values vector
+                if !expected_values.is_empty() {
                     return Err(Violation::new(
                         "contains",
                         ViolationCode::MissingValue,
