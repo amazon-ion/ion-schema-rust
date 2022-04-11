@@ -49,16 +49,17 @@ impl fmt::Display for Violation {
 /// Represents violation code that indicates the type of the violation
 #[derive(Debug, Clone)]
 pub enum ViolationCode {
-    NoTypesMatched,
-    InvalidNull, // if the value is a null for type references that doesn't allow null
-    MoreThanOneTypeMatched,
-    TypeMatched,
     AllTypesNotMatched,
-    TypeMismatched,
-    MissingValue, // if the ion value is missing for a particular constraint
     FieldsNotMatched,
+    InvalidLength, // this is ued for any length related constraints (e.g. container_length, byte_length, codepoint_length)
+    InvalidNull,   // if the value is a null for type references that doesn't allow null
     InvalidOpenContent, // if a container contains open content when `content: closed` is specified
+    MissingValue,  // if the ion value is missing for a particular constraint
+    MoreThanOneTypeMatched,
+    NoTypesMatched,
     TypeConstraintsUnsatisfied,
+    TypeMatched,
+    TypeMismatched,
 }
 
 impl fmt::Display for ViolationCode {
@@ -67,16 +68,17 @@ impl fmt::Display for ViolationCode {
             f,
             "{}",
             match self {
-                ViolationCode::NoTypesMatched => "no_types_matched",
-                ViolationCode::MoreThanOneTypeMatched => "more_than_one_type_matched",
-                ViolationCode::TypeMatched => "type_matched",
                 ViolationCode::AllTypesNotMatched => "all_types_not_matched",
-                ViolationCode::TypeMismatched => "type_mismatched",
-                ViolationCode::TypeConstraintsUnsatisfied => "type_constraints_unsatisfied",
-                ViolationCode::InvalidNull => "invalid_null",
-                ViolationCode::MissingValue => "missing_value",
                 ViolationCode::FieldsNotMatched => "fields_not_matched",
+                ViolationCode::InvalidLength => "invalid_length",
+                ViolationCode::InvalidNull => "invalid_null",
                 ViolationCode::InvalidOpenContent => "invalid_open_content",
+                ViolationCode::MissingValue => "missing_value",
+                ViolationCode::MoreThanOneTypeMatched => "more_than_one_type_matched",
+                ViolationCode::NoTypesMatched => "no_types_matched",
+                ViolationCode::TypeConstraintsUnsatisfied => "type_constraints_unsatisfied",
+                ViolationCode::TypeMatched => "type_matched",
+                ViolationCode::TypeMismatched => "type_mismatched",
             }
         )
     }

@@ -845,10 +845,11 @@ impl ConstraintValidator for ContainerLengthConstraint {
             .try_into()
             .expect("Unable to parse container_length to range");
 
+        // return a Violation if the container size didn't follow container_length constraint
         if !isl_length.contains(&(size as i64).into()).unwrap() {
             return Err(Violation::new(
                 "container_length",
-                ViolationCode::TypeMismatched,
+                ViolationCode::InvalidLength,
                 &format!("expected container length {:?} found {}", isl_length, size),
             ));
         }
