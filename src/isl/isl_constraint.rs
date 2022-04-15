@@ -2,8 +2,8 @@ use crate::isl::isl_import::IslImportType;
 use crate::isl::isl_type_reference::IslTypeRef;
 use crate::isl::util::Range;
 use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
-use ion_rs::value::owned::{text_token, OwnedElement, OwnedSymbolToken};
-use ion_rs::value::{AnyInt, Element, Sequence};
+use ion_rs::value::owned::OwnedElement;
+use ion_rs::value::{Element, Sequence};
 use ion_rs::value::{Struct, SymbolToken};
 use ion_rs::IonType;
 use std::collections::HashMap;
@@ -15,10 +15,10 @@ pub enum IslConstraint {
     AnyOf(Vec<IslTypeRef>),
     Contains(Vec<OwnedElement>),
     ContentClosed,
-    ContainerLength(IslLength),
+    ContainerLength(Range),
     Fields(HashMap<String, IslTypeRef>),
     Not(IslTypeRef),
-    Occurs(IslOccurs),
+    Occurs(Range),
     OneOf(Vec<IslTypeRef>),
     OrderedElements(Vec<IslTypeRef>),
     Type(IslTypeRef),
@@ -69,9 +69,9 @@ impl IslConstraint {
         IslConstraint::Contains(values.into())
     }
 
-    /// Creates a [IslConstraint::ContainerLength] using the [IslLength] referring to integer or range specified in it
-    pub fn container_length(values: IslLength) -> IslConstraint {
-        IslConstraint::ContainerLength(values)
+    /// Creates a [IslConstraint::ContainerLength] using the range specified in it
+    pub fn container_length(length: Range) -> IslConstraint {
+        IslConstraint::ContainerLength(length)
     }
 
     /// Parse constraints inside an [OwnedElement] to an [IslConstraint]
@@ -146,9 +146,9 @@ impl IslConstraint {
 
                 Ok(IslConstraint::ContentClosed)
             }
-            "container_length" => Ok(IslConstraint::ContainerLength(IslLength::from_ion_element(
-                value,
-                "container_length",
+
+            "container_length" => Ok(IslConstraint::ContainerLength(Range::from_ion_element(
+                value, true, // Pass true as container_length will have non negative range
             )?)),
             "fields" => {
                 let fields: HashMap<String, IslTypeRef> =
@@ -191,7 +191,39 @@ impl IslConstraint {
                     IslTypeRef::from_ion_element(value, inline_imported_types)?;
                 Ok(IslConstraint::Type(type_reference))
             }
-            "occurs" => Ok(IslConstraint::Occurs(IslOccurs::from_ion_element(value)?)),
+            "occurs" => {
+                use IonType::*;
+                if value.is_null() {
+                    return invalid_schema_error(
+                        "expected an integer or integer range for an `occurs` constraint, found null",
+                    );
+                }
+                let range = match value.ion_type() {
+                    Symbol => {
+                        let sym = try_to!(try_to!(value.as_sym()).text());
+                        match sym {
+                            "optional" => Range::optional(),
+                            "required" => Range::required(),
+                            _ => {
+                                return invalid_schema_error(format!(
+                                    "only optional and required symbols are supported with occurs constraint, found {}",
+                                    sym
+                                ))
+                            }
+                        }
+                    }
+                    Integer | List => {
+                        Range::from_ion_element(value, true)? // Pass true as occurs will have non negative range
+                    }
+                    _ => {
+                        return invalid_schema_error(format!(
+                            "ion type: {:?} is not supported with occurs constraint",
+                            value.ion_type()
+                        ))
+                    }
+                };
+                Ok(IslConstraint::Occurs(range))
+            }
             "ordered_elements" => {
                 let types: Vec<IslTypeRef> = IslConstraint::isl_type_references_from_ion_element(
                     value,
@@ -267,136 +299,5 @@ impl IslConstraint {
                     .and_then(|t| Ok((f.text().unwrap().to_owned(), t)))
             })
             .collect::<IonSchemaResult<HashMap<String, IslTypeRef>>>()?)
-    }
-}
-
-/// Represents ISL [Occurs] where some constraints can be defined by occurs
-/// Grammar: <OCCURS> ::= occurs: <INT>
-///            | occurs: <RANGE<INT>>
-///            | occurs: optional
-///            | occurs: required
-#[derive(Debug, Clone, PartialEq)]
-pub enum IslOccurs {
-    Int(AnyInt),
-    Range(Range),
-    Optional,
-    Required,
-}
-
-impl IslOccurs {
-    pub fn from_ion_element(value: &OwnedElement) -> IonSchemaResult<IslOccurs> {
-        use IonType::*;
-        if value.is_null() {
-            return invalid_schema_error(
-                "expected integer/integer ranges for occurs constraint found null",
-            );
-        }
-        match value.ion_type() {
-            Integer => {
-                // Non negative integer value/range is expected for occurs constraint
-                let integer_value = value.as_any_int().unwrap();
-                Range::validate_non_negative_integer_range_boundary_value(integer_value)?;
-                Ok(IslOccurs::Int(value.as_any_int().unwrap().to_owned()))
-            }
-            List => {
-                let value_annotations: Vec<&OwnedSymbolToken> = value.annotations().collect();
-                if value_annotations.contains(&&text_token("range")) {
-                    let is_non_negative = true; // for occurs range is_non_negative is true
-                    let range = Range::from_ion_element(value, is_non_negative)?;
-                    match range {
-                        Range::IntegerNonNegative(_, _) => {}
-                        _ => {
-                            return invalid_schema_error(
-                                "only integer ranges are supported for occurs constraint",
-                            )
-                        }
-                    };
-                    return Ok(IslOccurs::Range(range));
-                } else {
-                    return invalid_schema_error("range annotation missing for occurs constraint");
-                }
-            }
-            Symbol => {
-                let sym = try_to!(try_to!(value.as_sym()).text());
-                match sym {
-                    "optional" => Ok(IslOccurs::Optional),
-                    "required" => Ok(IslOccurs::Required),
-                    _ => {
-                        return invalid_schema_error(format!(
-                            "only optional and required symbols are supported with occurs constraint, found {}",
-                            sym
-                        ))
-                    }
-                }
-            }
-            _ => {
-                return invalid_schema_error(format!(
-                    "ion type: {:?} is not supported with occurs constraint",
-                    value.ion_type()
-                ))
-            }
-        }
-    }
-}
-
-/// Represents ISL length where some length related constraint may use this enum
-/// This is used by byte_length, codepoint_length, container_length constraints
-/// Grammar: <LENGTH> ::=  <INT>| <RANGE<INT>>
-#[derive(Debug, Clone, PartialEq)]
-pub enum IslLength {
-    Int(AnyInt),
-    Range(Range),
-}
-
-impl IslLength {
-    // TODO: some of the method logic here is similar to IslOccurs create a reusable function for both of these implementation
-    pub fn from_ion_element(
-        value: &OwnedElement,
-        constraint_name: &str,
-    ) -> IonSchemaResult<IslLength> {
-        use IonType::*;
-        if value.is_null() {
-            return invalid_schema_error(format!(
-                "expected integer/ integer ranges for {} constraint found null",
-                constraint_name
-            ));
-        }
-        match value.ion_type() {
-            Integer => {
-                // Non negative integer value/range is expected for occurs constraint
-                let integer_value = value.as_any_int().unwrap();
-                Range::validate_non_negative_integer_range_boundary_value(integer_value)?;
-                Ok(IslLength::Int(integer_value.to_owned()))
-            }
-            List => {
-                let value_annotations: Vec<&OwnedSymbolToken> = value.annotations().collect();
-                if value_annotations.contains(&&text_token("range")) {
-                    let is_non_negative = true; // for all length constraint related ranges is_non_negative is true
-                    let range = Range::from_ion_element(value, is_non_negative)?;
-                    match range {
-                        Range::IntegerNonNegative(_, _) => {}
-                        _ => {
-                            return invalid_schema_error(format!(
-                                "only integer ranges are supported for {} constraint",
-                                constraint_name
-                            ))
-                        }
-                    };
-                    return Ok(IslLength::Range(range));
-                } else {
-                    return invalid_schema_error(format!(
-                        "range annotation missing for {} constraint",
-                        constraint_name
-                    ));
-                }
-            }
-            _ => {
-                return invalid_schema_error(format!(
-                    "ion type: {:?} is not supported with {} constraint",
-                    value.ion_type(),
-                    constraint_name
-                ))
-            }
-        }
     }
 }

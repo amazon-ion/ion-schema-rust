@@ -8,7 +8,6 @@ use crate::violation::{Violation, ViolationCode};
 use ion_rs::value::owned::{text_token, OwnedElement};
 use ion_rs::value::{Builder, Element};
 use ion_rs::IonType;
-use std::convert::TryInto;
 use std::rc::Rc;
 
 /// Provides validation for Type
@@ -158,15 +157,15 @@ impl TypeDefinition {
             .filter(|c| matches!(c, Constraint::Occurs(_)))
             .next()
         {
-            return occurs.isl_occurs().try_into();
+            return Ok(occurs.occurs_range().to_owned());
         }
         // by default, if there is no `occurs` constraint for given type_def
         // then use `occurs:optional` if its `fields` constraint validation
         // otherwise, use `occurs: required` if its `ordered_elements` constraint validation
         if validation_constraint_name == "fields" {
-            return Range::optional();
+            return Ok(Range::optional());
         }
-        Range::required()
+        Ok(Range::required())
     }
 }
 
@@ -355,12 +354,9 @@ mod type_definition_tests {
     use super::*;
     use crate::constraint::Constraint;
     use crate::isl::isl_constraint::IslConstraint;
-    use crate::isl::isl_constraint::IslLength;
-    use crate::isl::isl_constraint::IslOccurs;
     use crate::isl::isl_type::IslType;
     use crate::isl::isl_type_reference::IslTypeRef;
     use crate::system::PendingTypes;
-    use ion_rs::value::AnyInt;
     use rstest::*;
 
     // TODO: Remove type ids for assertion to make tests more readable
@@ -440,7 +436,7 @@ mod type_definition_tests {
         /* For a schema with ordered_elements constraint as below:
             { ordered_elements: [ symbol, { type: int, occurs: optional }, ] }
         */
-        IslType::anonymous([IslConstraint::ordered_elements([IslTypeRef::named("symbol"), IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("int")), IslConstraint::Occurs(IslOccurs::Optional)])])]),
+        IslType::anonymous([IslConstraint::ordered_elements([IslTypeRef::named("symbol"), IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("int")), IslConstraint::Occurs(Range::optional())])])]),
         TypeDefinition::anonymous([Constraint::ordered_elements([5, 34]), Constraint::type_constraint(25)])
     ),
     case::fields_constraint(
@@ -461,8 +457,8 @@ mod type_definition_tests {
         /* For a schema with container_length constraint as below:
             { container_length: 3 }
         */
-        IslType::anonymous([IslConstraint::container_length(IslLength::Int(AnyInt::I64(3)))]),
-        TypeDefinition::anonymous([Constraint::container_length(IslLength::Int(AnyInt::I64(3))), Constraint::type_constraint(25)])
+        IslType::anonymous([IslConstraint::container_length(3.into())]),
+        TypeDefinition::anonymous([Constraint::container_length(3.into()), Constraint::type_constraint(25)])
     ),
     )]
     fn isl_type_to_type_definition(isl_type: IslType, type_def: TypeDefinition) {

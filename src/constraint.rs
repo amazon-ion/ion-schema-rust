@@ -1,4 +1,4 @@
-use crate::isl::isl_constraint::{IslConstraint, IslLength, IslOccurs};
+use crate::isl::isl_constraint::IslConstraint;
 use crate::isl::isl_type_reference::IslTypeRef;
 use crate::isl::util::Range;
 use crate::result::{IonSchemaResult, ValidationResult};
@@ -9,7 +9,6 @@ use ion_rs::value::owned::OwnedElement;
 use ion_rs::value::{Element, Sequence, Struct, SymbolToken};
 use ion_rs::IonType;
 use std::collections::HashMap;
-use std::convert::TryInto;
 use std::iter::Peekable;
 
 /// Provides validation for schema Constraint
@@ -74,9 +73,9 @@ impl Constraint {
         Constraint::Contains(ContainsConstraint::new(values.into()))
     }
 
-    /// Creates a [Constraint::ContainerLength] using the [IslLength] referring to integer or range specified in it
-    pub fn container_length(values: IslLength) -> Constraint {
-        Constraint::ContainerLength(ContainerLengthConstraint::new(values))
+    /// Creates a [Constraint::ContainerLength] from an [Range] specifying a length range.
+    pub fn container_length(length: Range) -> Constraint {
+        Constraint::ContainerLength(ContainerLengthConstraint::new(length))
     }
 
     /// Creates a [Constraint::Fields] referring to the fields represented by the provided field name and [TypeId]s.
@@ -156,8 +155,8 @@ impl Constraint {
                 )?;
                 Ok(Constraint::Type(type_constraint))
             }
-            IslConstraint::Occurs(isl_occurs) => Ok(Constraint::Occurs(OccursConstraint::new(
-                isl_occurs.to_owned(),
+            IslConstraint::Occurs(occurs_range) => Ok(Constraint::Occurs(OccursConstraint::new(
+                occurs_range.to_owned(),
             ))),
             IslConstraint::OrderedElements(type_references) => {
                 let ordered_elements: OrderedElementsConstraint =
@@ -434,16 +433,16 @@ impl ConstraintValidator for TypeConstraint {
 /// [occurs]: https://amzn.github.io/ion-schema/docs/spec.html#type-definitions
 #[derive(Debug, Clone, PartialEq)]
 pub struct OccursConstraint {
-    isl_occurs: IslOccurs,
+    occurs_range: Range,
 }
 
 impl OccursConstraint {
-    pub fn new(isl_occurs: IslOccurs) -> Self {
-        Self { isl_occurs }
+    pub fn new(occurs_range: Range) -> Self {
+        Self { occurs_range }
     }
 
-    pub fn isl_occurs(&self) -> &IslOccurs {
-        &self.isl_occurs
+    pub fn occurs_range(&self) -> &Range {
+        &self.occurs_range
     }
 }
 
@@ -796,16 +795,16 @@ impl ConstraintValidator for ContainsConstraint {
 /// [container_length]: https://amzn.github.io/ion-schema/docs/spec.html#container_length
 #[derive(Debug, Clone, PartialEq)]
 pub struct ContainerLengthConstraint {
-    isl_length: IslLength,
+    length_range: Range,
 }
 
 impl ContainerLengthConstraint {
-    pub fn new(isl_length: IslLength) -> Self {
-        Self { isl_length }
+    pub fn new(length_range: Range) -> Self {
+        Self { length_range }
     }
 
-    pub fn isl_length(&self) -> &IslLength {
-        &self.isl_length
+    pub fn length(&self) -> &Range {
+        &self.length_range
     }
 }
 
@@ -822,8 +821,7 @@ impl ConstraintValidator for ContainerLengthConstraint {
 
         // get the size of given value container
         let size = match value.ion_type() {
-            IonType::List => value.as_sequence().unwrap().iter().count(),
-            IonType::SExpression => value.as_sequence().unwrap().iter().count(),
+            IonType::List | IonType::SExpression => value.as_sequence().unwrap().iter().count(),
             IonType::Struct => value.as_struct().unwrap().iter().count(),
             _ => {
                 // return Violation if value is not an Ion container
@@ -831,7 +829,7 @@ impl ConstraintValidator for ContainerLengthConstraint {
                     "container_length",
                     ViolationCode::TypeMismatched,
                     &format!(
-                        "expected list/sexp/struct(container type) found {}",
+                        "expected a container (a list/sexp/struct) but found {}",
                         value.ion_type()
                     ),
                 ));
@@ -840,17 +838,14 @@ impl ConstraintValidator for ContainerLengthConstraint {
 
         // get isl length as a range
         // TODO: include IonSchemaError in Violations to remove usage of expect
-        let isl_length: Range = self
-            .isl_length()
-            .try_into()
-            .expect("Unable to parse container_length to range");
+        let length: &Range = self.length();
 
         // return a Violation if the container size didn't follow container_length constraint
-        if !isl_length.contains(&(size as i64).into()).unwrap() {
+        if !length.contains(&(size as i64).into()).unwrap() {
             return Err(Violation::new(
                 "container_length",
                 ViolationCode::InvalidLength,
-                &format!("expected container length {:?} found {}", isl_length, size),
+                &format!("expected container length {:?} found {}", length, size),
             ));
         }
 

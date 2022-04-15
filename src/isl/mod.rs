@@ -124,8 +124,6 @@ impl IslSchema {
 #[cfg(test)]
 mod isl_tests {
     use crate::isl::isl_constraint::IslConstraint;
-    use crate::isl::isl_constraint::IslLength;
-    use crate::isl::isl_constraint::IslOccurs;
     use crate::isl::isl_type::{IslType, IslTypeImpl};
     use crate::isl::isl_type_reference::IslTypeRef;
     use crate::isl::util::{Range, RangeBoundaryType, RangeBoundaryValue};
@@ -236,7 +234,7 @@ mod isl_tests {
         load_anonymous_type(r#" // For a schema with ordered_elements constraint as below:
                     { ordered_elements: [  symbol, { type: int, occurs: optional },  ] }
                 "#),
-        IslType::anonymous([IslConstraint::ordered_elements([IslTypeRef::named("symbol"), IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("int")), IslConstraint::Occurs(IslOccurs::Optional)])])])
+        IslType::anonymous([IslConstraint::ordered_elements([IslTypeRef::named("symbol"), IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("int")), IslConstraint::Occurs(Range::optional())])])])
     ),
     case::fields_constraint(
         load_anonymous_type(r#" // For a schema with fields constraint as below:
@@ -254,7 +252,7 @@ mod isl_tests {
         load_anonymous_type(r#" // For a schema with container_length constraint as below:
                     { container_length: 3 }
                 "#),
-        IslType::anonymous([IslConstraint::container_length(IslLength::Int(AnyInt::I64(3)))])
+        IslType::anonymous([IslConstraint::container_length(3.into())])
     ),
     )]
     fn owned_struct_to_isl_type(isl_type1: IslType, isl_type2: IslType) {
