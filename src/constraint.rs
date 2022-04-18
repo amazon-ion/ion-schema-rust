@@ -73,7 +73,7 @@ impl Constraint {
         Constraint::Contains(ContainsConstraint::new(values.into()))
     }
 
-    /// Creates a [Constraint::ContainerLength] from an [Range] specifying a length range.
+    /// Creates a [Constraint::ContainerLength] from a [Range] specifying a length range.
     pub fn container_length(length: Range) -> Constraint {
         Constraint::ContainerLength(ContainerLengthConstraint::new(length))
     }
