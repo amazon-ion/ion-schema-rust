@@ -487,9 +487,7 @@ impl OrderedElementsConstraint {
         values_iter: &mut Peekable<Box<dyn Iterator<Item = &OwnedElement> + 'a>>,
         type_store: &TypeStore,
     ) -> ValidationResult {
-        let occurs_range: Range = type_def
-            .get_occurs_constraint("ordered_elements")
-            .expect("Unable to parse occurs to range");
+        let occurs_range: Range = type_def.get_occurs_constraint("ordered_elements");
 
         // use this counter to keep track of valid values for given type_def
         let mut count: i64 = 0;
@@ -687,9 +685,7 @@ impl ConstraintValidator for FieldsConstraint {
             let values: Vec<&OwnedElement> = ion_struct.get_all(field_name).collect();
 
             // perform occurs validation for type_def for all values of the given field_name
-            let occurs_range: Range = type_def
-                .get_occurs_constraint("fields")
-                .expect("Unable to parse occurs to range");
+            let occurs_range: Range = type_def.get_occurs_constraint("fields");
 
             // verify if values follow occurs_range constraint
             if !occurs_range
@@ -837,7 +833,6 @@ impl ConstraintValidator for ContainerLengthConstraint {
         };
 
         // get isl length as a range
-        // TODO: include IonSchemaError in Violations to remove usage of expect
         let length: &Range = self.length();
 
         // return a Violation if the container size didn't follow container_length constraint

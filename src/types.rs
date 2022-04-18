@@ -145,10 +145,7 @@ impl TypeDefinition {
     }
 
     /// Returns an occurs constraint as range if it exists in the [TypeDefinition] otherwise returns `occurs: required`
-    pub fn get_occurs_constraint(
-        &self,
-        validation_constraint_name: &str,
-    ) -> IonSchemaResult<Range> {
+    pub fn get_occurs_constraint(&self, validation_constraint_name: &str) -> Range {
         // verify if the type_def contains `occurs` constraint and fill occurs_range
         // Otherwise if there is no `occurs` constraint specified then use `occurs: required`
         if let Some(Constraint::Occurs(occurs)) = self
@@ -157,15 +154,15 @@ impl TypeDefinition {
             .filter(|c| matches!(c, Constraint::Occurs(_)))
             .next()
         {
-            return Ok(occurs.occurs_range().to_owned());
+            return occurs.occurs_range().to_owned();
         }
         // by default, if there is no `occurs` constraint for given type_def
         // then use `occurs:optional` if its `fields` constraint validation
         // otherwise, use `occurs: required` if its `ordered_elements` constraint validation
         if validation_constraint_name == "fields" {
-            return Ok(Range::optional());
+            return Range::optional();
         }
-        Ok(Range::required())
+        Range::required()
     }
 }
 
