@@ -246,10 +246,7 @@ impl PendingTypes {
     pub fn get_type_id_by_name(&self, name: &str, type_store: &mut TypeStore) -> Option<TypeId> {
         match self.ids_by_name.get(name) {
             Some(id) => Some(*id + type_store.types_by_id.len()),
-            None => match type_store.get_type_id_by_name(name) {
-                Some(id) => Some(*id),
-                None => None,
-            },
+            None => type_store.get_type_id_by_name(name).copied(),
         }
     }
 
@@ -296,7 +293,7 @@ impl PendingTypes {
         }
         let type_id = self.types_by_id.len();
         self.builtin_type_ids_by_name
-            .insert(builtin_type_name.to_owned(), type_id);
+            .insert(builtin_type_name, type_id);
         self.types_by_id.push(Some(TypeDefinition::BuiltIn(
             builtin_type_definition.to_owned(),
         )));
@@ -501,8 +498,7 @@ impl TypeStore {
             _ => type_name,
         };
         self.builtin_type_ids_by_name
-            .get(type_name)
-            .and_then(|t| Some(t.to_owned()))
+            .get(type_name).map(|t| t.to_owned())
     }
 
     /// Provides the [Type] associated with given [TypeId] if it exists in the [TypeStore]  
@@ -540,7 +536,7 @@ impl TypeStore {
         }
         let type_id = self.types_by_id.len();
         self.builtin_type_ids_by_name
-            .insert(builtin_type_name.to_owned(), type_id);
+            .insert(builtin_type_name, type_id);
         self.types_by_id
             .push(TypeDefinition::BuiltIn(builtin_type_definition.to_owned()));
         type_id
@@ -700,7 +696,7 @@ impl Resolver {
         // Resolve all ISL imports
         for isl_import in isl.imports() {
             let import_id = isl_import.id();
-            let imported_schema = self.load_schema(import_id, type_store, Some(&isl_import))?;
+            let imported_schema = self.load_schema(import_id, type_store, Some(isl_import))?;
         }
 
         // Resolve all ISL types and constraints

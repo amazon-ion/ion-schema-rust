@@ -89,7 +89,7 @@ impl Iterator for SchemaTypeIterator {
         if self.index >= self.types.len() {
             return None;
         }
-        self.index = self.index + 1;
+        self.index += 1;
         Some(TypeRef::new(
             self.types[self.index - 1],
             Rc::clone(&self.type_store),
@@ -122,10 +122,10 @@ mod schema_tests {
 
         // create a isl from owned_elements and create a schema from isl
         let isl = resolver.isl_schema_from_elements(owned_elements, "my_schema.isl");
-        let schema = resolver
+        
+        resolver
             .schema_from_isl_schema(isl.unwrap(), "my_schema.isl", type_store, None)
-            .unwrap();
-        schema
+            .unwrap()
     }
 
     #[rstest(

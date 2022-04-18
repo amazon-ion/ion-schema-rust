@@ -445,7 +445,7 @@ impl RangeBoundaryValue {
                 value.as_timestamp().unwrap().to_owned(),
                 range_boundary_type,
             )),
-            _ => return invalid_schema_error("Unsupported range type specified"),
+            _ => invalid_schema_error("Unsupported range type specified"),
         }
     }
 }

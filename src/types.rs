@@ -53,7 +53,7 @@ impl TypeRef {
                 violations.push(violation);
             }
         }
-        if violations.len() == 0 {
+        if violations.is_empty() {
             return Ok(());
         }
         Err(Violation::with_violations(
@@ -150,9 +150,7 @@ impl TypeDefinition {
         // Otherwise if there is no `occurs` constraint specified then use `occurs: required`
         if let Some(Constraint::Occurs(occurs)) = self
             .constraints()
-            .iter()
-            .filter(|c| matches!(c, Constraint::Occurs(_)))
-            .next()
+            .iter().find(|c| matches!(c, Constraint::Occurs(_)))
         {
             return occurs.occurs_range().to_owned();
         }
@@ -192,7 +190,7 @@ impl TypeValidator for TypeDefinition {
                             &format!("expected type {:?}, found {:?}", ion_type, value.ion_type()),
                         ));
                     }
-                    return Ok(());
+                    Ok(())
                 }
                 BuiltInTypeDefinition::Derived(other_type) => {
                     other_type.validate(value, type_store)
@@ -334,7 +332,7 @@ impl TypeValidator for TypeDefinitionImpl {
                 violations.push(violation);
             }
         }
-        if violations.len() == 0 {
+        if violations.is_empty() {
             return Ok(());
         }
         Err(Violation::with_violations(

@@ -141,8 +141,7 @@ impl PartialEq for IslTypeImpl {
                 other
                     .constraints
                     .iter()
-                    .find(|other_constraint| &constraint == other_constraint)
-                    .is_some()
+                    .any(|other_constraint| constraint == other_constraint)
             })
     }
 }
