@@ -605,6 +605,8 @@ impl Resolver {
                 ),
             };
         }
+        // add all types from pending_types to type_store
+        pending_types.update_type_store(type_store, None)?;
         Ok(Schema::new(id, Rc::new(type_store.to_owned())))
     }
 

@@ -57,8 +57,10 @@
 //! let schema_system = SchemaSystem::new(vec![]); // no authorities added
 //! let schema = schema_system.schema_from_isl_types("my_schema", [isl_type.to_owned()]);
 //!
-//! // TODO: add an assert statement for get_types method of this schema
 //! assert!(schema.is_ok());
+//!
+//! // verify if the generated schema contains the correct type
+//! assert!(schema.unwrap().get_type("my_type_name").is_some())
 //! ```
 
 // The given schema is loaded with a two phase approach:
