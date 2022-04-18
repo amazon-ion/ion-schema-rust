@@ -209,6 +209,12 @@ mod schema_tests {
             "#).into_iter(),
         1 // this includes named type contains_type
     ),
+    case::container_length_constraint(
+        load(r#" // For a schema with container_length constraint as below:
+                    type:: { name: container_length_type, container_length: 3 }
+                "#).into_iter(),
+        1 // this includes named type container_length_type
+    ),
     )]
     fn owned_elements_to_schema<'a, I: Iterator<Item = OwnedElement>>(
         owned_elements: I,
@@ -431,10 +437,70 @@ mod schema_tests {
                     null.struct
                     [true, 1, 2.0, '3', "4", [5], (6)]
                 "#),
-                load_schema_from_text(r#" // For a schema with fields constraint as below:
+                load_schema_from_text(r#" // For a schema with contains constraint as below:
                         type::{ name: contains_type, contains: [true, 1, 2.0, '3', "4", [5], (6), {a: 7} ] }
                 "#),
                 "contains_type"
+        ),
+        case::container_length_with_range_constraint(
+                load(r#"
+                        [1]
+                        [1, 2]
+                        [1, 2, 3]
+                        (4)
+                        (4 5)
+                        (4 5 6)
+                        { a: 7 }
+                        { a: 7, b: 8 }
+                        { a: 7, b: 8, c: 9 }
+                    "#),
+                load(r#"
+                        null
+                        null.bool
+                        null.null
+                        null.list
+                        null.sexp
+                        null.struct
+                        []
+                        ()
+                        {}
+                        [1, 2, 3, 4]
+                        (1 2 3 4)
+                        { a: 1, b:2, c:3, d:4}
+                    "#),
+                load_schema_from_text(r#" // For a schema with contianer_length constraint as below:
+                            type::{ name: container_length_type, container_length: range::[1,3] }
+                    "#),
+                "container_length_type"
+        ),
+        case::container_length_exact_constraint(
+                load(r#"
+                            [null, null, null]
+                            [1, 2, 3]
+                            (4 5 6)
+                            { a: 7, b: 8, c: 9 }
+                        "#),
+                load(r#"
+                            null
+                            null.bool
+                            null.null
+                            null.list
+                            null.sexp
+                            null.struct
+                            []
+                            ()
+                            {}
+                            [1]
+                            (1)
+                            { a: 1 }
+                            [1, 2, 3, 4]
+                            (1 2 3 4)
+                            { a: 1, b:2, c:3, d:4}
+                        "#),
+                load_schema_from_text(r#" // For a schema with contianer_length constraint as below:
+                                type::{ name: container_length_type, container_length: 3 }
+                        "#),
+                "container_length_type"
         ),
     )]
     fn type_validation(

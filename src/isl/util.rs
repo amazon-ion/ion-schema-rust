@@ -1,16 +1,11 @@
-use crate::isl::isl_constraint::IslOccurs;
-use crate::result::{
-    invalid_schema_error, invalid_schema_error_raw, IonSchemaError, IonSchemaResult,
-};
+use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
 use ion_rs::types::decimal::Decimal;
 use ion_rs::types::timestamp::Timestamp;
 use ion_rs::value::owned::{text_token, OwnedElement, OwnedSymbolToken};
 use ion_rs::value::{AnyInt, Element, IntAccess, Sequence, SymbolToken};
 use ion_rs::IonType;
-use num_bigint::BigInt;
 use num_traits::Signed;
-use num_traits::Zero;
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryInto;
 
 /// Represents ISL [Range]s where some constraints can be defined by a range
 /// <RANGE<RANGE_TYPE>> ::= range::[ <EXCLUSIVITY><RANGE_TYPE>, <EXCLUSIVITY><RANGE_TYPE> ]
@@ -91,22 +86,16 @@ impl Range {
                         "Integer ranges can only have integer value for validation",
                     )
                 })?;
+
+                let non_negative_integer_value =
+                    Range::validate_non_negative_integer_range_boundary_value(value)?;
                 let is_in_lower_bound = match start {
-                    Min => match value {
-                        AnyInt::I64(int_value) => &0 <= int_value,
-                        AnyInt::BigInt(big_int_value) => &BigInt::zero() <= big_int_value,
-                    },
+                    Min => usize::MIN <= non_negative_integer_value,
                     Value(start_value, boundary_type) => match start_value {
                         IntegerNonNegative(min_value) => {
-                            match value {
-                                AnyInt::I64(int_value) => { match boundary_type {
-                                    RangeBoundaryType::Inclusive => &min_value.as_i64().unwrap() <= int_value,
-                                    RangeBoundaryType::Exclusive => &min_value.as_i64().unwrap() < int_value,
-                                }},
-                                AnyInt::BigInt(big_int_value) => { match boundary_type {
-                                    RangeBoundaryType::Inclusive => min_value.as_big_int().unwrap() <= big_int_value,
-                                    RangeBoundaryType::Exclusive => min_value.as_big_int().unwrap() < big_int_value,
-                                }}
+                            match boundary_type {
+                                RangeBoundaryType::Inclusive => min_value <= &non_negative_integer_value,
+                                RangeBoundaryType::Exclusive => min_value < &non_negative_integer_value,
                             }
                         },
                         _ => unreachable!("Integer range can only have integers as lower and upper range boundary value"),
@@ -119,15 +108,9 @@ impl Range {
                     Min => unreachable!("Cannot have 'Min' as the upper range boundary"),
                     Value(end_value, boundary_type) => match end_value {
                         IntegerNonNegative(max_value) => {
-                            match value {
-                                AnyInt::I64(int_value) => { match boundary_type {
-                                    RangeBoundaryType::Inclusive => &max_value.as_i64().unwrap() >= int_value,
-                                    RangeBoundaryType::Exclusive => &max_value.as_i64().unwrap() > int_value,
-                                }},
-                                AnyInt::BigInt(big_int_value) => { match boundary_type {
-                                    RangeBoundaryType::Inclusive => max_value.as_big_int().unwrap() >= big_int_value,
-                                    RangeBoundaryType::Exclusive => max_value.as_big_int().unwrap() > big_int_value,
-                                }}
+                            match boundary_type {
+                                RangeBoundaryType::Inclusive => max_value >= &non_negative_integer_value,
+                                RangeBoundaryType::Exclusive => max_value > &non_negative_integer_value,
                             }
                         },
                         _ => unreachable!("Integer range can only have integers as lower and upper range boundary value"),
@@ -255,6 +238,16 @@ impl Range {
     }
 
     pub fn from_ion_element(value: &OwnedElement, is_non_negative: bool) -> IonSchemaResult<Range> {
+        // if an integer value is passed here then convert it into a range
+        // eg. if `1` is passed as value then return a range [1,1]
+        if let Some(integer_value) = value.as_any_int() {
+            let non_negative_integer_value =
+                Range::validate_non_negative_integer_range_boundary_value(
+                    value.as_any_int().unwrap(),
+                )?;
+            return Ok(non_negative_integer_value.into());
+        }
+
         let range = try_to!(value.as_sequence());
         if range.len() != 2 {
             return invalid_schema_error(
@@ -273,11 +266,19 @@ impl Range {
     }
 
     // helper method to which validates a non negative integer range boundary value
-    fn validate_non_negative_integer_range_boundary_value(value: &AnyInt) -> IonSchemaResult<()> {
+    pub fn validate_non_negative_integer_range_boundary_value(
+        value: &AnyInt,
+    ) -> IonSchemaResult<usize> {
         match value.as_i64() {
             Some(v) => {
                 if v >= 0 {
-                    Ok(())
+                    match v.try_into() {
+                        Err(_) => invalid_schema_error(format!(
+                            "Expected non negative integer for range boundary values, found {}",
+                            v
+                        )),
+                        Ok(non_negative_int_value) => Ok(non_negative_int_value),
+                    }
                 } else {
                     invalid_schema_error(format!(
                         "Expected non negative integer for range boundary values, found {}",
@@ -291,7 +292,13 @@ impl Range {
                 }
                 Some(v) => {
                     if !v.is_negative() {
-                        Ok(())
+                        match v.try_into() {
+                            Err(_) => invalid_schema_error(format!(
+                                "Expected non negative integer for range boundary values, found {}",
+                                v
+                            )),
+                            Ok(non_negative_int_value) => Ok(non_negative_int_value),
+                        }
                     } else {
                         invalid_schema_error(format!(
                             "Expected non negative integer for range boundary values, found {}",
@@ -303,66 +310,46 @@ impl Range {
         }
     }
 
+    /// Provides integer range with given min and max values
+    pub fn integer_range(min_value: AnyInt, max_value: AnyInt) -> IonSchemaResult<Range> {
+        Range::range(
+            RangeBoundaryValue::int_value(min_value, RangeBoundaryType::Inclusive),
+            RangeBoundaryValue::int_value(max_value, RangeBoundaryType::Inclusive),
+        )
+    }
+
     /// Provides required non negative integer range
     /// required range: `range::[1,1]`
-    pub fn required() -> IonSchemaResult<Range> {
-        Range::range(
-            RangeBoundaryValue::int_non_negative_value(
-                AnyInt::I64(1),
-                RangeBoundaryType::Inclusive,
-            ),
-            RangeBoundaryValue::int_non_negative_value(
-                AnyInt::I64(1),
-                RangeBoundaryType::Inclusive,
-            ),
+    pub fn required() -> Range {
+        Range::IntegerNonNegative(
+            RangeBoundaryValue::int_non_negative_value(1, RangeBoundaryType::Inclusive),
+            RangeBoundaryValue::int_non_negative_value(1, RangeBoundaryType::Inclusive),
         )
     }
 
     /// Provides optional non negative integer range
     /// optional range: `range::[0,1]`
-    pub fn optional() -> IonSchemaResult<Range> {
-        Range::range(
-            RangeBoundaryValue::int_non_negative_value(
-                AnyInt::I64(0),
-                RangeBoundaryType::Inclusive,
-            ),
-            RangeBoundaryValue::int_non_negative_value(
-                AnyInt::I64(1),
-                RangeBoundaryType::Inclusive,
-            ),
+    pub fn optional() -> Range {
+        Range::IntegerNonNegative(
+            RangeBoundaryValue::int_non_negative_value(0, RangeBoundaryType::Inclusive),
+            RangeBoundaryValue::int_non_negative_value(1, RangeBoundaryType::Inclusive),
         )
     }
 }
 
-/// Provides `Range` for given `AnyInt`
-impl TryFrom<&AnyInt> for Range {
-    type Error = IonSchemaError;
-
-    fn try_from(int_value: &AnyInt) -> IonSchemaResult<Self> {
-        Range::range(
+/// Provides `Range` for given `usize`
+impl From<usize> for Range {
+    fn from(non_negative_int_value: usize) -> Self {
+        Range::IntegerNonNegative(
             RangeBoundaryValue::int_non_negative_value(
-                int_value.to_owned(),
+                non_negative_int_value,
                 RangeBoundaryType::Inclusive,
             ),
             RangeBoundaryValue::int_non_negative_value(
-                int_value.to_owned(),
+                non_negative_int_value,
                 RangeBoundaryType::Inclusive,
             ),
         )
-    }
-}
-
-/// Provides `Range` for given ISL `occurs` constraint
-impl TryFrom<&IslOccurs> for Range {
-    type Error = IonSchemaError;
-
-    fn try_from(isl_occurs: &IslOccurs) -> IonSchemaResult<Self> {
-        match isl_occurs {
-            IslOccurs::Int(int_value) => int_value.try_into(),
-            IslOccurs::Range(range) => Ok(range.to_owned()),
-            IslOccurs::Required => Range::required(),
-            IslOccurs::Optional => Range::optional(),
-        }
     }
 }
 
@@ -372,7 +359,7 @@ pub enum RangeBoundaryValueType {
     Decimal(Decimal),
     Float(f64),
     Integer(AnyInt),
-    IntegerNonNegative(AnyInt),
+    IntegerNonNegative(usize),
     Timestamp(Timestamp),
 }
 
@@ -388,7 +375,7 @@ impl RangeBoundaryValue {
     pub fn int_value(value: AnyInt, range_boundary_type: RangeBoundaryType) -> Self {
         RangeBoundaryValue::Value(RangeBoundaryValueType::Integer(value), range_boundary_type)
     }
-    pub fn int_non_negative_value(value: AnyInt, range_boundary_type: RangeBoundaryType) -> Self {
+    pub fn int_non_negative_value(value: usize, range_boundary_type: RangeBoundaryType) -> Self {
         RangeBoundaryValue::Value(
             RangeBoundaryValueType::IntegerNonNegative(value),
             range_boundary_type,
@@ -431,11 +418,12 @@ impl RangeBoundaryValue {
             }
             IonType::Integer => {
                 if is_non_negative {
-                    Range::validate_non_negative_integer_range_boundary_value(
-                        value.as_any_int().unwrap(),
-                    )?;
+                    let non_negative_integer_value =
+                        Range::validate_non_negative_integer_range_boundary_value(
+                            value.as_any_int().unwrap(),
+                        )?;
                     Ok(RangeBoundaryValue::int_non_negative_value(
-                        value.as_any_int().unwrap().to_owned(),
+                        non_negative_integer_value,
                         range_boundary_type,
                     ))
                 } else {
