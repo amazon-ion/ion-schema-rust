@@ -101,7 +101,9 @@ impl IslConstraint {
             }
             "contains" => {
                 if value.is_null() {
-                    return Err(invalid_schema_error_raw("contains constraint was a null instead of a list".to_string()));
+                    return Err(invalid_schema_error_raw(
+                        "contains constraint was a null instead of a list".to_string(),
+                    ));
                 }
 
                 if value.ion_type() != IonType::List {
@@ -121,7 +123,9 @@ impl IslConstraint {
             }
             "content" => {
                 if value.is_null() {
-                    return Err(invalid_schema_error_raw("content constraint was a null instead of a symbol `closed`".to_string()));
+                    return Err(invalid_schema_error_raw(
+                        "content constraint was a null instead of a symbol `closed`".to_string(),
+                    ));
                 }
 
                 if value.ion_type() != IonType::Symbol {
@@ -228,15 +232,13 @@ impl IslConstraint {
                 )?;
                 Ok(IslConstraint::OrderedElements(types))
             }
-            _ => {
-                Err(invalid_schema_error_raw(
-                    "Type: ".to_owned()
-                        + type_name
-                        + " can not be built as constraint: "
-                        + constraint_name
-                        + " does not exist",
-                ))
-            }
+            _ => Err(invalid_schema_error_raw(
+                "Type: ".to_owned()
+                    + type_name
+                    + " can not be built as constraint: "
+                    + constraint_name
+                    + " does not exist",
+            )),
         }
     }
 
@@ -291,7 +293,8 @@ impl IslConstraint {
             .unwrap()
             .iter()
             .map(|(f, v)| {
-                IslTypeRef::from_ion_element(v, inline_imported_types).map(|t| (f.text().unwrap().to_owned(), t))
+                IslTypeRef::from_ion_element(v, inline_imported_types)
+                    .map(|t| (f.text().unwrap().to_owned(), t))
             })
             .collect::<IonSchemaResult<HashMap<String, IslTypeRef>>>()
     }

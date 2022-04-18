@@ -89,13 +89,14 @@ fn validation_tests(path: &str) {
     let mut schema_system = SchemaSystem::new(vec![Box::new(authority)]);
 
     // get the schema content from given schema file path
-    let ion_content = fs::read(path).unwrap_or_else(|_| panic!("Could not read from given file {}", path));
-    let iterator = element_reader().iterate_over(&ion_content).unwrap_or_else(|_| panic!("Could not get owned elements from scehma file: {}",
-        path));
+    let ion_content =
+        fs::read(path).unwrap_or_else(|_| panic!("Could not read from given file {}", path));
+    let iterator = element_reader()
+        .iterate_over(&ion_content)
+        .unwrap_or_else(|_| panic!("Could not get owned elements from scehma file: {}", path));
     let schema_content = iterator
         .collect::<Result<Vec<OwnedElement>, IonError>>()
-        .unwrap_or_else(|_| panic!("Could not get owned elements from scehma file: {}",
-            path));
+        .unwrap_or_else(|_| panic!("Could not get owned elements from scehma file: {}", path));
 
     let type_store = &mut TypeStore::default();
     let mut invalid_values: Vec<OwnedElement> = vec![];
@@ -134,8 +135,9 @@ fn validation_tests(path: &str) {
             type_def = Some(
                 schema_system
                     .schema_type_from_element(&element, type_store)
-                    .unwrap_or_else(|_| panic!("Could not get schema type from owned element {:?}",
-                        element)),
+                    .unwrap_or_else(|_| {
+                        panic!("Could not get schema type from owned element {:?}", element)
+                    }),
             );
         } else {
             continue;
