@@ -117,12 +117,12 @@ mod schema_tests {
     fn load_schema_from_text(text: &str) -> Rc<Schema> {
         let owned_elements = load(text).into_iter();
         // create a type_store and resolver instance to be used for loading OwnedElements as schema
-        let type_store = &mut TypeStore::new();
+        let type_store = &mut TypeStore::default();
         let mut resolver = Resolver::new(vec![]);
 
         // create a isl from owned_elements and create a schema from isl
         let isl = resolver.isl_schema_from_elements(owned_elements, "my_schema.isl");
-        
+
         resolver
             .schema_from_isl_schema(isl.unwrap(), "my_schema.isl", type_store, None)
             .unwrap()
@@ -216,26 +216,25 @@ mod schema_tests {
         1 // this includes named type container_length_type
     ),
     )]
-    fn owned_elements_to_schema<'a, I: Iterator<Item = OwnedElement>>(
+    fn owned_elements_to_schema<I: Iterator<Item = OwnedElement>>(
         owned_elements: I,
         total_types: usize,
     ) {
         // create a type_store and resolver instance to be used for loading OwnedElements as schema
-        let type_store = &mut TypeStore::new();
+        let type_store = &mut TypeStore::default();
         let mut resolver = Resolver::new(vec![]);
 
         // create a isl from owned_elements and verifies if the result is `ok`
         let isl = resolver.isl_schema_from_elements(owned_elements, "my_schema.isl");
-        assert_eq!(isl.is_ok(), true);
+        assert!(isl.is_ok());
 
         // create a schema from isl and verifies if the result is `ok`
         let schema =
             resolver.schema_from_isl_schema(isl.unwrap(), "my_schema.isl", type_store, None);
-        assert_eq!(schema.is_ok(), true);
+        assert!(schema.is_ok());
 
         // check if the types of the created schema matches with the actual types specified by test case
-        let types: Vec<TypeRef> = schema.unwrap().get_types().collect();
-        assert_eq!(types.len(), total_types);
+        assert_eq!(schema.unwrap().get_types().count(), total_types);
     }
 
     #[rstest(
@@ -514,13 +513,13 @@ mod schema_tests {
         for valid_value in valid_values.iter() {
             // there is only a single type in each schema defined above hence validate with that type
             let validation_result = type_ref.validate(valid_value);
-            assert_eq!(validation_result.is_ok(), true);
+            assert!(validation_result.is_ok());
         }
         // check for violations due to invalid values
         for invalid_value in invalid_values.iter() {
             // there is only a single type in each schema defined above hence validate with that type
             let validation_result = type_ref.validate(invalid_value);
-            assert_eq!(validation_result.is_err(), true);
+            assert!(validation_result.is_err());
         }
     }
 }

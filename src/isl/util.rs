@@ -1,7 +1,7 @@
 use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
 use ion_rs::types::decimal::Decimal;
 use ion_rs::types::timestamp::Timestamp;
-use ion_rs::value::owned::{text_token, OwnedElement, OwnedSymbolToken};
+use ion_rs::value::owned::{text_token, OwnedElement};
 use ion_rs::value::{AnyInt, Element, IntAccess, Sequence, SymbolToken};
 use ion_rs::IonType;
 use num_traits::Signed;
@@ -90,7 +90,7 @@ impl Range {
                 let non_negative_integer_value =
                     Range::validate_non_negative_integer_range_boundary_value(value)?;
                 let is_in_lower_bound = match start {
-                    Min => usize::MIN <= non_negative_integer_value,
+                    Min => true, // this will always be true as non_negative_integer_Value is validated to be a `usize`
                     Value(start_value, boundary_type) => match start_value {
                         IntegerNonNegative(min_value) => {
                             match boundary_type {
@@ -187,6 +187,9 @@ impl Range {
         }
     }
 
+    // allowing to use function name that is same as struct name in order to have less verbose method name
+    // which is easier to understand for user
+    #[allow(clippy::self_named_constructors)]
     pub fn range(start: RangeBoundaryValue, end: RangeBoundaryValue) -> IonSchemaResult<Range> {
         use RangeBoundaryValue::*;
         use RangeBoundaryValueType::*;
@@ -395,8 +398,7 @@ impl RangeBoundaryValue {
     }
 
     fn from_ion_element(value: &OwnedElement, is_non_negative: bool) -> IonSchemaResult<Self> {
-        let value_annotations: Vec<&OwnedSymbolToken> = value.annotations().collect();
-        let range_boundary_type = if value_annotations.contains(&&text_token("exclusive")) {
+        let range_boundary_type = if value.annotations().any(|x| x == &text_token("exclusive")) {
             RangeBoundaryType::Exclusive
         } else {
             RangeBoundaryType::Inclusive

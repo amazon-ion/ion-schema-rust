@@ -150,7 +150,8 @@ impl TypeDefinition {
         // Otherwise if there is no `occurs` constraint specified then use `occurs: required`
         if let Some(Constraint::Occurs(occurs)) = self
             .constraints()
-            .iter().find(|c| matches!(c, Constraint::Occurs(_)))
+            .iter()
+            .find(|c| matches!(c, Constraint::Occurs(_)))
         {
             return occurs.occurs_range().to_owned();
         }
@@ -249,12 +250,10 @@ impl TypeDefinitionImpl {
         // convert IslConstraint to Constraint
         let mut found_type_constraint = false;
         for isl_constraint in isl_type.constraints() {
-            match isl_constraint {
-                IslConstraint::Type(_) => {
-                    found_type_constraint = true;
-                }
-                _ => {}
+            if let IslConstraint::Type(_) = isl_constraint {
+                found_type_constraint = true;
             }
+
             let constraint = Constraint::resolve_from_isl_constraint(
                 isl_constraint,
                 type_store,
@@ -458,8 +457,8 @@ mod type_definition_tests {
     )]
     fn isl_type_to_type_definition(isl_type: IslType, type_def: TypeDefinition) {
         // assert if both the TypeDefinition are same in terms of constraints and name
-        let type_store = &mut TypeStore::new();
-        let pending_types = &mut PendingTypes::new();
+        let type_store = &mut TypeStore::default();
+        let pending_types = &mut PendingTypes::default();
         let this_type_def = match isl_type {
             IslType::Named(named_isl_type) => TypeDefinition::Named(
                 TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(

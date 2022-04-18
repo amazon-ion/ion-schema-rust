@@ -97,7 +97,7 @@ fn validation_tests(path: &str) {
         .unwrap_or_else(|_| panic!("Could not get owned elements from scehma file: {}",
             path));
 
-    let type_store = &mut TypeStore::new();
+    let type_store = &mut TypeStore::default();
     let mut invalid_values: Vec<OwnedElement> = vec![];
     let mut valid_values: Vec<OwnedElement> = vec![];
     let mut type_def: Option<TypeDefinitionImpl> = None;
