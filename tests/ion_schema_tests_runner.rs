@@ -6,11 +6,11 @@ use ion_schema::authority::FileSystemDocumentAuthority;
 use ion_schema::system::{SchemaSystem, TypeStore};
 use ion_schema::types::{TypeDefinitionImpl, TypeValidator};
 use rstest::*;
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-use test_generator::test_resources;
-use std::collections::BTreeSet;
 use std::str::FromStr;
+use test_generator::test_resources;
 
 const TEST_ROOT_DIR: &str = "ion-schema-tests/";
 
