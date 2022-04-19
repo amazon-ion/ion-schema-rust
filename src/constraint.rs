@@ -26,6 +26,8 @@ pub trait ConstraintValidator {
 pub enum Constraint {
     AllOf(AllOfConstraint),
     AnyOf(AnyOfConstraint),
+    ByteLength(ByteLengthConstraint),
+    CodePointLength(CodePointLengthConstraint),
     Contains(ContainsConstraint),
     ContentClosed,
     ContainerLength(ContainerLengthConstraint),
@@ -78,6 +80,16 @@ impl Constraint {
         Constraint::ContainerLength(ContainerLengthConstraint::new(length))
     }
 
+    /// Creates a [Constraint::ByteLength] from a [Range] specifying a length range.
+    pub fn byte_length(length: Range) -> Constraint {
+        Constraint::ByteLength(ByteLengthConstraint::new(length))
+    }
+
+    /// Creates a [Constraint::CodePointLength] from a [Range] specifying a length range.
+    pub fn codepoint_length(length: Range) -> Constraint {
+        Constraint::CodePointLength(CodePointLengthConstraint::new(length))
+    }
+
     /// Creates a [Constraint::Fields] referring to the fields represented by the provided field name and [TypeId]s.
     /// By default, fields created using this method will allow open content
     pub fn fields<I>(fields: I) -> Constraint
@@ -112,6 +124,12 @@ impl Constraint {
                 )?;
                 Ok(Constraint::AnyOf(any_of))
             }
+            IslConstraint::ByteLength(byte_length) => Ok(Constraint::ByteLength(
+                ByteLengthConstraint::new(byte_length.to_owned()),
+            )),
+            IslConstraint::CodePointLength(codepoint_length) => Ok(Constraint::CodePointLength(
+                CodePointLengthConstraint::new(codepoint_length.to_owned()),
+            )),
             IslConstraint::Contains(values) => {
                 let contains_constraint: ContainsConstraint =
                     ContainsConstraint::new(values.to_owned());
@@ -174,6 +192,10 @@ impl Constraint {
         match self {
             Constraint::AllOf(all_of) => all_of.validate(value, type_store),
             Constraint::AnyOf(any_of) => any_of.validate(value, type_store),
+            Constraint::ByteLength(byte_length) => byte_length.validate(value, type_store),
+            Constraint::CodePointLength(codepoint_length) => {
+                codepoint_length.validate(value, type_store)
+            }
             Constraint::Contains(contains) => contains.validate(value, type_store),
             Constraint::ContentClosed => {
                 // No op
@@ -841,6 +863,121 @@ impl ConstraintValidator for ContainerLengthConstraint {
                 "container_length",
                 ViolationCode::InvalidLength,
                 &format!("expected container length {:?} found {}", length, size),
+            ));
+        }
+
+        Ok(())
+    }
+}
+
+/// Implements an `byte_length` constraint of Ion Schema
+/// [byte_length]: https://amzn.github.io/ion-schema/docs/spec.html#byte_length
+#[derive(Debug, Clone, PartialEq)]
+pub struct ByteLengthConstraint {
+    length_range: Range,
+}
+
+impl ByteLengthConstraint {
+    pub fn new(length_range: Range) -> Self {
+        Self { length_range }
+    }
+
+    pub fn length(&self) -> &Range {
+        &self.length_range
+    }
+}
+
+impl ConstraintValidator for ByteLengthConstraint {
+    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
+        // Check for null value
+        if value.is_null() {
+            return Err(Violation::new(
+                "byte_length",
+                ViolationCode::TypeMismatched,
+                &format!("expected a clob/blob found {:?}", value),
+            ));
+        }
+
+        // get the size of given bytes
+        let size = match value.ion_type() {
+            IonType::Clob | IonType::Blob => value.as_bytes().unwrap().len(),
+            _ => {
+                // return Violation if value is not an clob/blob
+                return Err(Violation::new(
+                    "byte_length",
+                    ViolationCode::TypeMismatched,
+                    &format!("expected a clob/blob but found {}", value.ion_type()),
+                ));
+            }
+        };
+
+        // get isl length as a range
+        let length: &Range = self.length();
+
+        // return a Violation if the clob/blob size didn't follow byte_length constraint
+        if !length.contains(&(size as i64).into()).unwrap() {
+            return Err(Violation::new(
+                "byte_length",
+                ViolationCode::InvalidLength,
+                &format!("expected byte length {:?} found {}", length, size),
+            ));
+        }
+
+        Ok(())
+    }
+}
+
+/// Implements an `codepoint_length` constraint of Ion Schema
+/// [codepoint_length]: https://amzn.github.io/ion-schema/docs/spec.html#codepoint_length
+#[derive(Debug, Clone, PartialEq)]
+pub struct CodePointLengthConstraint {
+    length_range: Range,
+}
+
+impl CodePointLengthConstraint {
+    pub fn new(length_range: Range) -> Self {
+        Self { length_range }
+    }
+
+    pub fn length(&self) -> &Range {
+        &self.length_range
+    }
+}
+
+impl ConstraintValidator for CodePointLengthConstraint {
+    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
+        // Check for null value
+        if value.is_null() {
+            return Err(Violation::new(
+                "codepoint_length",
+                ViolationCode::TypeMismatched,
+                &format!("expected a string/symbol found {:?}", value),
+            ));
+        }
+
+        // get the size of given string/symbol Unicode codepoints
+        let size = match value.ion_type() {
+            IonType::String => value.as_str().unwrap().len(),
+            IonType::Symbol => value.as_sym().unwrap().text().unwrap().len(),
+            _ => {
+                // return Violation if value is not string/symbol
+                return Err(Violation::new(
+                    "codepoint_length",
+                    ViolationCode::TypeMismatched,
+                    &format!("expected a string/symbol but found {}", value.ion_type()),
+                ));
+            }
+        };
+
+        // get isl length as a range
+        let length: &Range = self.length();
+
+        // return a Violation if the string/symbol codepoint size didn't follow codepoint_length constraint
+        if !length.contains(&(size as i64).into()).unwrap() {
+            return Err(Violation::new(
+                "codepoint_length",
+                ViolationCode::InvalidLength,
+                &format!("expected codepoint length {:?} found {}", length, size),
             ));
         }
 

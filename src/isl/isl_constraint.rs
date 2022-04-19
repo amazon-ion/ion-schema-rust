@@ -13,6 +13,8 @@ use std::collections::HashMap;
 pub enum IslConstraint {
     AllOf(Vec<IslTypeRef>),
     AnyOf(Vec<IslTypeRef>),
+    ByteLength(Range),
+    CodePointLength(Range),
     Contains(Vec<OwnedElement>),
     ContentClosed,
     ContainerLength(Range),
@@ -74,6 +76,16 @@ impl IslConstraint {
         IslConstraint::ContainerLength(length)
     }
 
+    /// Creates a [IslConstraint::ByteLength] using the range specified in it
+    pub fn byte_length(length: Range) -> IslConstraint {
+        IslConstraint::ByteLength(length)
+    }
+
+    /// Creates a [IslConstraint::CodePointLength] using the range specified in it
+    pub fn codepoint_length(length: Range) -> IslConstraint {
+        IslConstraint::CodePointLength(length)
+    }
+
     /// Parse constraints inside an [OwnedElement] to an [IslConstraint]
     pub fn from_ion_element(
         constraint_name: &str,
@@ -99,6 +111,12 @@ impl IslConstraint {
                 )?;
                 Ok(IslConstraint::AnyOf(types))
             }
+            "byte_length" => Ok(IslConstraint::ByteLength(Range::from_ion_element(
+                value, true, // Pass true as byte_length will have non negative range
+            )?)),
+            "codepoint_length" => Ok(IslConstraint::CodePointLength(Range::from_ion_element(
+                value, true, // Pass true as codepoint_length will have non negative range
+            )?)),
             "contains" => {
                 if value.is_null() {
                     return Err(invalid_schema_error_raw(

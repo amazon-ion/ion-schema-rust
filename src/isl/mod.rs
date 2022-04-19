@@ -253,6 +253,18 @@ mod isl_tests {
                 "#),
         IslType::anonymous([IslConstraint::container_length(3.into())])
     ),
+    case::byte_length_constraint(
+        load_anonymous_type(r#" // For a schema with byte_length constraint as below:
+                    { byte_length: 3 }
+                "#),
+        IslType::anonymous([IslConstraint::byte_length(3.into())])
+    ),
+    case::codepoint_length_constraint(
+        load_anonymous_type(r#" // For a schema with codepoint_length constraint as below:
+                    { codepoint_length: 3 }
+                "#),
+        IslType::anonymous([IslConstraint::codepoint_length(3.into())])
+    ),
     )]
     fn owned_struct_to_isl_type(isl_type1: IslType, isl_type2: IslType) {
         // assert if both the IslType are same in terms of constraints and name

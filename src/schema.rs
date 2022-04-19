@@ -215,6 +215,18 @@ mod schema_tests {
                 "#).into_iter(),
         1 // this includes named type container_length_type
     ),
+    case::byte_length_constraint(
+        load(r#" // For a schema with byte_length constraint as below:
+                    type:: { name: byte_length_type, byte_length: 3 }
+                "#).into_iter(),
+        1 // this includes named type byte_length_type
+    ),
+    case::codepoint_length_constraint(
+        load(r#" // For a schema with codepoint_length constraint as below:
+                        type:: { name: codepoint_length_type, codepoint_length: 3 }
+                    "#).into_iter(),
+        1 // this includes named type codepoint_length_type
+    ),
     )]
     fn owned_elements_to_schema<I: Iterator<Item = OwnedElement>>(
         owned_elements: I,
@@ -500,6 +512,46 @@ mod schema_tests {
                                 type::{ name: container_length_type, container_length: 3 }
                         "#),
                 "container_length_type"
+        ),
+        case::byte_length_constraint(
+                load(r#"
+                            {{"12345"}}
+                            {{ aGVsbG8= }}
+                        "#),
+                load(r#"
+                            null
+                            null.bool
+                            null.null
+                            null.clob
+                            null.blob
+                            {{}}
+                            {{"1234"}}
+                            {{"123456"}}
+                        "#),
+                load_schema_from_text(r#" // For a schema with byte_length constraint as below:
+                                type::{ name: byte_length_type, byte_length: 5 }
+                        "#),
+                "byte_length_type"
+        ),
+        case::codepoint_length_constraint(
+                load(r#"
+                            '12345'
+                            "12345"
+                        "#),
+                load(r#"
+                            null
+                            null.bool
+                            null.null
+                            null.string
+                            null.symbol
+                            ""
+                            '1234'
+                            "123456"
+                        "#),
+                load_schema_from_text(r#" // For a schema with codepoint_length constraint as below:
+                                type::{ name: codepoint_length_type, codepoint_length: 5 }
+                        "#),
+                "codepoint_length_type"
         ),
     )]
     fn type_validation(
