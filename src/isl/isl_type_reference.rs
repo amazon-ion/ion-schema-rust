@@ -53,10 +53,7 @@ impl IslTypeRef {
                         invalid_schema_error_raw(
                             "a base or alias type reference symbol doesn't have text",
                         )
-                    })
-                    .and_then(|type_name| {
-                        Ok(IslTypeRef::Named(type_name.to_owned()))
-                    })
+                    }).map(|type_name| IslTypeRef::Named(type_name.to_owned()))
             }
             IonType::Struct => {
                 if value.is_null() {

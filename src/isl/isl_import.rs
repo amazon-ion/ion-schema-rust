@@ -38,7 +38,7 @@ impl IslImport {
         };
 
         let alias = match import.get("as") {
-            Some(alias) => alias.as_str().and_then(|a| Some(a.to_owned())),
+            Some(alias) => alias.as_str().map(|a| a.to_owned()),
             None => {
                 return Ok(IslImport::Type(IslImportType::new(
                     id.to_owned(),

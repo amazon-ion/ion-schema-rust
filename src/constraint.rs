@@ -246,7 +246,7 @@ impl ConstraintValidator for AllOfConstraint {
                 violations,
             ));
         }
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -296,7 +296,7 @@ impl ConstraintValidator for AnyOfConstraint {
                 violations,
             ));
         }
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -452,7 +452,7 @@ impl ConstraintValidator for OccursConstraint {
         // `occurs` does not work as a constraint by its own, it needs to be used with other constraints
         // e.g. `ordered_elements`, `fields`, etc.
         // the validation for occurs is done within these other constraints
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -554,7 +554,7 @@ impl ConstraintValidator for OrderedElementsConstraint {
             return Err(Violation::with_violations(
                 "ordered_elements",
                 ViolationCode::TypeMismatched,
-                &format!("Null list/sexp not allowed for ordered_elements constraint"),
+                "Null list/sexp not allowed for ordered_elements constraint",
                 violations,
             ));
         }
@@ -629,7 +629,7 @@ impl FieldsConstraint {
             .iter()
             .map(|(f, t)| {
                 IslTypeRef::resolve_type_reference(t, type_store, pending_types)
-                    .and_then(|type_id| Ok((f.to_owned(), type_id)))
+                    .map(|type_id| (f.to_owned(), type_id))
             })
             .collect::<IonSchemaResult<HashMap<String, TypeId>>>()?;
         Ok(FieldsConstraint::new(resolved_fields, open_content))
@@ -645,7 +645,7 @@ impl ConstraintValidator for FieldsConstraint {
             return Err(Violation::with_violations(
                 "fields",
                 ViolationCode::TypeMismatched,
-                &format!("Null struct not allowed for fields constraint"),
+                "Null struct not allowed for fields constraint",
                 violations,
             ));
         }
@@ -717,7 +717,7 @@ impl ConstraintValidator for FieldsConstraint {
             return Err(Violation::with_violations(
                 "fields",
                 ViolationCode::FieldsNotMatched,
-                &format!("value didn't satisfy fields constraint"),
+                "value didn't satisfy fields constraint",
                 violations,
             ));
         }
@@ -767,7 +767,7 @@ impl ConstraintValidator for ContainsConstraint {
                 // for each value in expected values if it does not exist in ion sequence
                 // then add it to missing_values to keep track of missing values
                 for expected_value in self.values.iter() {
-                    if ion_sequence.iter().find(|v| v == &expected_value).is_none() {
+                    if !ion_sequence.iter().any(|v| v == expected_value) {
                         missing_values.push(expected_value);
                     }
                 }

@@ -69,13 +69,12 @@ impl DocumentAuthority for MapDocumentAuthority {
     /// Returns a vector of [OwnedElement]s based on given schema id using ion_content_by_id map
     fn elements(&self, id: &str) -> IonSchemaResult<Vec<OwnedElement>> {
         // if ion content exists for the given id  in the map then return ion content as OwnedElements
-        let ion_content = self
-            .ion_content_by_id
-            .get(id)
-            .ok_or(unresolvable_schema_error_raw(format!(
+        let ion_content = self.ion_content_by_id.get(id).ok_or_else(|| {
+            unresolvable_schema_error_raw(format!(
                 "MapDocumentAuthority does not contain schema with id: {}",
                 id
-            )))?;
+            ))
+        })?;
         let iterator = element_reader().iterate_over(ion_content.as_bytes())?;
         let schema_content = iterator.collect::<Result<Vec<OwnedElement>, IonError>>()?;
         Ok(schema_content)

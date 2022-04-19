@@ -17,51 +17,50 @@
 //!
 //! ## Example usage of `isl` module to create an [IslType]:
 //! ```
-//! use ion_rs::IonType;
-//! use ion_schema::isl::{isl_type::*, isl_constraint::*, isl_type_reference::*};
+//! use ion_schema::isl::{isl_type::IslType, isl_constraint::IslConstraint, isl_type_reference::IslTypeRef};
 //! use ion_schema::schema::Schema;
 //! use ion_schema::system::SchemaSystem;
 //! use std::path::Path;
 //!
-//! fn main() {
-//!     // below code represents an ISL type:
-//!     // type:: {
-//!     //      name:my_type_name,
-//!     //      type: int,
-//!     //      all_of: [
-//!     //          { type: bool }
-//!     //      ]
-//!     //  }
-//!     let isl_type = IslType::named(
-//!         // represents the `name` of the defined type
-//!         "my_type_name".to_owned(),
-//!         vec![
-//!             // represents the `type: int` constraint
-//!             IslConstraint::type_constraint(
-//!                 IslTypeRef::named("int")
-//!             ),
-//!             // represents `all_of` with anonymous type `{ type: bool }` constraint
-//!             IslConstraint::all_of(
-//!                 vec![
-//!                     IslTypeRef::anonymous(
-//!                         vec![
-//!                             IslConstraint::type_constraint(
-//!                                 IslTypeRef::named("bool")
-//!                             )
-//!                         ]
-//!                     )
-//!                 ]
-//!             )
-//!         ]
-//!     );
+//! // below code represents an ISL type:
+//! // type:: {
+//! //      name:my_type_name,
+//! //      type: int,
+//! //      all_of: [
+//! //          { type: bool }
+//! //      ]
+//! //  }
+//! let isl_type = IslType::named(
+//!     // represents the `name` of the defined type
+//!     "my_type_name".to_owned(),
+//!     vec![
+//!         // represents the `type: int` constraint
+//!         IslConstraint::type_constraint(
+//!             IslTypeRef::named("int")
+//!         ),
+//!         // represents `all_of` with anonymous type `{ type: bool }` constraint
+//!         IslConstraint::all_of(
+//!             vec![
+//!                 IslTypeRef::anonymous(
+//!                     vec![
+//!                         IslConstraint::type_constraint(
+//!                             IslTypeRef::named("bool")
+//!                         )
+//!                     ]
+//!                 )
+//!             ]
+//!         )
+//!     ]
+//! );
 //!
-//!     // create a schema from given IslType using SchemaSystem
-//!     let schema_system = SchemaSystem::new(vec![]); // no authorities added
-//!     let schema = schema_system.schema_from_isl_types("my_schema", [isl_type.to_owned()]);
+//! // create a schema from given IslType using SchemaSystem
+//! let schema_system = SchemaSystem::new(vec![]); // no authorities added
+//! let schema = schema_system.schema_from_isl_types("my_schema", [isl_type.to_owned()]);
 //!
-//!     // TODO: add an assert statement for get_types method of this schema
-//!     assert_eq!(schema.is_ok(), true);
-//! }
+//! assert!(schema.is_ok());
+//!
+//! // verify if the generated schema contains the correct type
+//! assert!(schema.unwrap().get_type("my_type_name").is_some())
 //! ```
 
 // The given schema is loaded with a two phase approach:
@@ -325,8 +324,8 @@ mod isl_tests {
     )]
     fn owned_struct_to_range(range1: IonSchemaResult<Range>, range2: IonSchemaResult<Range>) {
         // determine that both the ranges are created with no errors
-        assert_eq!(range1.is_ok(), true);
-        assert_eq!(range2.is_ok(), true);
+        assert!(range1.is_ok());
+        assert!(range2.is_ok());
 
         // assert if both the ranges are same
         assert_eq!(range1.unwrap(), range2.unwrap());
@@ -363,7 +362,7 @@ mod isl_tests {
     )]
     fn invalid_ranges(range: IonSchemaResult<Range>) {
         // determine that the range is created with an error for an invalid range
-        assert_eq!(range.is_err(), true);
+        assert!(range.is_err());
     }
 
     #[rstest(
@@ -487,13 +486,13 @@ mod isl_tests {
         // verify if the range contains given valid values
         for valid_value in valid_values {
             let range_contains_result = range.as_ref().unwrap().contains(&valid_value).unwrap();
-            assert_eq!(range_contains_result, true)
+            assert!(range_contains_result)
         }
 
         // verify that range doesn't contain the invalid values
         for invalid_value in invalid_values {
             let range_contains_result = range.as_ref().unwrap().contains(&invalid_value).unwrap();
-            assert_eq!(range_contains_result, false)
+            assert!(!range_contains_result)
         }
     }
 }

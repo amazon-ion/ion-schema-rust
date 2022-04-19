@@ -1,7 +1,7 @@
 use crate::isl::isl_constraint::IslConstraint;
 use crate::isl::isl_import::IslImportType;
 use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
-use ion_rs::value::owned::{text_token, OwnedElement, OwnedSymbolToken};
+use ion_rs::value::owned::{text_token, OwnedElement};
 use ion_rs::value::{Element, Struct, SymbolToken};
 
 /// Represents a type in an ISL schema.
@@ -75,9 +75,7 @@ impl IslTypeImpl {
         inline_imported_types: &mut Vec<IslImportType>, // stores the inline_imports that are discovered while loading this ISL type
     ) -> IonSchemaResult<Self> {
         let mut constraints = vec![];
-        let annotations: Vec<&OwnedSymbolToken> = ion.annotations().collect();
-
-        let contains_annotations = annotations.contains(&&text_token("type"));
+        let contains_annotations = ion.annotations().any(|x| x == &text_token("type"));
 
         let ion_struct = try_to!(ion.as_struct());
 
@@ -141,8 +139,7 @@ impl PartialEq for IslTypeImpl {
                 other
                     .constraints
                     .iter()
-                    .find(|other_constraint| &constraint == other_constraint)
-                    .is_some()
+                    .any(|other_constraint| constraint == other_constraint)
             })
     }
 }

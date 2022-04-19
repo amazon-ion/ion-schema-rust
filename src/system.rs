@@ -29,7 +29,7 @@ use std::rc::Rc;
 /// that we do not have a complete definition for yet. When the
 /// [SchemaSystem] finishes loading these types, the type definitions in
 /// [PendingTypes] can be promoted the [TypeStore].
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct PendingTypes {
     builtin_type_ids_by_name: HashMap<String, TypeId>,
     ids_by_name: HashMap<String, TypeId>,
@@ -38,15 +38,6 @@ pub struct PendingTypes {
 }
 
 impl PendingTypes {
-    pub fn new() -> Self {
-        Self {
-            parent: None,
-            builtin_type_ids_by_name: HashMap::new(),
-            ids_by_name: HashMap::new(),
-            types_by_id: Vec::new(),
-        }
-    }
-
     /// Adds all the types from PendingTypes into given [TypeStore] including adding all the imported types into imports of [TypeStore].
     /// It also clears [PendingTypes] types for loading next set of types.
     /// This method is used after a schema named type/root type is loaded entirely into [PendingTypes]
@@ -62,8 +53,8 @@ impl PendingTypes {
         load_isl_import: Option<&IslImport>,
     ) -> IonSchemaResult<bool> {
         // if load_isl_import is not None, then match the enum variant and update type store with import types accordingly
-        if load_isl_import.is_some() {
-            match load_isl_import.unwrap() {
+        if let Some(import) = load_isl_import {
+            match import {
                 IslImport::Schema(_) => {
                     self.update_type_store_with_all_isl_imported_types(None, type_store)?;
                 }
@@ -171,11 +162,9 @@ impl PendingTypes {
     fn update_type_store_with_all_types(&self, type_store: &mut TypeStore) -> IonSchemaResult<()> {
         for optional_type in &self.types_by_id {
             // return an error if any of the type in types_by_id vector is None/Unresolved
-            let type_def = optional_type
-                .to_owned()
-                .ok_or(unresolvable_schema_error_raw(
-                    "Unable to load schema due to unresolvable type",
-                ))?;
+            let type_def = optional_type.to_owned().ok_or_else(|| {
+                unresolvable_schema_error_raw("Unable to load schema due to unresolvable type")
+            })?;
 
             match type_def {
                 TypeDefinition::Named(named_type_def) => type_store.add_named_type(named_type_def),
@@ -200,11 +189,9 @@ impl PendingTypes {
     ) -> IonSchemaResult<()> {
         for optional_type in &self.types_by_id {
             // return an error if any of the type in types_by_id vector is None/Unresolved
-            let type_def = optional_type
-                .to_owned()
-                .ok_or(unresolvable_schema_error_raw(
-                    "Unable to load schema due to unresolvable type",
-                ))?;
+            let type_def = optional_type.to_owned().ok_or_else(|| {
+                unresolvable_schema_error_raw("Unable to load schema due to unresolvable type")
+            })?;
 
             match type_def.to_owned() {
                 TypeDefinition::Named(named_type_def) => {
@@ -246,10 +233,7 @@ impl PendingTypes {
     pub fn get_type_id_by_name(&self, name: &str, type_store: &mut TypeStore) -> Option<TypeId> {
         match self.ids_by_name.get(name) {
             Some(id) => Some(*id + type_store.types_by_id.len()),
-            None => match type_store.get_type_id_by_name(name) {
-                Some(id) => Some(*id),
-                None => None,
-            },
+            None => type_store.get_type_id_by_name(name).copied(),
         }
     }
 
@@ -296,7 +280,7 @@ impl PendingTypes {
         }
         let type_id = self.types_by_id.len();
         self.builtin_type_ids_by_name
-            .insert(builtin_type_name.to_owned(), type_id);
+            .insert(builtin_type_name, type_id);
         self.types_by_id.push(Some(TypeDefinition::BuiltIn(
             builtin_type_definition.to_owned(),
         )));
@@ -388,8 +372,8 @@ pub struct TypeStore {
     types_by_id: Vec<TypeDefinition>,
 }
 
-impl TypeStore {
-    pub fn new() -> Self {
+impl Default for TypeStore {
+    fn default() -> Self {
         let mut type_store = Self {
             builtin_type_ids_by_name: HashMap::new(),
             imported_type_ids_by_name: HashMap::new(),
@@ -401,7 +385,9 @@ impl TypeStore {
             .expect("The type store didn't preload with built-in types correctly");
         type_store
     }
+}
 
+impl TypeStore {
     /// Preloads all [builtin isl types] into the TypeStore
     /// [builtin isl types]: https://amzn.github.io/ion-schema/docs/spec.html#type-system
     /// TODO: add document builtin type
@@ -443,7 +429,7 @@ impl TypeStore {
         self.add_builtin_type(&BuiltInTypeDefinition::Atomic(Null, Nullability::Nullable));
 
         // get the derived built in types map and related text value for given type_name [type_ids: 25 - 32]
-        let pending_types = &mut PendingTypes::new();
+        let pending_types = &mut PendingTypes::default();
         for text in DERIVED_ISL_TYPES {
             let isl_type = IslTypeImpl::from_owned_element(
                 &element_reader()
@@ -502,7 +488,7 @@ impl TypeStore {
         };
         self.builtin_type_ids_by_name
             .get(type_name)
-            .and_then(|t| Some(t.to_owned()))
+            .map(|t| t.to_owned())
     }
 
     /// Provides the [Type] associated with given [TypeId] if it exists in the [TypeStore]  
@@ -540,7 +526,7 @@ impl TypeStore {
         }
         let type_id = self.types_by_id.len();
         self.builtin_type_ids_by_name
-            .insert(builtin_type_name.to_owned(), type_id);
+            .insert(builtin_type_name, type_id);
         self.types_by_id
             .push(TypeDefinition::BuiltIn(builtin_type_definition.to_owned()));
         type_id
@@ -596,8 +582,8 @@ impl Resolver {
         isl_types: B,
     ) -> IonSchemaResult<Schema> {
         // create type_store and pending types which will be used to create type definition
-        let type_store = &mut TypeStore::new();
-        let pending_types = &mut PendingTypes::new();
+        let type_store = &mut TypeStore::default();
+        let pending_types = &mut PendingTypes::default();
         for isl_type in isl_types.into() {
             // convert [IslType] into [TypeDefinition]
             match isl_type {
@@ -619,6 +605,8 @@ impl Resolver {
                 ),
             };
         }
+        // add all types from pending_types to type_store
+        pending_types.update_type_store(type_store, None)?;
         Ok(Schema::new(id, Rc::new(type_store.to_owned())))
     }
 
@@ -700,12 +688,12 @@ impl Resolver {
         // Resolve all ISL imports
         for isl_import in isl.imports() {
             let import_id = isl_import.id();
-            let imported_schema = self.load_schema(import_id, type_store, Some(&isl_import))?;
+            let imported_schema = self.load_schema(import_id, type_store, Some(isl_import))?;
         }
 
         // Resolve all ISL types and constraints
         for isl_type in isl.types() {
-            let pending_types = &mut PendingTypes::new();
+            let pending_types = &mut PendingTypes::default();
 
             // convert IslType to TypeDefinition
             let type_def: TypeDefinitionImpl =
@@ -785,7 +773,8 @@ impl SchemaSystem {
     /// until one successfully resolves it.
     /// If an Authority throws an exception, resolution silently proceeds to the next Authority.
     pub fn load_schema<A: AsRef<str>>(&mut self, id: A) -> IonSchemaResult<Rc<Schema>> {
-        self.resolver.load_schema(id, &mut TypeStore::new(), None)
+        self.resolver
+            .load_schema(id, &mut TypeStore::default(), None)
     }
 
     /// Returns authorities associated with this [SchemaSystem]
@@ -842,7 +831,7 @@ impl SchemaSystem {
         }
 
         // convert to type_def
-        let pending_types = &mut PendingTypes::new();
+        let pending_types = &mut PendingTypes::default();
 
         // convert IslType to TypeDefinition
         let type_def: TypeDefinitionImpl =
@@ -957,7 +946,7 @@ mod schema_system_tests {
             SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
         // verify if the schema loads without any errors
         let schema = schema_system.load_schema("sample_number.isl");
-        assert_eq!(true, schema.is_ok());
+        assert!(schema.is_ok());
     }
 
     #[test]
@@ -1014,7 +1003,7 @@ mod schema_system_tests {
             SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
         // verify if the schema loads without any errors
         let schema = schema_system.load_schema("sample_number.isl");
-        assert_eq!(true, schema.is_ok());
+        assert!(schema.is_ok());
     }
 
     #[test]
@@ -1058,7 +1047,7 @@ mod schema_system_tests {
             SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
         // verify if the schema loads without any errors
         let schema = schema_system.load_schema("sample_import_string.isl");
-        assert_eq!(true, schema.is_ok());
+        assert!(schema.is_ok());
     }
 
     #[test]
@@ -1115,7 +1104,7 @@ mod schema_system_tests {
             SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
         // verify if the schema loads without any errors
         let schema = schema_system.load_schema("sample_number.isl");
-        assert_eq!(true, schema.is_ok());
+        assert!(schema.is_ok());
     }
 
     #[test]
@@ -1172,7 +1161,7 @@ mod schema_system_tests {
             SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
         // verify if the schema loads with specific errors
         let schema = schema_system.load_schema("sample_number.isl");
-        assert_eq!(true, schema.is_err());
+        assert!(schema.is_err());
         assert!(matches!(schema.unwrap_err(), InvalidSchemaError { .. }));
     }
 
@@ -1231,7 +1220,7 @@ mod schema_system_tests {
             SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
         // verify if the schema loads without any errors
         let schema = schema_system.load_schema("sample.isl");
-        assert_eq!(true, schema.is_ok());
+        assert!(schema.is_ok());
     }
 
     #[test]
@@ -1294,6 +1283,6 @@ mod schema_system_tests {
             SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
         // verify if the schema loads without any errors
         let schema = schema_system.load_schema("sample.isl");
-        assert_eq!(true, schema.is_ok());
+        assert!(schema.is_ok());
     }
 }

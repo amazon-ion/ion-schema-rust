@@ -53,7 +53,7 @@ impl TypeRef {
                 violations.push(violation);
             }
         }
-        if violations.len() == 0 {
+        if violations.is_empty() {
             return Ok(());
         }
         Err(Violation::with_violations(
@@ -151,8 +151,7 @@ impl TypeDefinition {
         if let Some(Constraint::Occurs(occurs)) = self
             .constraints()
             .iter()
-            .filter(|c| matches!(c, Constraint::Occurs(_)))
-            .next()
+            .find(|c| matches!(c, Constraint::Occurs(_)))
         {
             return occurs.occurs_range().to_owned();
         }
@@ -192,7 +191,7 @@ impl TypeValidator for TypeDefinition {
                             &format!("expected type {:?}, found {:?}", ion_type, value.ion_type()),
                         ));
                     }
-                    return Ok(());
+                    Ok(())
                 }
                 BuiltInTypeDefinition::Derived(other_type) => {
                     other_type.validate(value, type_store)
@@ -251,12 +250,10 @@ impl TypeDefinitionImpl {
         // convert IslConstraint to Constraint
         let mut found_type_constraint = false;
         for isl_constraint in isl_type.constraints() {
-            match isl_constraint {
-                IslConstraint::Type(_) => {
-                    found_type_constraint = true;
-                }
-                _ => {}
+            if let IslConstraint::Type(_) = isl_constraint {
+                found_type_constraint = true;
             }
+
             let constraint = Constraint::resolve_from_isl_constraint(
                 isl_constraint,
                 type_store,
@@ -334,7 +331,7 @@ impl TypeValidator for TypeDefinitionImpl {
                 violations.push(violation);
             }
         }
-        if violations.len() == 0 {
+        if violations.is_empty() {
             return Ok(());
         }
         Err(Violation::with_violations(
@@ -460,8 +457,8 @@ mod type_definition_tests {
     )]
     fn isl_type_to_type_definition(isl_type: IslType, type_def: TypeDefinition) {
         // assert if both the TypeDefinition are same in terms of constraints and name
-        let type_store = &mut TypeStore::new();
-        let pending_types = &mut PendingTypes::new();
+        let type_store = &mut TypeStore::default();
+        let pending_types = &mut PendingTypes::default();
         let this_type_def = match isl_type {
             IslType::Named(named_isl_type) => TypeDefinition::Named(
                 TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
