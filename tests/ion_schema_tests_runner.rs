@@ -6,8 +6,10 @@ use ion_schema::authority::FileSystemDocumentAuthority;
 use ion_schema::system::{SchemaSystem, TypeStore};
 use ion_schema::types::{TypeDefinitionImpl, TypeValidator};
 use rstest::*;
+use std::collections::BTreeSet;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use test_generator::test_resources;
 
 const TEST_ROOT_DIR: &str = "ion-schema-tests/";
@@ -79,8 +81,11 @@ const SKIP_LIST: &[&str] = &[
 fn validation_tests(path: &str) {
     print!("{}...", path);
 
+    // create a set of all skip list file paths
+    let paths_to_skip = skip_list_as_set(SKIP_LIST);
+
     // ignore the files that are in SKIP_LIST
-    if SKIP_LIST.contains(&path) {
+    if paths_to_skip.contains(&PathBuf::from_str(path).unwrap()) {
         println!("IGNORED");
         return;
     }
@@ -172,4 +177,13 @@ fn validation_tests(path: &str) {
         }
         panic!("Found error in ion schema tests")
     }
+}
+
+// Converts the provided slice of strings to a HashSet of paths
+fn skip_list_as_set(files_to_skip: &[&str]) -> BTreeSet<PathBuf> {
+    let mut skip_set = BTreeSet::new();
+    for file in files_to_skip {
+        skip_set.insert(PathBuf::from_str(file).unwrap());
+    }
+    skip_set
 }
