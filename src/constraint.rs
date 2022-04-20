@@ -855,14 +855,17 @@ impl ConstraintValidator for ContainerLengthConstraint {
         };
 
         // get isl length as a range
-        let length: &Range = self.length();
+        let length_range: &Range = self.length();
 
         // return a Violation if the container size didn't follow container_length constraint
-        if !length.contains(&(size as i64).into()).unwrap() {
+        if !length_range.contains(&(size as i64).into()).unwrap() {
             return Err(Violation::new(
                 "container_length",
                 ViolationCode::InvalidLength,
-                &format!("expected container length {:?} found {}", length, size),
+                &format!(
+                    "expected container length {:?} found {}",
+                    length_range, size
+                ),
             ));
         }
 
@@ -870,7 +873,7 @@ impl ConstraintValidator for ContainerLengthConstraint {
     }
 }
 
-/// Implements an `byte_length` constraint of Ion Schema
+/// Implements Ion Schema's `byte_length` constraint
 /// [byte_length]: https://amzn.github.io/ion-schema/docs/spec.html#byte_length
 #[derive(Debug, Clone, PartialEq)]
 pub struct ByteLengthConstraint {
@@ -912,14 +915,14 @@ impl ConstraintValidator for ByteLengthConstraint {
         };
 
         // get isl length as a range
-        let length: &Range = self.length();
+        let length_range: &Range = self.length();
 
         // return a Violation if the clob/blob size didn't follow byte_length constraint
-        if !length.contains(&(size as i64).into()).unwrap() {
+        if !length_range.contains(&(size as i64).into()).unwrap() {
             return Err(Violation::new(
                 "byte_length",
                 ViolationCode::InvalidLength,
-                &format!("expected byte length {:?} found {}", length, size),
+                &format!("expected byte length {:?} found {}", length_range, size),
             ));
         }
 
@@ -957,8 +960,8 @@ impl ConstraintValidator for CodePointLengthConstraint {
 
         // get the size of given string/symbol Unicode codepoints
         let size = match value.ion_type() {
-            IonType::String => value.as_str().unwrap().len(),
-            IonType::Symbol => value.as_sym().unwrap().text().unwrap().len(),
+            IonType::String => value.as_str().unwrap().chars().count(),
+            IonType::Symbol => value.as_sym().unwrap().text().unwrap().chars().count(),
             _ => {
                 // return Violation if value is not string/symbol
                 return Err(Violation::new(
@@ -970,14 +973,17 @@ impl ConstraintValidator for CodePointLengthConstraint {
         };
 
         // get isl length as a range
-        let length: &Range = self.length();
+        let length_range: &Range = self.length();
 
         // return a Violation if the string/symbol codepoint size didn't follow codepoint_length constraint
-        if !length.contains(&(size as i64).into()).unwrap() {
+        if !length_range.contains(&(size as i64).into()).unwrap() {
             return Err(Violation::new(
                 "codepoint_length",
                 ViolationCode::InvalidLength,
-                &format!("expected codepoint length {:?} found {}", length, size),
+                &format!(
+                    "expected codepoint length {:?} found {}",
+                    length_range, size
+                ),
             ));
         }
 

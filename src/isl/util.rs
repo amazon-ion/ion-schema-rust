@@ -240,7 +240,7 @@ impl Range {
         })
     }
 
-    pub fn from_ion_element(value: &OwnedElement, is_non_negative: bool) -> IonSchemaResult<Range> {
+    pub fn from_ion_element(value: &OwnedElement, range_type: RangeType) -> IonSchemaResult<Range> {
         // if an integer value is passed here then convert it into a range
         // eg. if `1` is passed as value then return a range [1,1]
         if let Some(integer_value) = value.as_any_int() {
@@ -259,10 +259,10 @@ impl Range {
         }
 
         // set start of the range
-        let start = RangeBoundaryValue::from_ion_element(try_to!(range.get(0)), is_non_negative)?;
+        let start = RangeBoundaryValue::from_ion_element(try_to!(range.get(0)), &range_type)?;
 
         // set end of the range
-        let end = RangeBoundaryValue::from_ion_element(try_to!(range.get(1)), is_non_negative)?;
+        let end = RangeBoundaryValue::from_ion_element(try_to!(range.get(1)), &range_type)?;
 
         // validate both range boundary values and returns created `Range`
         Range::range(start, end)
@@ -397,7 +397,7 @@ impl RangeBoundaryValue {
         RangeBoundaryValue::Value(RangeBoundaryValueType::Decimal(value), range_boundary_type)
     }
 
-    fn from_ion_element(value: &OwnedElement, is_non_negative: bool) -> IonSchemaResult<Self> {
+    fn from_ion_element(value: &OwnedElement, range_type: &RangeType) -> IonSchemaResult<Self> {
         let range_boundary_type = if value.annotations().any(|x| x == &text_token("exclusive")) {
             RangeBoundaryType::Exclusive
         } else {
@@ -418,8 +418,8 @@ impl RangeBoundaryValue {
                     }
                 }
             }
-            IonType::Integer => {
-                if is_non_negative {
+            IonType::Integer => match range_type {
+                RangeType::NonNegativeInteger => {
                     let non_negative_integer_value =
                         Range::validate_non_negative_integer_range_boundary_value(
                             value.as_any_int().unwrap(),
@@ -428,13 +428,12 @@ impl RangeBoundaryValue {
                         non_negative_integer_value,
                         range_boundary_type,
                     ))
-                } else {
-                    Ok(RangeBoundaryValue::int_value(
-                        value.as_any_int().unwrap().to_owned(),
-                        range_boundary_type,
-                    ))
                 }
-            }
+                RangeType::Other => Ok(RangeBoundaryValue::int_value(
+                    value.as_any_int().unwrap().to_owned(),
+                    range_boundary_type,
+                )),
+            },
             IonType::Decimal => Ok(RangeBoundaryValue::decimal_value(
                 value.as_decimal().unwrap().to_owned(),
                 range_boundary_type,
@@ -457,4 +456,12 @@ impl RangeBoundaryValue {
 pub enum RangeBoundaryType {
     Inclusive,
     Exclusive,
+}
+
+/// Represents if the range is non negative integer range or not
+/// This will be used while creating an integer range from OwnedElement
+/// to explicitly state if its non negative or not
+pub enum RangeType {
+    NonNegativeInteger, // used by byte_length, container_length and codepoint_length to specify non negative integer range
+    Other,              // used for any other range types (e.g. Integer, Float, Timestamp, Decimal)
 }

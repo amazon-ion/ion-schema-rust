@@ -125,7 +125,7 @@ mod isl_tests {
     use crate::isl::isl_constraint::IslConstraint;
     use crate::isl::isl_type::{IslType, IslTypeImpl};
     use crate::isl::isl_type_reference::IslTypeRef;
-    use crate::isl::util::{Range, RangeBoundaryType, RangeBoundaryValue};
+    use crate::isl::util::{Range, RangeBoundaryType, RangeBoundaryValue, RangeType};
     use crate::result::IonSchemaResult;
     use ion_rs::types::decimal::*;
     use ion_rs::types::timestamp::Timestamp;
@@ -277,7 +277,7 @@ mod isl_tests {
             &element_reader()
                 .read_one(text.as_bytes())
                 .expect("parsing failed unexpectedly"),
-            false,
+            RangeType::Other,
         )
     }
 

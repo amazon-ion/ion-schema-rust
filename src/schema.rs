@@ -537,6 +537,8 @@ mod schema_tests {
                 load(r#"
                             '12345'
                             "12345"
+                            "1234😎"
+                            "हैलो!"
                         "#),
                 load(r#"
                             null
@@ -545,6 +547,7 @@ mod schema_tests {
                             null.string
                             null.symbol
                             ""
+                            "😎"
                             '1234'
                             "123456"
                         "#),
