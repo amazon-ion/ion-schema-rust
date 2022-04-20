@@ -14,7 +14,7 @@ pub enum IslConstraint {
     AllOf(Vec<IslTypeRef>),
     AnyOf(Vec<IslTypeRef>),
     ByteLength(Range),
-    CodePointLength(Range),
+    CodepointLength(Range),
     Contains(Vec<OwnedElement>),
     ContentClosed,
     ContainerLength(Range),
@@ -83,7 +83,7 @@ impl IslConstraint {
 
     /// Creates a [IslConstraint::CodePointLength] using the range specified in it
     pub fn codepoint_length(length: Range) -> IslConstraint {
-        IslConstraint::CodePointLength(length)
+        IslConstraint::CodepointLength(length)
     }
 
     /// Parse constraints inside an [OwnedElement] to an [IslConstraint]
@@ -115,7 +115,7 @@ impl IslConstraint {
                 value,
                 RangeType::NonNegativeInteger,
             )?)),
-            "codepoint_length" => Ok(IslConstraint::CodePointLength(Range::from_ion_element(
+            "codepoint_length" => Ok(IslConstraint::CodepointLength(Range::from_ion_element(
                 value,
                 RangeType::NonNegativeInteger,
             )?)),

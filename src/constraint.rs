@@ -27,7 +27,7 @@ pub enum Constraint {
     AllOf(AllOfConstraint),
     AnyOf(AnyOfConstraint),
     ByteLength(ByteLengthConstraint),
-    CodePointLength(CodePointLengthConstraint),
+    CodepointLength(CodepointLengthConstraint),
     Contains(ContainsConstraint),
     ContentClosed,
     ContainerLength(ContainerLengthConstraint),
@@ -87,7 +87,7 @@ impl Constraint {
 
     /// Creates a [Constraint::CodePointLength] from a [Range] specifying a length range.
     pub fn codepoint_length(length: Range) -> Constraint {
-        Constraint::CodePointLength(CodePointLengthConstraint::new(length))
+        Constraint::CodepointLength(CodepointLengthConstraint::new(length))
     }
 
     /// Creates a [Constraint::Fields] referring to the fields represented by the provided field name and [TypeId]s.
@@ -127,8 +127,8 @@ impl Constraint {
             IslConstraint::ByteLength(byte_length) => Ok(Constraint::ByteLength(
                 ByteLengthConstraint::new(byte_length.to_owned()),
             )),
-            IslConstraint::CodePointLength(codepoint_length) => Ok(Constraint::CodePointLength(
-                CodePointLengthConstraint::new(codepoint_length.to_owned()),
+            IslConstraint::CodepointLength(codepoint_length) => Ok(Constraint::CodepointLength(
+                CodepointLengthConstraint::new(codepoint_length.to_owned()),
             )),
             IslConstraint::Contains(values) => {
                 let contains_constraint: ContainsConstraint =
@@ -193,7 +193,7 @@ impl Constraint {
             Constraint::AllOf(all_of) => all_of.validate(value, type_store),
             Constraint::AnyOf(any_of) => any_of.validate(value, type_store),
             Constraint::ByteLength(byte_length) => byte_length.validate(value, type_store),
-            Constraint::CodePointLength(codepoint_length) => {
+            Constraint::CodepointLength(codepoint_length) => {
                 codepoint_length.validate(value, type_store)
             }
             Constraint::Contains(contains) => contains.validate(value, type_store),
@@ -902,8 +902,8 @@ impl ConstraintValidator for ByteLengthConstraint {
         }
 
         // get the size of given bytes
-        let size = match value.ion_type() {
-            IonType::Clob | IonType::Blob => value.as_bytes().unwrap().len(),
+        let size = match value.as_bytes() {
+            Some(bytes) => bytes.len(),
             _ => {
                 // return Violation if value is not an clob/blob
                 return Err(Violation::new(
@@ -933,11 +933,11 @@ impl ConstraintValidator for ByteLengthConstraint {
 /// Implements an `codepoint_length` constraint of Ion Schema
 /// [codepoint_length]: https://amzn.github.io/ion-schema/docs/spec.html#codepoint_length
 #[derive(Debug, Clone, PartialEq)]
-pub struct CodePointLengthConstraint {
+pub struct CodepointLengthConstraint {
     length_range: Range,
 }
 
-impl CodePointLengthConstraint {
+impl CodepointLengthConstraint {
     pub fn new(length_range: Range) -> Self {
         Self { length_range }
     }
@@ -947,7 +947,7 @@ impl CodePointLengthConstraint {
     }
 }
 
-impl ConstraintValidator for CodePointLengthConstraint {
+impl ConstraintValidator for CodepointLengthConstraint {
     fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
         // Check for null value
         if value.is_null() {
@@ -959,9 +959,8 @@ impl ConstraintValidator for CodePointLengthConstraint {
         }
 
         // get the size of given string/symbol Unicode codepoints
-        let size = match value.ion_type() {
-            IonType::String => value.as_str().unwrap().chars().count(),
-            IonType::Symbol => value.as_sym().unwrap().text().unwrap().chars().count(),
+        let size = match value.as_str() {
+            Some(text) => text.chars().count(),
             _ => {
                 // return Violation if value is not string/symbol
                 return Err(Violation::new(
