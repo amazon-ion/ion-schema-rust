@@ -948,7 +948,7 @@ impl ConstraintValidator for CodepointLengthConstraint {
                     "codepoint_length",
                     ViolationCode::TypeMismatched,
                     &format!(
-                        "expected a clob/blob but found {}",
+                        "expected a string/symbol but found {}",
                         if value.is_null() {
                             format!("{:?}", value)
                         } else {
