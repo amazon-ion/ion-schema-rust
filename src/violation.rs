@@ -50,6 +50,7 @@ impl fmt::Display for Violation {
 #[derive(Debug, Clone)]
 pub enum ViolationCode {
     AllTypesNotMatched,
+    ElementMismatched, // this is used for mismatched elements in containers
     FieldsNotMatched,
     InvalidLength, // this is ued for any length related constraints (e.g. container_length, byte_length, codepoint_length)
     InvalidNull,   // if the value is a null for type references that doesn't allow null
@@ -69,6 +70,7 @@ impl fmt::Display for ViolationCode {
             "{}",
             match self {
                 ViolationCode::AllTypesNotMatched => "all_types_not_matched",
+                ViolationCode::ElementMismatched => "element_mismatched",
                 ViolationCode::FieldsNotMatched => "fields_not_matched",
                 ViolationCode::InvalidLength => "invalid_length",
                 ViolationCode::InvalidNull => "invalid_null",

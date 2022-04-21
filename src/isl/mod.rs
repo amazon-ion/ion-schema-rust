@@ -265,6 +265,12 @@ mod isl_tests {
                 "#),
         IslType::anonymous([IslConstraint::codepoint_length(3.into())])
     ),
+    case::element_constraint(
+        load_anonymous_type(r#" // For a schema with element constraint as below:
+                    { element: int }
+                "#),
+        IslType::anonymous([IslConstraint::element(IslTypeRef::named("int"))])
+    ),
     )]
     fn owned_struct_to_isl_type(isl_type1: IslType, isl_type2: IslType) {
         // assert if both the IslType are same in terms of constraints and name
