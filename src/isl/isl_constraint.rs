@@ -1,6 +1,6 @@
 use crate::isl::isl_import::IslImportType;
 use crate::isl::isl_type_reference::IslTypeRef;
-use crate::isl::util::Range;
+use crate::isl::util::{Range, RangeType};
 use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
 use ion_rs::value::owned::OwnedElement;
 use ion_rs::value::{Element, Sequence};
@@ -13,6 +13,8 @@ use std::collections::HashMap;
 pub enum IslConstraint {
     AllOf(Vec<IslTypeRef>),
     AnyOf(Vec<IslTypeRef>),
+    ByteLength(Range),
+    CodepointLength(Range),
     Contains(Vec<OwnedElement>),
     ContentClosed,
     ContainerLength(Range),
@@ -74,6 +76,16 @@ impl IslConstraint {
         IslConstraint::ContainerLength(length)
     }
 
+    /// Creates a [IslConstraint::ByteLength] using the range specified in it
+    pub fn byte_length(length: Range) -> IslConstraint {
+        IslConstraint::ByteLength(length)
+    }
+
+    /// Creates a [IslConstraint::CodePointLength] using the range specified in it
+    pub fn codepoint_length(length: Range) -> IslConstraint {
+        IslConstraint::CodepointLength(length)
+    }
+
     /// Parse constraints inside an [OwnedElement] to an [IslConstraint]
     pub fn from_ion_element(
         constraint_name: &str,
@@ -99,10 +111,18 @@ impl IslConstraint {
                 )?;
                 Ok(IslConstraint::AnyOf(types))
             }
+            "byte_length" => Ok(IslConstraint::ByteLength(Range::from_ion_element(
+                value,
+                RangeType::NonNegativeInteger,
+            )?)),
+            "codepoint_length" => Ok(IslConstraint::CodepointLength(Range::from_ion_element(
+                value,
+                RangeType::NonNegativeInteger,
+            )?)),
             "contains" => {
                 if value.is_null() {
                     return Err(invalid_schema_error_raw(
-                        "contains constraint was a null instead of a list".to_string(),
+                        "contains constraint was a null instead of a list",
                     ));
                 }
 
@@ -124,7 +144,7 @@ impl IslConstraint {
             "content" => {
                 if value.is_null() {
                     return Err(invalid_schema_error_raw(
-                        "content constraint was a null instead of a symbol `closed`".to_string(),
+                        "content constraint was a null instead of a symbol `closed`",
                     ));
                 }
 
@@ -148,7 +168,8 @@ impl IslConstraint {
             }
 
             "container_length" => Ok(IslConstraint::ContainerLength(Range::from_ion_element(
-                value, true, // Pass true as container_length will have non negative range
+                value,
+                RangeType::NonNegativeInteger,
             )?)),
             "fields" => {
                 let fields: HashMap<String, IslTypeRef> =
@@ -213,7 +234,7 @@ impl IslConstraint {
                         }
                     }
                     Integer | List => {
-                        Range::from_ion_element(value, true)? // Pass true as occurs will have non negative range
+                        Range::from_ion_element(value, RangeType::NonNegativeInteger)?
                     }
                     _ => {
                         return invalid_schema_error(format!(

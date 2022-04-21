@@ -454,6 +454,20 @@ mod type_definition_tests {
         IslType::anonymous([IslConstraint::container_length(3.into())]),
         TypeDefinition::anonymous([Constraint::container_length(3.into()), Constraint::type_constraint(25)])
     ),
+    case::byte_length_constraint(
+        /* For a schema with byte_length constraint as below:
+            { byte_length: 3 }
+        */
+        IslType::anonymous([IslConstraint::byte_length(3.into())]),
+        TypeDefinition::anonymous([Constraint::byte_length(3.into()), Constraint::type_constraint(25)])
+    ),
+    case::codepoint_length_constraint(
+        /* For a schema with codepoint_length constraint as below:
+            { codepoint_length: 3 }
+        */
+        IslType::anonymous([IslConstraint::codepoint_length(3.into())]),
+        TypeDefinition::anonymous([Constraint::codepoint_length(3.into()), Constraint::type_constraint(25)])
+    ),
     )]
     fn isl_type_to_type_definition(isl_type: IslType, type_def: TypeDefinition) {
         // assert if both the TypeDefinition are same in terms of constraints and name
