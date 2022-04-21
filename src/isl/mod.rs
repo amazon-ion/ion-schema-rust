@@ -277,7 +277,7 @@ mod isl_tests {
             &element_reader()
                 .read_one(text.as_bytes())
                 .expect("parsing failed unexpectedly"),
-            RangeType::Other,
+            RangeType::Any,
         )
     }
 

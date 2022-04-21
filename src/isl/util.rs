@@ -429,7 +429,7 @@ impl RangeBoundaryValue {
                         range_boundary_type,
                     ))
                 }
-                RangeType::Other => Ok(RangeBoundaryValue::int_value(
+                RangeType::Any => Ok(RangeBoundaryValue::int_value(
                     value.as_any_int().unwrap().to_owned(),
                     range_boundary_type,
                 )),
@@ -463,5 +463,5 @@ pub enum RangeBoundaryType {
 /// to explicitly state if its non negative or not
 pub enum RangeType {
     NonNegativeInteger, // used by byte_length, container_length and codepoint_length to specify non negative integer range
-    Other,              // used for any other range types (e.g. Integer, Float, Timestamp, Decimal)
+    Any,                // used for any other range types (e.g. Integer, Float, Timestamp, Decimal)
 }
