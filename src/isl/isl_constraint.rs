@@ -122,7 +122,7 @@ impl IslConstraint {
             "contains" => {
                 if value.is_null() {
                     return Err(invalid_schema_error_raw(
-                        "contains constraint was a null instead of a list".to_string(),
+                        "contains constraint was a null instead of a list",
                     ));
                 }
 
@@ -144,7 +144,7 @@ impl IslConstraint {
             "content" => {
                 if value.is_null() {
                     return Err(invalid_schema_error_raw(
-                        "content constraint was a null instead of a symbol `closed`".to_string(),
+                        "content constraint was a null instead of a symbol `closed`",
                     ));
                 }
 

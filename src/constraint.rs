@@ -571,23 +571,20 @@ impl ConstraintValidator for OrderedElementsConstraint {
     fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
         let violations: Vec<Violation> = vec![];
 
-        // Check for null sequence
-        if value.is_null() {
-            return Err(Violation::with_violations(
-                "ordered_elements",
-                ViolationCode::TypeMismatched,
-                "Null list/sexp not allowed for ordered_elements constraint",
-                violations,
-            ));
-        }
-
         // Create a peekable iterator for given sequence
         let mut values_iter = match value.as_sequence() {
             None => {
                 return Err(Violation::with_violations(
                     "ordered_elements",
                     ViolationCode::TypeMismatched,
-                    &format!("expected list/sexp ion found {}", value.ion_type()),
+                    &format!(
+                        "expected list/sexp ion found {}",
+                        if value.is_null() {
+                            format!("{:?}", value)
+                        } else {
+                            format!("{}", value.ion_type())
+                        }
+                    ),
                     violations,
                 ));
             }
@@ -662,23 +659,20 @@ impl ConstraintValidator for FieldsConstraint {
     fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
         let mut violations: Vec<Violation> = vec![];
 
-        // Check for null struct
-        if value.is_null() {
-            return Err(Violation::with_violations(
-                "fields",
-                ViolationCode::TypeMismatched,
-                "Null struct not allowed for fields constraint",
-                violations,
-            ));
-        }
-
         // Create a peekable iterator for given struct
         let ion_struct = match value.as_struct() {
             None => {
                 return Err(Violation::with_violations(
                     "fields",
                     ViolationCode::TypeMismatched,
-                    &format!("expected struct ion found {}", value.ion_type()),
+                    &format!(
+                        "expected struct ion found {}",
+                        if value.is_null() {
+                            format!("{:?}", value)
+                        } else {
+                            format!("{}", value.ion_type())
+                        }
+                    ),
                     violations,
                 ));
             }
@@ -764,22 +758,20 @@ impl ContainsConstraint {
 
 impl ConstraintValidator for ContainsConstraint {
     fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
-        // Check for null sequence
-        if value.is_null() {
-            return Err(Violation::new(
-                "contains",
-                ViolationCode::TypeMismatched,
-                &format!("expected a sequence found {:?}", value),
-            ));
-        }
-
         match value.as_sequence() {
             None => {
                 // return Violation if value is not an Ion sequence
                 return Err(Violation::new(
                     "contains",
                     ViolationCode::TypeMismatched,
-                    &format!("expected list/sexp found {}", value.ion_type()),
+                    &format!(
+                        "expected list/sexp found {}",
+                        if value.is_null() {
+                            format!("{:?}", value)
+                        } else {
+                            format!("{}", value.ion_type())
+                        }
+                    ),
                 ));
             }
             Some(ion_sequence) => {
@@ -892,15 +884,6 @@ impl ByteLengthConstraint {
 
 impl ConstraintValidator for ByteLengthConstraint {
     fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
-        // Check for null value
-        if value.is_null() {
-            return Err(Violation::new(
-                "byte_length",
-                ViolationCode::TypeMismatched,
-                &format!("expected a clob/blob found {:?}", value),
-            ));
-        }
-
         // get the size of given bytes
         let size = match value.as_bytes() {
             Some(bytes) => bytes.len(),
@@ -909,7 +892,14 @@ impl ConstraintValidator for ByteLengthConstraint {
                 return Err(Violation::new(
                     "byte_length",
                     ViolationCode::TypeMismatched,
-                    &format!("expected a clob/blob but found {}", value.ion_type()),
+                    &format!(
+                        "expected a clob/blob but found {}",
+                        if value.is_null() {
+                            format!("{:?}", value)
+                        } else {
+                            format!("{}", value.ion_type())
+                        }
+                    ),
                 ));
             }
         };
@@ -949,15 +939,6 @@ impl CodepointLengthConstraint {
 
 impl ConstraintValidator for CodepointLengthConstraint {
     fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
-        // Check for null value
-        if value.is_null() {
-            return Err(Violation::new(
-                "codepoint_length",
-                ViolationCode::TypeMismatched,
-                &format!("expected a string/symbol found {:?}", value),
-            ));
-        }
-
         // get the size of given string/symbol Unicode codepoints
         let size = match value.as_str() {
             Some(text) => text.chars().count(),
@@ -966,7 +947,14 @@ impl ConstraintValidator for CodepointLengthConstraint {
                 return Err(Violation::new(
                     "codepoint_length",
                     ViolationCode::TypeMismatched,
-                    &format!("expected a string/symbol but found {}", value.ion_type()),
+                    &format!(
+                        "expected a clob/blob but found {}",
+                        if value.is_null() {
+                            format!("{:?}", value)
+                        } else {
+                            format!("{}", value.ion_type())
+                        }
+                    ),
                 ));
             }
         };
