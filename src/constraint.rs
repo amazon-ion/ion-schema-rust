@@ -994,7 +994,7 @@ impl ConstraintValidator for CodepointLengthConstraint {
     }
 }
 
-/// Implements a `element` constraint
+/// Implements the `element` constraint
 /// [element]: https://amzn.github.io/ion-schema/docs/spec.html#element
 #[derive(Debug, Clone, PartialEq)]
 pub struct ElementConstraint {
@@ -1027,10 +1027,11 @@ impl ConstraintValidator for ElementConstraint {
             return Err(Violation::new(
                 "element",
                 ViolationCode::TypeMismatched,
-                &format!("expected a container found {:?}", value),
+                &format!("expected a container but found {:?}", value),
             ));
         }
 
+        // this type_id was validated while creating `ElementConstraint` hence the unwrap here is safe
         let type_def = type_store.get_type_by_id(self.type_id).unwrap();
 
         // validate each element of the given value container
