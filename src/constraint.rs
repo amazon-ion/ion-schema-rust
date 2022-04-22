@@ -31,6 +31,7 @@ pub enum Constraint {
     Contains(ContainsConstraint),
     ContentClosed,
     ContainerLength(ContainerLengthConstraint),
+    Element(ElementConstraint),
     Fields(FieldsConstraint),
     Not(NotConstraint),
     OneOf(OneOfConstraint),
@@ -90,6 +91,11 @@ impl Constraint {
         Constraint::CodepointLength(CodepointLengthConstraint::new(length))
     }
 
+    /// Creates a [Constraint::Element] referring to the type represented by the provided [TypeId].
+    pub fn element(type_id: TypeId) -> Constraint {
+        Constraint::Element(ElementConstraint::new(type_id))
+    }
+
     /// Creates a [Constraint::Fields] referring to the fields represented by the provided field name and [TypeId]s.
     /// By default, fields created using this method will allow open content
     pub fn fields<I>(fields: I) -> Constraint
@@ -139,6 +145,15 @@ impl Constraint {
             IslConstraint::ContainerLength(isl_length) => Ok(Constraint::ContainerLength(
                 ContainerLengthConstraint::new(isl_length.to_owned()),
             )),
+            IslConstraint::Element(type_reference) => {
+                let element_constraint: ElementConstraint =
+                    ElementConstraint::resolve_from_isl_constraint(
+                        type_reference,
+                        type_store,
+                        pending_types,
+                    )?;
+                Ok(Constraint::Element(element_constraint))
+            }
             IslConstraint::Fields(fields) => {
                 let fields_constraint: FieldsConstraint =
                     FieldsConstraint::resolve_from_isl_constraint(
@@ -207,6 +222,7 @@ impl Constraint {
             Constraint::ContainerLength(container_length) => {
                 container_length.validate(value, type_store)
             }
+            Constraint::Element(element) => element.validate(value, type_store),
             Constraint::Fields(fields) => fields.validate(value, type_store),
             Constraint::Not(not) => not.validate(value, type_store),
             Constraint::OneOf(one_of) => one_of.validate(value, type_store),
@@ -974,6 +990,87 @@ impl ConstraintValidator for CodepointLengthConstraint {
             ));
         }
 
+        Ok(())
+    }
+}
+
+/// Implements the `element` constraint
+/// [element]: https://amzn.github.io/ion-schema/docs/spec.html#element
+#[derive(Debug, Clone, PartialEq)]
+pub struct ElementConstraint {
+    type_id: TypeId,
+}
+
+impl ElementConstraint {
+    pub fn new(type_id: TypeId) -> Self {
+        Self { type_id }
+    }
+
+    /// Tries to create an element constraint from the given OwnedElement
+    pub fn resolve_from_isl_constraint(
+        type_reference: &IslTypeRef,
+        type_store: &mut TypeStore,
+        pending_types: &mut PendingTypes,
+    ) -> IonSchemaResult<Self> {
+        let type_id =
+            IslTypeRef::resolve_type_reference(type_reference, type_store, pending_types)?;
+        Ok(ElementConstraint::new(type_id))
+    }
+}
+
+impl ConstraintValidator for ElementConstraint {
+    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
+        let mut violations: Vec<Violation> = vec![];
+
+        // Check for null container
+        if value.is_null() {
+            return Err(Violation::new(
+                "element",
+                ViolationCode::TypeMismatched,
+                &format!("expected a container but found {:?}", value),
+            ));
+        }
+
+        // this type_id was validated while creating `ElementConstraint` hence the unwrap here is safe
+        let type_def = type_store.get_type_by_id(self.type_id).unwrap();
+
+        // validate each element of the given value container
+        match value.ion_type() {
+            IonType::List | IonType::SExpression => {
+                for val in value.as_sequence().unwrap().iter() {
+                    if let Err(violation) = type_def.validate(val, type_store) {
+                        violations.push(violation);
+                    }
+                }
+            }
+            IonType::Struct => {
+                for (field_name, val) in value.as_struct().unwrap().iter() {
+                    if let Err(violation) = type_def.validate(val, type_store) {
+                        violations.push(violation);
+                    }
+                }
+            }
+            _ => {
+                // return Violation if value is not an Ion container
+                return Err(Violation::new(
+                    "element",
+                    ViolationCode::TypeMismatched,
+                    &format!(
+                        "expected a container (a list/sexp/struct) but found {}",
+                        value.ion_type()
+                    ),
+                ));
+            }
+        }
+
+        if !violations.is_empty() {
+            return Err(Violation::with_violations(
+                "element",
+                ViolationCode::ElementMismatched,
+                "one or more elements don't satisfy element constraint",
+                violations,
+            ));
+        }
         Ok(())
     }
 }

@@ -468,6 +468,13 @@ mod type_definition_tests {
         IslType::anonymous([IslConstraint::codepoint_length(3.into())]),
         TypeDefinition::anonymous([Constraint::codepoint_length(3.into()), Constraint::type_constraint(25)])
     ),
+    case::element_constraint(
+        /* For a schema with element constraint as below:
+            { element: int }
+        */
+        IslType::anonymous([IslConstraint::element(IslTypeRef::named("int"))]),
+        TypeDefinition::anonymous([Constraint::element(0), Constraint::type_constraint(25)])
+    ),
     )]
     fn isl_type_to_type_definition(isl_type: IslType, type_def: TypeDefinition) {
         // assert if both the TypeDefinition are same in terms of constraints and name
