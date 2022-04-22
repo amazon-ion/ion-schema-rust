@@ -178,12 +178,6 @@ impl IslConstraint {
                 RangeType::NonNegativeInteger,
             )?)),
             "element" => {
-                if value.ion_type() != IonType::Symbol && value.ion_type() != IonType::Struct {
-                    return Err(invalid_schema_error_raw(format!(
-                        "element constraint was a {:?} instead of a symbol/struct",
-                        value.ion_type()
-                    )));
-                }
                 let type_reference: IslTypeRef =
                     IslTypeRef::from_ion_element(value, inline_imported_types)?;
                 Ok(IslConstraint::Element(type_reference))
@@ -208,23 +202,11 @@ impl IslConstraint {
                 Ok(IslConstraint::OneOf(types))
             }
             "not" => {
-                if value.ion_type() != IonType::Symbol && value.ion_type() != IonType::Struct {
-                    return Err(invalid_schema_error_raw(format!(
-                        "type constraint was a {:?} instead of a symbol/struct",
-                        value.ion_type()
-                    )));
-                }
                 let type_reference: IslTypeRef =
                     IslTypeRef::from_ion_element(value, inline_imported_types)?;
                 Ok(IslConstraint::Not(type_reference))
             }
             "type" => {
-                if value.ion_type() != IonType::Symbol && value.ion_type() != IonType::Struct {
-                    return Err(invalid_schema_error_raw(format!(
-                        "type constraint was a {:?} instead of a symbol/struct",
-                        value.ion_type()
-                    )));
-                }
                 let type_reference: IslTypeRef =
                     IslTypeRef::from_ion_element(value, inline_imported_types)?;
                 Ok(IslConstraint::Type(type_reference))
