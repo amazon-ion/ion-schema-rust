@@ -1,7 +1,7 @@
 use ion_schema::external::ion_rs::value::reader::{element_reader, ElementReader};
+use ion_schema::isl::isl_constraint::IslConstraint;
 use ion_schema::isl::isl_type::{IslType, IslTypeImpl};
 use ion_schema::isl::isl_type_reference::IslTypeRef;
-use ion_schema::isl::isl_constraint::IslConstraint;
 
 /// This test shows how the ion_schema integration with ion_rs can be used
 /// through a reexport. This means that consumers of ion_schema can use this
@@ -11,7 +11,8 @@ use ion_schema::isl::isl_constraint::IslConstraint;
 #[test]
 fn ion_rs_is_reexported() {
     let actual_isl_type = load_anonymous_type("{type: int}");
-    let expected_isl_type = IslType::anonymous([IslConstraint::type_constraint(IslTypeRef::named("int"))]);
+    let expected_isl_type =
+        IslType::anonymous([IslConstraint::type_constraint(IslTypeRef::named("int"))]);
     assert_eq!(actual_isl_type, expected_isl_type);
 }
 
@@ -24,6 +25,6 @@ fn load_anonymous_type(text: &str) -> IslType {
                 .expect("parsing failed unexpectedly"),
             &mut vec![],
         )
-            .unwrap(),
+        .unwrap(),
     )
 }
