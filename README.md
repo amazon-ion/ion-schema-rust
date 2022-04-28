@@ -50,7 +50,7 @@ $ cargo run --package ion-schema --example schema load --directory <DIRECTORY> -
 
 To validate an ion value against a schema type using the examples CLI:
 ```bash
-$ cargo run --package ion-schema --example schema validate --directory <DIRECTORY> --schema <SCHEMA_FILE> --input <INPUT_FILE>
+$ cargo run --package ion-schema --example schema validate --directory <DIRECTORY> --schema <SCHEMA_FILE> --input <INPUT_FILE> --type<TYPE>
 ```
 
 For more information on how to use the examples CLI, run the following command:
