@@ -25,9 +25,7 @@ pub mod system;
 pub mod types;
 mod violation;
 
-/// Re-exports of ion-rust dependency that is part of our public API.
-///
-/// See also: https://github.com/amzn/ion-schema-rust/issues/77.
+/// Re-export of the ion-rs dependency that is part of our public API.
 pub mod external {
     pub use ion_rs;
 }
