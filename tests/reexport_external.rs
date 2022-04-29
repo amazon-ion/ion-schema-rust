@@ -25,7 +25,7 @@ mod reexport_tests {
                     .expect("parsing failed unexpectedly"),
                 &mut vec![],
             )
-                .unwrap(),
+            .unwrap(),
         )
     }
 }
