@@ -50,17 +50,20 @@ impl fmt::Display for Violation {
 #[derive(Debug, Clone)]
 pub enum ViolationCode {
     AllTypesNotMatched,
+    AnnotationMismatched,
     ElementMismatched, // this is used for mismatched elements in containers
     FieldsNotMatched,
     InvalidLength, // this is ued for any length related constraints (e.g. container_length, byte_length, codepoint_length)
     InvalidNull,   // if the value is a null for type references that doesn't allow null
     InvalidOpenContent, // if a container contains open content when `content: closed` is specified
+    MissingAnnotation, // if the annotation is missing for annotations constraint
     MissingValue,  // if the ion value is missing for a particular constraint
     MoreThanOneTypeMatched,
     NoTypesMatched,
     TypeConstraintsUnsatisfied,
     TypeMatched,
     TypeMismatched,
+    UnexpectedAnnotation, // if unexpected annotation is found for annotations constraint
 }
 
 impl fmt::Display for ViolationCode {
@@ -70,17 +73,20 @@ impl fmt::Display for ViolationCode {
             "{}",
             match self {
                 ViolationCode::AllTypesNotMatched => "all_types_not_matched",
+                ViolationCode::AnnotationMismatched => "annotation_mismatched",
                 ViolationCode::ElementMismatched => "element_mismatched",
                 ViolationCode::FieldsNotMatched => "fields_not_matched",
                 ViolationCode::InvalidLength => "invalid_length",
                 ViolationCode::InvalidNull => "invalid_null",
                 ViolationCode::InvalidOpenContent => "invalid_open_content",
+                ViolationCode::MissingAnnotation => "missing_annotation",
                 ViolationCode::MissingValue => "missing_value",
                 ViolationCode::MoreThanOneTypeMatched => "more_than_one_type_matched",
                 ViolationCode::NoTypesMatched => "no_types_matched",
                 ViolationCode::TypeConstraintsUnsatisfied => "type_constraints_unsatisfied",
                 ViolationCode::TypeMatched => "type_matched",
                 ViolationCode::TypeMismatched => "type_mismatched",
+                ViolationCode::UnexpectedAnnotation => "unexpected_annotation",
             }
         )
     }

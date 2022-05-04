@@ -1,8 +1,8 @@
 use crate::isl::isl_import::IslImportType;
 use crate::isl::isl_type_reference::IslTypeRef;
-use crate::isl::util::{Range, RangeType};
+use crate::isl::util::{Annotation, AnnotationModifier, Range, RangeType};
 use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
-use ion_rs::value::owned::OwnedElement;
+use ion_rs::value::owned::{OwnedElement, OwnedSymbolToken};
 use ion_rs::value::{Element, Sequence};
 use ion_rs::value::{Struct, SymbolToken};
 use ion_rs::IonType;
@@ -12,6 +12,7 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq)]
 pub enum IslConstraint {
     AllOf(Vec<IslTypeRef>),
+    Annotations(Vec<AnnotationModifier>, Vec<Annotation>),
     AnyOf(Vec<IslTypeRef>),
     ByteLength(Range),
     CodepointLength(Range),
@@ -92,6 +93,30 @@ impl IslConstraint {
         IslConstraint::Element(isl_type)
     }
 
+    /// Creates a [IslConstraint::Annotations] using [OwnedSymbolToken]s and [OwnedElement]s specified inside it
+    pub fn annotations<A: Into<Vec<OwnedSymbolToken>>, B: Into<Vec<OwnedElement>>>(
+        annotations_modifiers: A,
+        annotations: B,
+    ) -> IslConstraint {
+        let annotations_modifiers: Vec<AnnotationModifier> = annotations_modifiers
+            .into()
+            .iter()
+            .map(|sym| sym.into())
+            .filter(|annotation_modifier| *annotation_modifier != AnnotationModifier::Any)
+            .collect();
+        let annotations: Vec<Annotation> = annotations
+            .into()
+            .iter()
+            .map(|a| {
+                Annotation::new(
+                    a,
+                    annotations_modifiers.contains(&AnnotationModifier::Required),
+                )
+            })
+            .collect();
+        IslConstraint::Annotations(annotations_modifiers, annotations)
+    }
+
     /// Parse constraints inside an [OwnedElement] to an [IslConstraint]
     pub fn from_ion_element(
         constraint_name: &str,
@@ -108,6 +133,40 @@ impl IslConstraint {
                     "all_of",
                 )?;
                 Ok(IslConstraint::AllOf(types))
+            }
+            "annotations" => {
+                if value.is_null() {
+                    return Err(invalid_schema_error_raw(
+                        "annotations constraint was a null instead of a list",
+                    ));
+                }
+
+                if value.ion_type() != IonType::List {
+                    return Err(invalid_schema_error_raw(format!(
+                        "annotations constraint was a {:?} instead of a list",
+                        value.ion_type()
+                    )));
+                }
+
+                // Convert all the list-level annotations to `AnnotationModifiers `and remove open content(`AnnotationModifier::Any`) annotations from it
+                let annotation_modifiers: Vec<AnnotationModifier> = value
+                    .annotations()
+                    .map(|sym| sym.into())
+                    .filter(|annotation_modifier| *annotation_modifier != AnnotationModifier::Any)
+                    .collect();
+
+                let values: Vec<Annotation> = value
+                    .as_sequence()
+                    .unwrap()
+                    .iter()
+                    .map(|e| {
+                        Annotation::new(
+                            e,
+                            annotation_modifiers.contains(&AnnotationModifier::Required),
+                        )
+                    })
+                    .collect();
+                Ok(IslConstraint::Annotations(annotation_modifiers, values))
             }
             "any_of" => {
                 let types: Vec<IslTypeRef> = IslConstraint::isl_type_references_from_ion_element(

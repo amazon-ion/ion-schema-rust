@@ -1,7 +1,7 @@
 use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
 use ion_rs::types::decimal::Decimal;
 use ion_rs::types::timestamp::Timestamp;
-use ion_rs::value::owned::{text_token, OwnedElement};
+use ion_rs::value::owned::{text_token, OwnedElement, OwnedSymbolToken};
 use ion_rs::value::{AnyInt, Element, IntAccess, Sequence, SymbolToken};
 use ion_rs::IonType;
 use num_traits::Signed;
@@ -464,4 +464,66 @@ pub enum RangeBoundaryType {
 pub enum RangeType {
     NonNegativeInteger, // used by byte_length, container_length and codepoint_length to specify non negative integer range
     Any,                // used for any other range types (e.g. Integer, Float, Timestamp, Decimal)
+}
+
+/// Represents annotation modifiers for [annotations] constraint.
+/// Grammar: <ANNOTATIONS_MODIFIER> ::= required::
+///                          | ordered::
+///                          | closed::
+/// [annotations]: https://amzn.github.io/ion-schema/docs/spec.html#annotations
+#[derive(Debug, Clone, PartialEq)]
+pub enum AnnotationModifier {
+    Required,
+    Ordered,
+    Closed,
+    Any, // any other annotation that will be considered as open content
+}
+
+impl From<&OwnedSymbolToken> for AnnotationModifier {
+    fn from(value: &OwnedSymbolToken) -> Self {
+        match value.text().unwrap() {
+            "required" => AnnotationModifier::Required,
+            "closed" => AnnotationModifier::Closed,
+            "ordered" => AnnotationModifier::Ordered,
+            _ => AnnotationModifier::Any,
+        }
+    }
+}
+
+/// Represents an annotation for [annotations] constraint.
+/// Grammar: <ANNOTATION> ::= <SYMBOL>
+///                | required::<SYMBOL>
+///                | optional::<SYMBOL>
+/// [annotations]: https://amzn.github.io/ion-schema/docs/spec.html#annotations
+#[derive(Debug, Clone, PartialEq)]
+pub struct Annotation {
+    value: String,
+    is_required: bool, // Specifies whether an annotation's occurrence is required or optional
+}
+
+impl Annotation {
+    pub fn new(value: &OwnedElement, list_level_required: bool) -> Self {
+        Self {
+            value: value.as_str().unwrap().to_owned(),
+            is_required: {
+                if value.annotations().any(|a| a.text().unwrap() == "required") {
+                    true
+                } else if list_level_required {
+                    // if the value is annotated with `optional` then it overrides the list-level `required` behavior
+                    !value.annotations().any(|a| a.text().unwrap() == "optional")
+                } else {
+                    // for any value the default annotation is `optional`
+                    false
+                }
+            },
+        }
+    }
+
+    pub fn value(&self) -> &String {
+        &self.value
+    }
+
+    pub fn is_required(&self) -> bool {
+        self.is_required
+    }
 }

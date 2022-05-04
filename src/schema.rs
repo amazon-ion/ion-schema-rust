@@ -586,6 +586,30 @@ mod schema_tests {
                         "#),
                 "element_type"
         ),
+        case::annotations_constraint(
+                load(r#"
+                          b::d::5
+                          a::b::d::5
+                          b::c::d::5
+                          a::b::c::d::5
+                          b::a::d::5    // 'a' is treated as open content
+                          c::b::d::5       // 'c' is treated as open content
+                          c::b::a::d::5    // 'a' and 'c' are treated as open content
+                          open_content::open_content::b::d::5
+                          b::d::3.5
+                          b::d::"hello"
+                        "#),
+                load(r#"
+                          b::5
+                          d::5
+                          d::b::5
+                          5
+                        "#),
+                load_schema_from_text(r#" // For a schema with annotations constraint as below:
+                                type::{ name: annotations_type, annotations: ordered::optional::[a, required::b, c, required::d] }
+                        "#),
+                "annotations_type"
+        ),
     )]
     fn type_validation(
         valid_values: Vec<OwnedElement>,
