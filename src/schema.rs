@@ -233,6 +233,12 @@ mod schema_tests {
                  "#).into_iter(),
         1 // this includes named type element_type
     ),
+    case::annotations_constraint(
+    load(r#" // For a schema with annotations constraint as below:
+                    type:: { name: annotations_type, annotations: closed::[red, blue, green] }
+                 "#).into_iter(),
+    1 // this includes named type annotations_type
+    ),
     )]
     fn owned_elements_to_schema<I: Iterator<Item = OwnedElement>>(
         owned_elements: I,

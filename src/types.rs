@@ -475,6 +475,13 @@ mod type_definition_tests {
         IslType::anonymous([IslConstraint::element(IslTypeRef::named("int"))]),
         TypeDefinition::anonymous([Constraint::element(0), Constraint::type_constraint(25)])
     ),
+    case::annotations_constraint(
+        /* For a schema with annotations constraint as below:
+            { annotations: closed::[red, blue, green] }
+        */
+        IslType::anonymous([IslConstraint::annotations(vec![text_token("closed")], vec![text_token("red").into(), text_token("blue").into(), text_token("green").into()])]),
+        TypeDefinition::anonymous([Constraint::annotations(vec![text_token("closed")], vec![text_token("red").into(), text_token("blue").into(), text_token("green").into()]), Constraint::type_constraint(25)])
+    ),
     )]
     fn isl_type_to_type_definition(isl_type: IslType, type_def: TypeDefinition) {
         // assert if both the TypeDefinition are same in terms of constraints and name
