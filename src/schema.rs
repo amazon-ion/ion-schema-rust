@@ -612,7 +612,7 @@ mod schema_tests {
                           5
                         "#),
                 load_schema_from_text(r#" // For a schema with annotations constraint as below:
-                                type::{ name: annotations_type, annotations: ordered::optional::[a, required::b, c, required::d] }
+                                type::{ name: annotations_type, annotations: ordered::[a, required::b, c, required::d] }
                         "#),
                 "annotations_type"
         ),

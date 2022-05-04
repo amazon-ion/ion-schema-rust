@@ -1240,10 +1240,11 @@ impl AnnotationsConstraint {
         if self
             .annotations_modifiers
             .contains(&AnnotationModifier::Closed)
-            && !self
-                .annotations
-                .iter()
-                .all(|v| value_annotations.contains(&v.value().as_str()))
+            && !value_annotations.iter().all(|v| {
+                self.annotations
+                    .iter()
+                    .any(|expected_ann| v == expected_ann.value())
+            })
         {
             return Err(Violation::with_violations(
                 "annotations",
