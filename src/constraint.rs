@@ -1,7 +1,6 @@
-use crate::external::ion_rs::value::owned::OwnedSymbolToken;
 use crate::isl::isl_constraint::IslConstraint;
 use crate::isl::isl_type_reference::IslTypeRef;
-use crate::isl::util::{Annotation, AnnotationModifier, Range};
+use crate::isl::util::{Annotation, Range};
 use crate::result::{IonSchemaResult, ValidationResult};
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::types::{TypeDefinition, TypeValidator};
@@ -98,29 +97,21 @@ impl Constraint {
         Constraint::Element(ElementConstraint::new(type_id))
     }
 
-    /// Creates a [Constraint::Annotations] using [OwnedSymbolToken]s and [OwnedElement]s specified inside it
-    pub fn annotations<A: Into<Vec<OwnedSymbolToken>>, B: Into<Vec<OwnedElement>>>(
+    /// Creates a [Constraint::Annotations] using [str]s and [OwnedElement]s specified inside it
+    pub fn annotations<'a, A: Into<Vec<&'a str>>, B: Into<Vec<OwnedElement>>>(
         annotations_modifiers: A,
         annotations: B,
     ) -> Constraint {
-        let annotations_modifiers: Vec<AnnotationModifier> = annotations_modifiers
-            .into()
-            .iter()
-            .map(|sym| sym.into())
-            .filter(|annotation_modifier| *annotation_modifier != AnnotationModifier::Any)
-            .collect();
+        let annotations_modifiers: Vec<&str> = annotations_modifiers.into();
         let annotations: Vec<Annotation> = annotations
             .into()
             .iter()
-            .map(|a| {
-                Annotation::new(
-                    a,
-                    annotations_modifiers.contains(&AnnotationModifier::Required),
-                )
-            })
+            .map(|a| Annotation::new(a, annotations_modifiers.contains(&"required")))
             .collect();
         Constraint::Annotations(AnnotationsConstraint::new(
-            annotations_modifiers,
+            annotations_modifiers.contains(&"closed"),
+            annotations_modifiers.contains(&"ordered"),
+            annotations_modifiers.contains(&"required"),
             annotations,
         ))
     }
@@ -151,10 +142,12 @@ impl Constraint {
                 )?;
                 Ok(Constraint::AllOf(all_of))
             }
-            IslConstraint::Annotations(annotation_modifiers, annotations) => {
+            IslConstraint::Annotations(isl_annotations) => {
                 Ok(Constraint::Annotations(AnnotationsConstraint::new(
-                    annotation_modifiers.to_owned(),
-                    annotations.to_owned(),
+                    isl_annotations.is_closed,
+                    isl_annotations.is_ordered,
+                    isl_annotations.is_required,
+                    isl_annotations.annotations.to_owned(),
                 )))
             }
             IslConstraint::AnyOf(type_references) => {
@@ -1115,17 +1108,23 @@ impl ConstraintValidator for ElementConstraint {
 /// [annotations]: https://amzn.github.io/ion-schema/docs/spec.html#annotations
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnnotationsConstraint {
-    annotations_modifiers: Vec<AnnotationModifier>,
+    is_closed: bool,
+    is_ordered: bool,
+    is_required: bool,
     annotations: Vec<Annotation>,
 }
 
 impl AnnotationsConstraint {
     pub fn new(
-        annotations_modifiers: Vec<AnnotationModifier>,
+        is_closed: bool,
+        is_ordered: bool,
+        is_required: bool,
         annotations: Vec<Annotation>,
     ) -> Self {
         Self {
-            annotations_modifiers,
+            is_closed,
+            is_ordered,
+            is_required,
             annotations,
         }
     }
@@ -1147,11 +1146,7 @@ impl AnnotationsConstraint {
                     && expected_annotation.value() != actual_annotation
                 {
                     let mut expected_annotation_found = false;
-                    while value_annotations.peek() != None
-                        && !self
-                            .annotations_modifiers
-                            .contains(&AnnotationModifier::Closed)
-                    {
+                    while value_annotations.peek() != None && !self.is_closed {
                         // As there are open content possible for annotations that doesn't have list-level `closed` annotation
                         // traverse through the next annotations to find this expected, ordered and required annotation
                         if expected_annotation.value() == value_annotations.next().unwrap() {
@@ -1181,11 +1176,7 @@ impl AnnotationsConstraint {
             }
         }
 
-        if self
-            .annotations_modifiers
-            .contains(&AnnotationModifier::Closed)
-            && value_annotations.peek() != None
-        {
+        if self.is_closed && value_annotations.peek() != None {
             // check if there are still annotations left at the end of the list
             return Err(Violation::with_violations(
                 "annotations",
@@ -1237,9 +1228,7 @@ impl AnnotationsConstraint {
 
         // if the annotations is annotated with `closed` at list-level then verify
         // there are no unexpected annotations in the value annotations
-        if self
-            .annotations_modifiers
-            .contains(&AnnotationModifier::Closed)
+        if self.is_closed
             && !value_annotations.iter().all(|v| {
                 self.annotations
                     .iter()
@@ -1263,10 +1252,7 @@ impl ConstraintValidator for AnnotationsConstraint {
         let violations: Vec<Violation> = vec![];
 
         // validate annotations that have list-level `ordered` annotation
-        if self
-            .annotations_modifiers
-            .contains(&AnnotationModifier::Ordered)
-        {
+        if self.is_ordered {
             return self.validate_ordered_annotations(value, type_store, violations);
         }
         // validate annotations that does not have list-level `ordered` annotation

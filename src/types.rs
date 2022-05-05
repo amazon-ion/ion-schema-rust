@@ -479,8 +479,8 @@ mod type_definition_tests {
         /* For a schema with annotations constraint as below:
             { annotations: closed::[red, blue, green] }
         */
-        IslType::anonymous([IslConstraint::annotations(vec![text_token("closed")], vec![text_token("red").into(), text_token("blue").into(), text_token("green").into()])]),
-        TypeDefinition::anonymous([Constraint::annotations(vec![text_token("closed")], vec![text_token("red").into(), text_token("blue").into(), text_token("green").into()]), Constraint::type_constraint(25)])
+        IslType::anonymous([IslConstraint::annotations(vec!["closed"], vec![text_token("red").into(), text_token("blue").into(), text_token("green").into()])]),
+        TypeDefinition::anonymous([Constraint::annotations(vec!["closed"], vec![text_token("red").into(), text_token("blue").into(), text_token("green").into()]), Constraint::type_constraint(25)])
     ),
     )]
     fn isl_type_to_type_definition(isl_type: IslType, type_def: TypeDefinition) {

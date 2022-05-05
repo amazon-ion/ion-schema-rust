@@ -276,7 +276,7 @@ mod isl_tests {
         load_anonymous_type(r#" // For a schema with annotations constraint as below:
                         { annotations: closed::[red, blue, green] }
                     "#),
-        IslType::anonymous([IslConstraint::annotations(vec![text_token("closed")], vec![text_token("red").into(), text_token("blue").into(), text_token("green").into()])])
+        IslType::anonymous([IslConstraint::annotations(vec!["closed"], vec![text_token("red").into(), text_token("blue").into(), text_token("green").into()])])
     ),
     )]
     fn owned_struct_to_isl_type(isl_type1: IslType, isl_type2: IslType) {

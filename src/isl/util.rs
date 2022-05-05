@@ -1,7 +1,7 @@
 use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
 use ion_rs::types::decimal::Decimal;
 use ion_rs::types::timestamp::Timestamp;
-use ion_rs::value::owned::{text_token, OwnedElement, OwnedSymbolToken};
+use ion_rs::value::owned::{text_token, OwnedElement};
 use ion_rs::value::{AnyInt, Element, IntAccess, Sequence, SymbolToken};
 use ion_rs::IonType;
 use num_traits::Signed;
@@ -464,30 +464,6 @@ pub enum RangeBoundaryType {
 pub enum RangeType {
     NonNegativeInteger, // used by byte_length, container_length and codepoint_length to specify non negative integer range
     Any,                // used for any other range types (e.g. Integer, Float, Timestamp, Decimal)
-}
-
-/// Represents annotation modifiers for [annotations] constraint.
-/// Grammar: <ANNOTATIONS_MODIFIER> ::= required::
-///                          | ordered::
-///                          | closed::
-/// [annotations]: https://amzn.github.io/ion-schema/docs/spec.html#annotations
-#[derive(Debug, Clone, PartialEq)]
-pub enum AnnotationModifier {
-    Required,
-    Ordered,
-    Closed,
-    Any, // any other annotation that will be considered as open content
-}
-
-impl From<&OwnedSymbolToken> for AnnotationModifier {
-    fn from(value: &OwnedSymbolToken) -> Self {
-        match value.text().unwrap() {
-            "required" => AnnotationModifier::Required,
-            "closed" => AnnotationModifier::Closed,
-            "ordered" => AnnotationModifier::Ordered,
-            _ => AnnotationModifier::Any,
-        }
-    }
 }
 
 /// Represents an annotation for [annotations] constraint.
