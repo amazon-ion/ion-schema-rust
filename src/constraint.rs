@@ -111,7 +111,6 @@ impl Constraint {
         Constraint::Annotations(AnnotationsConstraint::new(
             annotations_modifiers.contains(&"closed"),
             annotations_modifiers.contains(&"ordered"),
-            annotations_modifiers.contains(&"required"),
             annotations,
         ))
     }
@@ -146,7 +145,6 @@ impl Constraint {
                 Ok(Constraint::Annotations(AnnotationsConstraint::new(
                     isl_annotations.is_closed,
                     isl_annotations.is_ordered,
-                    isl_annotations.is_required,
                     isl_annotations.annotations.to_owned(),
                 )))
             }
@@ -1106,25 +1104,20 @@ impl ConstraintValidator for ElementConstraint {
 
 /// Implements the `annotations` constraint
 /// [annotations]: https://amzn.github.io/ion-schema/docs/spec.html#annotations
+// The `required` annotation provided on the list of annotations is not represented here,
+// requirement of an annotation is represented in the annotation itself by the field `is_required` of `Annotation` struct.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnnotationsConstraint {
     is_closed: bool,
     is_ordered: bool,
-    is_required: bool,
     annotations: Vec<Annotation>,
 }
 
 impl AnnotationsConstraint {
-    pub fn new(
-        is_closed: bool,
-        is_ordered: bool,
-        is_required: bool,
-        annotations: Vec<Annotation>,
-    ) -> Self {
+    pub fn new(is_closed: bool, is_ordered: bool, annotations: Vec<Annotation>) -> Self {
         Self {
             is_closed,
             is_ordered,
-            is_required,
             annotations,
         }
     }

@@ -110,7 +110,6 @@ impl IslConstraint {
         IslConstraint::Annotations(IslAnnotationsConstraint::new(
             annotations_modifiers.contains(&"closed"),
             annotations_modifiers.contains(&"ordered"),
-            annotations_modifiers.contains(&"required"),
             annotations,
         ))
     }
@@ -361,25 +360,20 @@ impl IslConstraint {
 
 /// Represents the `annotations` constraint
 /// [annotations]: https://amzn.github.io/ion-schema/docs/spec.html#annotations
+// The `required` annotation provided on the list of annotations is not represented here,
+// requirement of an annotation is represented in the annotation itself by the field `is_required` of `Annotation` struct.
 #[derive(Debug, Clone, PartialEq)]
 pub struct IslAnnotationsConstraint {
     pub is_closed: bool,
     pub is_ordered: bool,
-    pub is_required: bool,
     pub annotations: Vec<Annotation>,
 }
 
 impl IslAnnotationsConstraint {
-    pub fn new(
-        is_closed: bool,
-        is_ordered: bool,
-        is_required: bool,
-        annotations: Vec<Annotation>,
-    ) -> Self {
+    pub fn new(is_closed: bool, is_ordered: bool, annotations: Vec<Annotation>) -> Self {
         Self {
             is_closed,
             is_ordered,
-            is_required,
             annotations,
         }
     }
@@ -401,7 +395,6 @@ impl TryFrom<&OwnedElement> for IslAnnotationsConstraint {
         Ok(IslAnnotationsConstraint::new(
             annotation_modifiers.contains(&"closed"),
             annotation_modifiers.contains(&"ordered"),
-            annotation_modifiers.contains(&"required"),
             annotations,
         ))
     }
