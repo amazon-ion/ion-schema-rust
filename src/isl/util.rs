@@ -491,7 +491,7 @@ impl Annotation {
     }
 
     // Returns a bool value that represents if an annotation is required or not
-    pub fn is_annotations_required(value: &OwnedElement, list_level_required: bool) -> bool {
+    pub(crate) fn is_annotation_required(value: &OwnedElement, list_level_required: bool) -> bool {
         if value.annotations().any(|a| a.text().unwrap() == "required") {
             true
         } else if list_level_required {

@@ -111,7 +111,7 @@ impl IslConstraint {
             .map(|a| {
                 Annotation::new(
                     a.as_str().unwrap().to_owned(),
-                    Annotation::is_annotations_required(
+                    Annotation::is_annotation_required(
                         &a,
                         annotations_modifiers.contains(&"required"),
                     ),
@@ -404,7 +404,7 @@ impl TryFrom<&OwnedElement> for IslAnnotationsConstraint {
             .map(|e| {
                 Annotation::new(
                     e.as_str().unwrap().to_owned(),
-                    Annotation::is_annotations_required(
+                    Annotation::is_annotation_required(
                         e,
                         annotation_modifiers.contains(&"required"),
                     ),
