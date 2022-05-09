@@ -29,7 +29,7 @@ schema_footer::{
 }
 ```
 
-### Simple rust example to demonstrate how to load a schema and validate an ion value
+### Loading a schema and validating an Ion value
 ```rust
 use ion_schema::authority::{DocumentAuthority, FileSystemDocumentAuthority};
 use ion_schema::external::ion_rs::value::owned::OwnedElement;
