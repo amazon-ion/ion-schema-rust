@@ -129,6 +129,7 @@ mod isl_tests {
     use crate::result::IonSchemaResult;
     use ion_rs::types::decimal::*;
     use ion_rs::types::timestamp::Timestamp;
+    use ion_rs::value::owned::text_token;
     use ion_rs::value::owned::OwnedElement;
     use ion_rs::value::reader::element_reader;
     use ion_rs::value::reader::ElementReader;
@@ -270,6 +271,12 @@ mod isl_tests {
                     { element: int }
                 "#),
         IslType::anonymous([IslConstraint::element(IslTypeRef::named("int"))])
+    ),
+    case::annotations_constraint(
+        load_anonymous_type(r#" // For a schema with annotations constraint as below:
+                        { annotations: closed::[red, blue, green] }
+                    "#),
+        IslType::anonymous([IslConstraint::annotations(vec!["closed"], vec![text_token("red").into(), text_token("blue").into(), text_token("green").into()])])
     ),
     )]
     fn owned_struct_to_isl_type(isl_type1: IslType, isl_type2: IslType) {

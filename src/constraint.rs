@@ -1,6 +1,6 @@
 use crate::isl::isl_constraint::IslConstraint;
 use crate::isl::isl_type_reference::IslTypeRef;
-use crate::isl::util::Range;
+use crate::isl::util::{Annotation, Range};
 use crate::result::{IonSchemaResult, ValidationResult};
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::types::{TypeDefinition, TypeValidator};
@@ -25,6 +25,7 @@ pub trait ConstraintValidator {
 // TODO: add other constraints
 pub enum Constraint {
     AllOf(AllOfConstraint),
+    Annotations(AnnotationsConstraint),
     AnyOf(AnyOfConstraint),
     ByteLength(ByteLengthConstraint),
     CodepointLength(CodepointLengthConstraint),
@@ -96,6 +97,35 @@ impl Constraint {
         Constraint::Element(ElementConstraint::new(type_id))
     }
 
+    /// Creates a [Constraint::Annotations] using [str]s and [OwnedElement]s specified inside it
+    pub fn annotations<
+        'a,
+        A: IntoIterator<Item = &'a str>,
+        B: IntoIterator<Item = OwnedElement>,
+    >(
+        annotations_modifiers: A,
+        annotations: B,
+    ) -> Constraint {
+        let annotations_modifiers: Vec<&str> = annotations_modifiers.into_iter().collect();
+        let annotations: Vec<Annotation> = annotations
+            .into_iter()
+            .map(|a| {
+                Annotation::new(
+                    a.as_str().unwrap().to_owned(),
+                    Annotation::is_annotation_required(
+                        &a,
+                        annotations_modifiers.contains(&"required"),
+                    ),
+                )
+            })
+            .collect();
+        Constraint::Annotations(AnnotationsConstraint::new(
+            annotations_modifiers.contains(&"closed"),
+            annotations_modifiers.contains(&"ordered"),
+            annotations,
+        ))
+    }
+
     /// Creates a [Constraint::Fields] referring to the fields represented by the provided field name and [TypeId]s.
     /// By default, fields created using this method will allow open content
     pub fn fields<I>(fields: I) -> Constraint
@@ -121,6 +151,13 @@ impl Constraint {
                     pending_types,
                 )?;
                 Ok(Constraint::AllOf(all_of))
+            }
+            IslConstraint::Annotations(isl_annotations) => {
+                Ok(Constraint::Annotations(AnnotationsConstraint::new(
+                    isl_annotations.is_closed,
+                    isl_annotations.is_ordered,
+                    isl_annotations.annotations.to_owned(),
+                )))
             }
             IslConstraint::AnyOf(type_references) => {
                 let any_of: AnyOfConstraint = AnyOfConstraint::resolve_from_isl_constraint(
@@ -206,6 +243,7 @@ impl Constraint {
     pub fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
         match self {
             Constraint::AllOf(all_of) => all_of.validate(value, type_store),
+            Constraint::Annotations(annotations) => annotations.validate(value, type_store),
             Constraint::AnyOf(any_of) => any_of.validate(value, type_store),
             Constraint::ByteLength(byte_length) => byte_length.validate(value, type_store),
             Constraint::CodepointLength(codepoint_length) => {
@@ -1072,5 +1110,167 @@ impl ConstraintValidator for ElementConstraint {
             ));
         }
         Ok(())
+    }
+}
+
+/// Implements the `annotations` constraint
+/// [annotations]: https://amzn.github.io/ion-schema/docs/spec.html#annotations
+// The `required` annotation provided on the list of annotations is not represented here,
+// requirement of an annotation is represented in the annotation itself by the field `is_required` of `Annotation` struct.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AnnotationsConstraint {
+    is_closed: bool,
+    is_ordered: bool,
+    annotations: Vec<Annotation>,
+}
+
+impl AnnotationsConstraint {
+    pub fn new(is_closed: bool, is_ordered: bool, annotations: Vec<Annotation>) -> Self {
+        Self {
+            is_closed,
+            is_ordered,
+            annotations,
+        }
+    }
+
+    // Find the required expected annotation from value annotations
+    // This is a helper method used by validate_ordered_annotations
+    pub fn find_expected_annotation<'a, I: Iterator<Item = &'a str>>(
+        &self,
+        value_annotations: &mut Peekable<I>,
+        expected_annotation: &Annotation,
+    ) -> bool {
+        // As there are open content possible for annotations that doesn't have list-level `closed` annotation
+        // traverse through the next annotations to find this expected, ordered and required annotation
+        while value_annotations.peek() != None && !self.is_closed {
+            if expected_annotation.value() == value_annotations.next().unwrap() {
+                return true;
+            }
+        }
+
+        // if we didn't find the expected annotation return false
+        false
+    }
+
+    pub fn validate_ordered_annotations(
+        &self,
+        value: &OwnedElement,
+        type_store: &TypeStore,
+        violations: Vec<Violation>,
+    ) -> ValidationResult {
+        let mut value_annotations = value
+            .annotations()
+            .map(|sym| sym.text().unwrap())
+            .peekable();
+
+        // iterate over the expected annotations and see if there are any unexpected value annotations found
+        for expected_annotation in &self.annotations {
+            if let Some(actual_annotation) = value_annotations.peek() {
+                if expected_annotation.is_required()
+                    && expected_annotation.value() != actual_annotation
+                {
+                    // iterate over the actual value annotations to find the required expected annotation
+                    if !self.find_expected_annotation(&mut value_annotations, expected_annotation) {
+                        // missing required expected annotation
+                        return Err(Violation::new(
+                            "annotations",
+                            ViolationCode::AnnotationMismatched,
+                            "annotations don't match expectations",
+                        ));
+                    }
+                } else if expected_annotation.value() == actual_annotation {
+                    let _ = value_annotations.next(); // consume the annotation if its equal to the expected annotation
+                }
+            } else if expected_annotation.is_required() {
+                // we already exhausted value annotations and didn't find the required expected annotation
+                return Err(Violation::new(
+                    "annotations",
+                    ViolationCode::AnnotationMismatched,
+                    "annotations don't match expectations",
+                ));
+            }
+        }
+
+        if self.is_closed && value_annotations.peek() != None {
+            // check if there are still annotations left at the end of the list
+            return Err(Violation::with_violations(
+                "annotations",
+                ViolationCode::AnnotationMismatched,
+                // unwrap as we already verified with peek that there is a value
+                &format!(
+                    "Unexpected annotations found {:?}",
+                    value_annotations.next().unwrap()
+                ),
+                violations,
+            ));
+        }
+
+        Ok(())
+    }
+
+    pub fn validate_unordered_annotations(
+        &self,
+        value: &OwnedElement,
+        type_store: &TypeStore,
+        violations: Vec<Violation>,
+    ) -> ValidationResult {
+        // This will be used by a violation to to return all the missing annotations
+        let mut missing_annotations: Vec<&Annotation> = vec![];
+
+        let value_annotations: Vec<&str> =
+            value.annotations().map(|sym| sym.text().unwrap()).collect();
+
+        for expected_annotation in &self.annotations {
+            // verify if the expected_annotation is required and if it matches with value annotation
+            if expected_annotation.is_required()
+                && !value
+                    .annotations()
+                    .any(|a| a.text().unwrap() == expected_annotation.value())
+            {
+                missing_annotations.push(expected_annotation);
+            }
+        }
+
+        // if missing_annotations is not empty return violation
+        if !missing_annotations.is_empty() {
+            return Err(Violation::with_violations(
+                "annotations",
+                ViolationCode::MissingAnnotation,
+                &format!("missing annotation(s): {:?}", missing_annotations),
+                violations,
+            ));
+        }
+
+        // if the annotations is annotated with `closed` at list-level then verify
+        // there are no unexpected annotations in the value annotations
+        if self.is_closed
+            && !value_annotations.iter().all(|v| {
+                self.annotations
+                    .iter()
+                    .any(|expected_ann| v == expected_ann.value())
+            })
+        {
+            return Err(Violation::with_violations(
+                "annotations",
+                ViolationCode::UnexpectedAnnotation,
+                "found one or more unexpected annotations",
+                violations,
+            ));
+        }
+
+        Ok(())
+    }
+}
+
+impl ConstraintValidator for AnnotationsConstraint {
+    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
+        let violations: Vec<Violation> = vec![];
+
+        // validate annotations that have list-level `ordered` annotation
+        if self.is_ordered {
+            return self.validate_ordered_annotations(value, type_store, violations);
+        }
+        // validate annotations that does not have list-level `ordered` annotation
+        self.validate_unordered_annotations(value, type_store, violations)
     }
 }

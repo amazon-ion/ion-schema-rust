@@ -465,3 +465,41 @@ pub enum RangeType {
     NonNegativeInteger, // used by byte_length, container_length and codepoint_length to specify non negative integer range
     Any,                // used for any other range types (e.g. Integer, Float, Timestamp, Decimal)
 }
+
+/// Represents an annotation for [annotations] constraint.
+/// Grammar: <ANNOTATION> ::= <SYMBOL>
+///                | required::<SYMBOL>
+///                | optional::<SYMBOL>
+/// [annotations]: https://amzn.github.io/ion-schema/docs/spec.html#annotations
+#[derive(Debug, Clone, PartialEq)]
+pub struct Annotation {
+    value: String,
+    is_required: bool, // Specifies whether an annotation's occurrence is required or optional
+}
+
+impl Annotation {
+    pub fn new(value: String, is_required: bool) -> Self {
+        Self { value, is_required }
+    }
+
+    pub fn value(&self) -> &String {
+        &self.value
+    }
+
+    pub fn is_required(&self) -> bool {
+        self.is_required
+    }
+
+    // Returns a bool value that represents if an annotation is required or not
+    pub(crate) fn is_annotation_required(value: &OwnedElement, list_level_required: bool) -> bool {
+        if value.annotations().any(|a| a.text().unwrap() == "required") {
+            true
+        } else if list_level_required {
+            // if the value is annotated with `optional` then it overrides the list-level `required` behavior
+            !value.annotations().any(|a| a.text().unwrap() == "optional")
+        } else {
+            // for any value the default annotation is `optional`
+            false
+        }
+    }
+}

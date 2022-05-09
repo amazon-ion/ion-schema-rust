@@ -1,17 +1,21 @@
 use crate::isl::isl_import::IslImportType;
 use crate::isl::isl_type_reference::IslTypeRef;
-use crate::isl::util::{Range, RangeType};
-use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
+use crate::isl::util::{Annotation, Range, RangeType};
+use crate::result::{
+    invalid_schema_error, invalid_schema_error_raw, IonSchemaError, IonSchemaResult,
+};
 use ion_rs::value::owned::OwnedElement;
 use ion_rs::value::{Element, Sequence};
 use ion_rs::value::{Struct, SymbolToken};
 use ion_rs::IonType;
 use std::collections::HashMap;
+use std::convert::{TryFrom, TryInto};
 
 /// Represents a public facing API for schema constraints [IslConstraint] which stores IslTypeRef
 #[derive(Debug, Clone, PartialEq)]
 pub enum IslConstraint {
     AllOf(Vec<IslTypeRef>),
+    Annotations(IslAnnotationsConstraint),
     AnyOf(Vec<IslTypeRef>),
     ByteLength(Range),
     CodepointLength(Range),
@@ -92,6 +96,35 @@ impl IslConstraint {
         IslConstraint::Element(isl_type)
     }
 
+    /// Creates a [IslConstraint::Annotations] using [str]s and [OwnedElement]s specified inside it
+    pub fn annotations<
+        'a,
+        A: IntoIterator<Item = &'a str>,
+        B: IntoIterator<Item = OwnedElement>,
+    >(
+        annotations_modifiers: A,
+        annotations: B,
+    ) -> IslConstraint {
+        let annotations_modifiers: Vec<&str> = annotations_modifiers.into_iter().collect();
+        let annotations: Vec<Annotation> = annotations
+            .into_iter()
+            .map(|a| {
+                Annotation::new(
+                    a.as_str().unwrap().to_owned(),
+                    Annotation::is_annotation_required(
+                        &a,
+                        annotations_modifiers.contains(&"required"),
+                    ),
+                )
+            })
+            .collect();
+        IslConstraint::Annotations(IslAnnotationsConstraint::new(
+            annotations_modifiers.contains(&"closed"),
+            annotations_modifiers.contains(&"ordered"),
+            annotations,
+        ))
+    }
+
     /// Parse constraints inside an [OwnedElement] to an [IslConstraint]
     pub fn from_ion_element(
         constraint_name: &str,
@@ -108,6 +141,22 @@ impl IslConstraint {
                     "all_of",
                 )?;
                 Ok(IslConstraint::AllOf(types))
+            }
+            "annotations" => {
+                if value.is_null() {
+                    return Err(invalid_schema_error_raw(
+                        "annotations constraint was a null instead of a list",
+                    ));
+                }
+
+                if value.ion_type() != IonType::List {
+                    return Err(invalid_schema_error_raw(format!(
+                        "annotations constraint was a {:?} instead of a list",
+                        value.ion_type()
+                    )));
+                }
+
+                Ok(IslConstraint::Annotations(value.try_into()?))
             }
             "any_of" => {
                 let types: Vec<IslTypeRef> = IslConstraint::isl_type_references_from_ion_element(
@@ -317,5 +366,56 @@ impl IslConstraint {
                     .map(|t| (f.text().unwrap().to_owned(), t))
             })
             .collect::<IonSchemaResult<HashMap<String, IslTypeRef>>>()
+    }
+}
+
+/// Represents the `annotations` constraint
+/// [annotations]: https://amzn.github.io/ion-schema/docs/spec.html#annotations
+// The `required` annotation provided on the list of annotations is not represented here,
+// requirement of an annotation is represented in the annotation itself by the field `is_required` of `Annotation` struct.
+#[derive(Debug, Clone, PartialEq)]
+pub struct IslAnnotationsConstraint {
+    pub is_closed: bool,
+    pub is_ordered: bool,
+    pub annotations: Vec<Annotation>,
+}
+
+impl IslAnnotationsConstraint {
+    pub fn new(is_closed: bool, is_ordered: bool, annotations: Vec<Annotation>) -> Self {
+        Self {
+            is_closed,
+            is_ordered,
+            annotations,
+        }
+    }
+}
+
+impl TryFrom<&OwnedElement> for IslAnnotationsConstraint {
+    type Error = IonSchemaError;
+
+    fn try_from(value: &OwnedElement) -> IonSchemaResult<Self> {
+        let annotation_modifiers: Vec<&str> =
+            value.annotations().map(|sym| sym.text().unwrap()).collect();
+
+        let annotations: Vec<Annotation> = value
+            .as_sequence()
+            .unwrap()
+            .iter()
+            .map(|e| {
+                Annotation::new(
+                    e.as_str().unwrap().to_owned(),
+                    Annotation::is_annotation_required(
+                        e,
+                        annotation_modifiers.contains(&"required"),
+                    ),
+                )
+            })
+            .collect();
+
+        Ok(IslAnnotationsConstraint::new(
+            annotation_modifiers.contains(&"closed"),
+            annotation_modifiers.contains(&"ordered"),
+            annotations,
+        ))
     }
 }
