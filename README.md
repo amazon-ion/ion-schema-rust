@@ -10,10 +10,11 @@ An implementation of [Amazon Ion Schema](http://amzn.github.io/ion-schema) in Ru
 
 ## Getting Started
 
-The following rust code sample is a simple example of how to use this API. The `my_int_type` is an integer ion type. 
-A sample schema `my_schema.isl` can be loaded using `ion-schema-rust` as following:
+The following rust code sample is a simple example of how to use this API.
 
 ### Example schema `my_schema.isl`
+
+This file (`my_schema.isl`) defines a new type (`my_int_type`) based on Ion's `int` type.
 ```
 schema_header::{
   imports: [],
