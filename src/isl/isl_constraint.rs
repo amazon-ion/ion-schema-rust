@@ -97,15 +97,18 @@ impl IslConstraint {
     }
 
     /// Creates a [IslConstraint::Annotations] using [str]s and [OwnedElement]s specified inside it
-    pub fn annotations<'a, A: Into<Vec<&'a str>>, B: Into<Vec<OwnedElement>>>(
+    pub fn annotations<
+        'a,
+        A: IntoIterator<Item = &'a str>,
+        B: IntoIterator<Item = OwnedElement>,
+    >(
         annotations_modifiers: A,
         annotations: B,
     ) -> IslConstraint {
-        let annotations_modifiers = annotations_modifiers.into();
+        let annotations_modifiers: Vec<&str> = annotations_modifiers.into_iter().collect();
         let annotations: Vec<Annotation> = annotations
-            .into()
-            .iter()
-            .map(|a| Annotation::new(a, annotations_modifiers.contains(&"required")))
+            .into_iter()
+            .map(|a| Annotation::new(&a, annotations_modifiers.contains(&"required")))
             .collect();
         IslConstraint::Annotations(IslAnnotationsConstraint::new(
             annotations_modifiers.contains(&"closed"),

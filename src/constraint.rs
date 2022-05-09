@@ -98,15 +98,18 @@ impl Constraint {
     }
 
     /// Creates a [Constraint::Annotations] using [str]s and [OwnedElement]s specified inside it
-    pub fn annotations<'a, A: Into<Vec<&'a str>>, B: Into<Vec<OwnedElement>>>(
+    pub fn annotations<
+        'a,
+        A: IntoIterator<Item = &'a str>,
+        B: IntoIterator<Item = OwnedElement>,
+    >(
         annotations_modifiers: A,
         annotations: B,
     ) -> Constraint {
-        let annotations_modifiers: Vec<&str> = annotations_modifiers.into();
+        let annotations_modifiers: Vec<&str> = annotations_modifiers.into_iter().collect();
         let annotations: Vec<Annotation> = annotations
-            .into()
-            .iter()
-            .map(|a| Annotation::new(a, annotations_modifiers.contains(&"required")))
+            .into_iter()
+            .map(|a| Annotation::new(&a, annotations_modifiers.contains(&"required")))
             .collect();
         Constraint::Annotations(AnnotationsConstraint::new(
             annotations_modifiers.contains(&"closed"),
@@ -1122,6 +1125,25 @@ impl AnnotationsConstraint {
         }
     }
 
+    // Find the required expected annotation from value annotations
+    // This is a helper method used by validate_ordered_annotations
+    pub fn find_expected_annotation<'a, I: Iterator<Item = &'a str>>(
+        &self,
+        value_annotations: &mut Peekable<I>,
+        expected_annotation: &Annotation,
+    ) -> bool {
+        // As there are open content possible for annotations that doesn't have list-level `closed` annotation
+        // traverse through the next annotations to find this expected, ordered and required annotation
+        while value_annotations.peek() != None && !self.is_closed {
+            if expected_annotation.value() == value_annotations.next().unwrap() {
+                return true;
+            }
+        }
+
+        // if we didn't find the expected annotation return false
+        false
+    }
+
     pub fn validate_ordered_annotations(
         &self,
         value: &OwnedElement,
@@ -1133,22 +1155,14 @@ impl AnnotationsConstraint {
             .map(|sym| sym.text().unwrap())
             .peekable();
 
+        // iterate over the expected annotations and see if there are any unexpected value annotations found
         for expected_annotation in &self.annotations {
             if let Some(actual_annotation) = value_annotations.peek() {
                 if expected_annotation.is_required()
                     && expected_annotation.value() != actual_annotation
                 {
-                    let mut expected_annotation_found = false;
-                    while value_annotations.peek() != None && !self.is_closed {
-                        // As there are open content possible for annotations that doesn't have list-level `closed` annotation
-                        // traverse through the next annotations to find this expected, ordered and required annotation
-                        if expected_annotation.value() == value_annotations.next().unwrap() {
-                            expected_annotation_found = true;
-                            break;
-                        }
-                    }
-
-                    if !expected_annotation_found {
+                    // iterate over the actual value annotations to find the required expected annotation
+                    if !self.find_expected_annotation(&mut value_annotations, expected_annotation) {
                         // missing required expected annotation
                         return Err(Violation::new(
                             "annotations",
@@ -1160,7 +1174,7 @@ impl AnnotationsConstraint {
                     let _ = value_annotations.next(); // consume the annotation if its equal to the expected annotation
                 }
             } else if expected_annotation.is_required() {
-                // missing required expected annotation
+                // we already exhausted value annotations and didn't find the required expected annotation
                 return Err(Violation::new(
                     "annotations",
                     ViolationCode::AnnotationMismatched,
