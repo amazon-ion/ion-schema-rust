@@ -8,6 +8,92 @@ An implementation of [Amazon Ion Schema](http://amzn.github.io/ion-schema) in Ru
 
 **This package is considered experimental, under active/early development, and the API is subject to change.**
 
+## Getting Started
+
+The following rust code sample is a simple example of how to use this API.
+
+### Example schema `my_schema.isl`
+
+This file (`my_schema.isl`) defines a new type (`my_int_type`) based on Ion's `int` type.
+```
+schema_header::{
+  imports: [],
+}
+
+type::{
+  name: my_int_type,
+  type: int,
+}
+
+schema_footer::{
+}
+```
+
+### Loading a schema and validating an Ion value
+```rust
+use ion_schema::authority::{DocumentAuthority, FileSystemDocumentAuthority};
+use ion_schema::external::ion_rs::value::owned::OwnedElement;
+use ion_schema::result::{ValidationResult, IonSchemaResult};
+use ion_schema::types::TypeRef;
+use ion_schema::schema::Schema;
+use ion_schema::system::SchemaSystem;
+use std::path::Path;
+use std::rc::Rc;
+
+fn main() -> IonSchemaResult<()> {
+    // Create authorities vector containing all the authorities that will be used to load a schema based on schema id
+    let document_authorities: Vec<Box<dyn DocumentAuthority>> = vec![Box::new(
+        FileSystemDocumentAuthority::new(Path::new("schema")), // provide a path to the authority base folder containing schemas
+    )];
+
+    // Create a new schema system from given document authorities
+    let mut schema_system = SchemaSystem::new(document_authorities);
+
+    // Provide schema id for the schema you want to load (schema_id is the schema file name here)
+    let schema_id = "my_schema.isl";
+
+    // Load schema
+    let schema: Rc<Schema> = schema_system.load_schema(schema_id)?;
+
+    // Retrieve a particular type from this schema
+    let type_ref: TypeRef = schema.get_type("my_int_type").unwrap();
+
+    // Validate data based on the type: 'my_int_type'
+    check_value(5.into(), &type_ref); // this validation passes as the value satisfies integer type constraint
+    check_value(5e3.into(), &type_ref); // this returns violation as 'my_int_type' expects an integer value
+
+    Ok(())
+}
+
+// Verify if the given value is valid and print violation for invalid value
+fn check_value(value: OwnedElement, type_ref: &TypeRef) {
+    let validation_result: ValidationResult = type_ref.validate(&value);
+    if let Err(violation) = validation_result {
+        println!("{:?}", value);
+        println!("{:#?}", violation);
+    }
+}
+```
+
+### Output
+When run, the code above produces the following output:
+```
+OwnedElement { annotations: [], value: Float(5000.0) }
+Violation {
+    constraint: "my_int_type",
+    code: TypeConstraintsUnsatisfied,
+    message: "value didn't satisfy type constraint(s)",
+    violations: [
+        Violation {
+            constraint: "type_constraint",
+            code: TypeMismatched,
+            message: "expected type Integer, found Float",
+            violations: [],
+        },
+    ],
+}
+```
+
 ## Development
 
 This repository contains [git submodules](https://git-scm.com/docs/git-submodule)
