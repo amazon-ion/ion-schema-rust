@@ -108,7 +108,15 @@ impl IslConstraint {
         let annotations_modifiers: Vec<&str> = annotations_modifiers.into_iter().collect();
         let annotations: Vec<Annotation> = annotations
             .into_iter()
-            .map(|a| Annotation::new(&a, annotations_modifiers.contains(&"required")))
+            .map(|a| {
+                Annotation::new(
+                    a.as_str().unwrap().to_owned(),
+                    Annotation::is_annotations_required(
+                        &a,
+                        annotations_modifiers.contains(&"required"),
+                    ),
+                )
+            })
             .collect();
         IslConstraint::Annotations(IslAnnotationsConstraint::new(
             annotations_modifiers.contains(&"closed"),
@@ -393,8 +401,17 @@ impl TryFrom<&OwnedElement> for IslAnnotationsConstraint {
             .as_sequence()
             .unwrap()
             .iter()
-            .map(|e| Annotation::new(e, annotation_modifiers.contains(&"required")))
+            .map(|e| {
+                Annotation::new(
+                    e.as_str().unwrap().to_owned(),
+                    Annotation::is_annotations_required(
+                        e,
+                        annotation_modifiers.contains(&"required"),
+                    ),
+                )
+            })
             .collect();
+
         Ok(IslAnnotationsConstraint::new(
             annotation_modifiers.contains(&"closed"),
             annotation_modifiers.contains(&"ordered"),

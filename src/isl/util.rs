@@ -478,21 +478,8 @@ pub struct Annotation {
 }
 
 impl Annotation {
-    pub fn new(value: &OwnedElement, list_level_required: bool) -> Self {
-        Self {
-            value: value.as_str().unwrap().to_owned(),
-            is_required: {
-                if value.annotations().any(|a| a.text().unwrap() == "required") {
-                    true
-                } else if list_level_required {
-                    // if the value is annotated with `optional` then it overrides the list-level `required` behavior
-                    !value.annotations().any(|a| a.text().unwrap() == "optional")
-                } else {
-                    // for any value the default annotation is `optional`
-                    false
-                }
-            },
-        }
+    pub fn new(value: String, is_required: bool) -> Self {
+        Self { value, is_required }
     }
 
     pub fn value(&self) -> &String {
@@ -501,5 +488,18 @@ impl Annotation {
 
     pub fn is_required(&self) -> bool {
         self.is_required
+    }
+
+    // Returns a bool value that represents if an annotation is required or not
+    pub fn is_annotations_required(value: &OwnedElement, list_level_required: bool) -> bool {
+        if value.annotations().any(|a| a.text().unwrap() == "required") {
+            true
+        } else if list_level_required {
+            // if the value is annotated with `optional` then it overrides the list-level `required` behavior
+            !value.annotations().any(|a| a.text().unwrap() == "optional")
+        } else {
+            // for any value the default annotation is `optional`
+            false
+        }
     }
 }

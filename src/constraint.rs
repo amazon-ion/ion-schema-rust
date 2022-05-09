@@ -109,7 +109,15 @@ impl Constraint {
         let annotations_modifiers: Vec<&str> = annotations_modifiers.into_iter().collect();
         let annotations: Vec<Annotation> = annotations
             .into_iter()
-            .map(|a| Annotation::new(&a, annotations_modifiers.contains(&"required")))
+            .map(|a| {
+                Annotation::new(
+                    a.as_str().unwrap().to_owned(),
+                    Annotation::is_annotations_required(
+                        &a,
+                        annotations_modifiers.contains(&"required"),
+                    ),
+                )
+            })
             .collect();
         Constraint::Annotations(AnnotationsConstraint::new(
             annotations_modifiers.contains(&"closed"),
