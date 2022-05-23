@@ -1,11 +1,11 @@
 #[macro_use]
 extern crate clap;
 use clap::{App, ArgMatches};
-use ion_rs::text::writer::TextWriter;
 use ion_rs::value::reader::element_reader;
 use ion_rs::value::reader::ElementReader;
 use ion_rs::value::writer::{ElementWriter, Format, TextKind};
 use ion_rs::IonType;
+use ion_rs::{RawTextWriter, Writer};
 use ion_schema::authority::{DocumentAuthority, FileSystemDocumentAuthority};
 use ion_schema::result::IonSchemaResult;
 use ion_schema::system::SchemaSystem;
@@ -91,7 +91,7 @@ fn validate(command_args: &ArgMatches) -> IonSchemaResult<()> {
 
     // create a text writer to make the output
     let mut output = vec![];
-    let mut writer = TextWriter::new(&mut output);
+    let mut writer = RawTextWriter::new(&mut output);
 
     // validate owned_elements according to type_ref
     for owned_element in owned_elements {

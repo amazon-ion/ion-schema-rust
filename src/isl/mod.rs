@@ -128,12 +128,12 @@ mod isl_tests {
     use crate::isl::util::{Range, RangeBoundaryType, RangeBoundaryValue, RangeType};
     use crate::result::IonSchemaResult;
     use ion_rs::types::decimal::*;
+    use ion_rs::types::integer::Integer as IntegerValue;
     use ion_rs::types::timestamp::Timestamp;
     use ion_rs::value::owned::text_token;
     use ion_rs::value::owned::OwnedElement;
     use ion_rs::value::reader::element_reader;
     use ion_rs::value::reader::ElementReader;
-    use ion_rs::value::AnyInt;
     use rstest::*;
 
     // helper function to create NamedIslType for isl tests
@@ -310,7 +310,7 @@ mod isl_tests {
             ),
             Range::range(
                 RangeBoundaryValue::Min,
-                RangeBoundaryValue::int_value(AnyInt::I64(5), RangeBoundaryType::Inclusive)
+                RangeBoundaryValue::int_value(IntegerValue::I64(5), RangeBoundaryType::Inclusive)
             )
         ),
         case::range_with_float(
