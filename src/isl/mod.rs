@@ -278,6 +278,12 @@ mod isl_tests {
                     "#),
         IslType::anonymous([IslConstraint::annotations(vec!["closed"], vec![text_token("red").into(), text_token("blue").into(), text_token("green").into()])])
     ),
+    case::precision_constraint(
+        load_anonymous_type(r#" // For a schema with precision constraint as below:
+                        { precision: 2 }
+                    "#),
+        IslType::anonymous([IslConstraint::precision(2.into())])
+    ),
     )]
     fn owned_struct_to_isl_type(isl_type1: IslType, isl_type2: IslType) {
         // assert if both the IslType are same in terms of constraints and name

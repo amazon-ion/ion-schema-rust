@@ -28,6 +28,7 @@ pub enum IslConstraint {
     Occurs(Range),
     OneOf(Vec<IslTypeRef>),
     OrderedElements(Vec<IslTypeRef>),
+    Precision(Range),
     Type(IslTypeRef),
 }
 
@@ -56,6 +57,10 @@ impl IslConstraint {
     /// Creates a [IslConstraint::OrderedElements] using the [IslTypeRef] referenced inside it
     pub fn ordered_elements<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
         IslConstraint::OrderedElements(isl_types.into())
+    }
+    /// Creates a [IslConstraint::Precision] using the range specified in it
+    pub fn precision(precision: Range) -> IslConstraint {
+        IslConstraint::Precision(precision)
     }
 
     /// Creates a [IslConstraint::Fields] using the field names and [IslTypeRef]s referenced inside it
@@ -301,6 +306,13 @@ impl IslConstraint {
                 )?;
                 Ok(IslConstraint::OrderedElements(types))
             }
+            "precision" => {
+                let mut precision_range =
+                    Range::from_ion_element(value, RangeType::NonNegativeInteger)?;
+                precision_range = Range::validate_precision_range(&precision_range)?;
+                Ok(IslConstraint::Precision(precision_range))
+            }
+
             _ => Err(invalid_schema_error_raw(
                 "Type: ".to_owned()
                     + type_name

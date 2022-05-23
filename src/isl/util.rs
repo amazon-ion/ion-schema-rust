@@ -242,6 +242,37 @@ impl Range {
         })
     }
 
+    pub fn validate_precision_range(precision_range: &Range) -> IonSchemaResult<Range> {
+        // minimum precision must be greater than or equal to 0
+        // for more information: https://amzn.github.io/ion-schema/docs/spec.html#precision
+        match precision_range {
+            Range::IntegerNonNegative(min_value, max_value) => match min_value {
+                RangeBoundaryValue::Max => Ok(precision_range.to_owned()),
+                RangeBoundaryValue::Min => {
+                    return Range::range(
+                        RangeBoundaryValue::Value(
+                            RangeBoundaryValueType::IntegerNonNegative(1),
+                            RangeBoundaryType::Inclusive,
+                        ),
+                        max_value.to_owned(),
+                    );
+                }
+                RangeBoundaryValue::Value(range_value_type, _) => match range_value_type {
+                    RangeBoundaryValueType::IntegerNonNegative(integer_value)
+                        if integer_value < &1 =>
+                    {
+                        return invalid_schema_error(format!(
+                            "Expected precision to be greater than or equal to 1 found {}",
+                            integer_value
+                        ));
+                    }
+                    _ => Ok(precision_range.to_owned()),
+                },
+            },
+            _ => Ok(precision_range.to_owned()),
+        }
+    }
+
     pub fn from_ion_element(value: &OwnedElement, range_type: RangeType) -> IonSchemaResult<Range> {
         // if an integer value is passed here then convert it into a range
         // eg. if `1` is passed as value then return a range [1,1]

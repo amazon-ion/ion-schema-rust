@@ -38,6 +38,7 @@ pub enum Constraint {
     OneOf(OneOfConstraint),
     OrderedElements(OrderedElementsConstraint),
     Occurs(OccursConstraint),
+    Precision(PrecisionConstraint),
     Type(TypeConstraint),
 }
 
@@ -124,6 +125,11 @@ impl Constraint {
             annotations_modifiers.contains(&"ordered"),
             annotations,
         ))
+    }
+
+    /// Creates a [Constraint::Precision] from a [Range] specifying a precision range.
+    pub fn precision(precision: Range) -> Constraint {
+        Constraint::Precision(PrecisionConstraint::new(precision))
     }
 
     /// Creates a [Constraint::Fields] referring to the fields represented by the provided field name and [TypeId]s.
@@ -237,6 +243,9 @@ impl Constraint {
                     )?;
                 Ok(Constraint::OrderedElements(ordered_elements))
             }
+            IslConstraint::Precision(precision_range) => Ok(Constraint::Precision(
+                PrecisionConstraint::new(precision_range.to_owned()),
+            )),
         }
     }
 
@@ -269,6 +278,7 @@ impl Constraint {
             Constraint::OrderedElements(ordered_elements) => {
                 ordered_elements.validate(value, type_store)
             }
+            Constraint::Precision(precision) => precision.validate(value, type_store),
         }
     }
 }
@@ -1272,5 +1282,68 @@ impl ConstraintValidator for AnnotationsConstraint {
         }
         // validate annotations that does not have list-level `ordered` annotation
         self.validate_unordered_annotations(value, type_store, violations)
+    }
+}
+
+/// Implements an `precision` constraint of Ion Schema
+/// [precision]: https://amzn.github.io/ion-schema/docs/spec.html#precision
+#[derive(Debug, Clone, PartialEq)]
+pub struct PrecisionConstraint {
+    precision_range: Range,
+}
+
+impl PrecisionConstraint {
+    pub fn new(length_range: Range) -> Self {
+        Self {
+            precision_range: length_range,
+        }
+    }
+
+    pub fn precision(&self) -> &Range {
+        &self.precision_range
+    }
+}
+
+impl ConstraintValidator for PrecisionConstraint {
+    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
+        // get the precision of given decimal
+        let value_precision = match value.as_decimal() {
+            Some(decimal_value) => decimal_value.precision(),
+            _ => {
+                // return Violation if value is not decimal
+                return Err(Violation::new(
+                    "precision",
+                    ViolationCode::TypeMismatched,
+                    &format!(
+                        "expected a decimal but found {}",
+                        if value.is_null() {
+                            format!("{:?}", value)
+                        } else {
+                            format!("{}", value.ion_type())
+                        }
+                    ),
+                ));
+            }
+        };
+
+        // get isl decimal precision as a range
+        let precision_range: &Range = self.precision();
+
+        // return a Violation if the value didn't follow precision constraint
+        if !precision_range
+            .contains(&(value_precision as i64).into())
+            .unwrap()
+        {
+            return Err(Violation::new(
+                "precision",
+                ViolationCode::InvalidLength,
+                &format!(
+                    "expected precision {:?} found {}",
+                    precision_range, value_precision
+                ),
+            ));
+        }
+
+        Ok(())
     }
 }
