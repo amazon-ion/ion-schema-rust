@@ -1285,7 +1285,7 @@ impl ConstraintValidator for AnnotationsConstraint {
     }
 }
 
-/// Implements an `precision` constraint of Ion Schema
+/// Implements Ion Schema's `precision` constraint
 /// [precision]: https://amzn.github.io/ion-schema/docs/spec.html#precision
 #[derive(Debug, Clone, PartialEq)]
 pub struct PrecisionConstraint {
@@ -1311,17 +1311,15 @@ impl ConstraintValidator for PrecisionConstraint {
             Some(decimal_value) => decimal_value.precision(),
             _ => {
                 // return Violation if value is not decimal
+                let error_message = if value.is_null() {
+                    format!("expected a decimal but found {:?}", value)
+                } else {
+                    format!("expected a decimal but found {}", value.ion_type())
+                };
                 return Err(Violation::new(
                     "precision",
                     ViolationCode::TypeMismatched,
-                    &format!(
-                        "expected a decimal but found {}",
-                        if value.is_null() {
-                            format!("{:?}", value)
-                        } else {
-                            format!("{}", value.ion_type())
-                        }
-                    ),
+                    &error_message,
                 ));
             }
         };

@@ -243,7 +243,7 @@ impl Range {
     }
 
     pub fn validate_precision_range(precision_range: &Range) -> IonSchemaResult<Range> {
-        // minimum precision must be greater than or equal to 0
+        // minimum precision must be greater than or equal to 1
         // for more information: https://amzn.github.io/ion-schema/docs/spec.html#precision
         match precision_range {
             Range::IntegerNonNegative(min_value, max_value) => match min_value {
