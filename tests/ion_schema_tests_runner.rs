@@ -49,7 +49,6 @@ const SKIP_LIST: &[&str] = &[
     "ion-schema-tests/constraints/element/validation_inline_import.isl",
     "ion-schema-tests/constraints/element/validation_int.isl",
     "ion-schema-tests/constraints/element/validation_named_type.isl",
-    "ion-schema-tests/constraints/precision/invalid.isl",
     "ion-schema-tests/constraints/precision/validation.isl",
 ];
 

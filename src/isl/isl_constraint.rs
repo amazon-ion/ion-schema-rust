@@ -306,12 +306,10 @@ impl IslConstraint {
                 )?;
                 Ok(IslConstraint::OrderedElements(types))
             }
-            "precision" => {
-                let mut precision_range =
-                    Range::from_ion_element(value, RangeType::NonNegativeInteger)?;
-                precision_range = Range::validate_precision_range(&precision_range)?;
-                Ok(IslConstraint::Precision(precision_range))
-            }
+            "precision" => Ok(IslConstraint::Precision(Range::from_ion_element(
+                value,
+                RangeType::PrecisionRange,
+            )?)),
 
             _ => Err(invalid_schema_error_raw(
                 "Type: ".to_owned()

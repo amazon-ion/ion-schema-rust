@@ -1,11 +1,11 @@
 use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
 use ion_rs::types::decimal::Decimal;
-// use ion_rs::types::integer::{IntAccess, Integer};
 use ion_rs::types::integer::IntAccess;
 use ion_rs::types::timestamp::Timestamp;
 use ion_rs::value::owned::{text_token, OwnedElement};
 use ion_rs::value::{Element, Sequence, SymbolToken};
 use ion_rs::{Integer as IntegerValue, IonType};
+use num_bigint::BigInt;
 use num_traits::Signed;
 use std::convert::TryInto;
 
@@ -90,7 +90,10 @@ impl Range {
                 })?;
 
                 let non_negative_integer_value =
-                    Range::validate_non_negative_integer_range_boundary_value(value)?;
+                    Range::validate_non_negative_integer_range_boundary_value(
+                        value,
+                        &RangeType::NonNegativeInteger,
+                    )?;
                 let is_in_lower_bound = match start {
                     Min => true, // this will always be true as non_negative_integer_Value is validated to be a `usize`
                     Value(start_value, boundary_type) => match start_value {
@@ -242,37 +245,6 @@ impl Range {
         })
     }
 
-    pub fn validate_precision_range(precision_range: &Range) -> IonSchemaResult<Range> {
-        // minimum precision must be greater than or equal to 1
-        // for more information: https://amzn.github.io/ion-schema/docs/spec.html#precision
-        match precision_range {
-            Range::IntegerNonNegative(min_value, max_value) => match min_value {
-                RangeBoundaryValue::Max => Ok(precision_range.to_owned()),
-                RangeBoundaryValue::Min => {
-                    return Range::range(
-                        RangeBoundaryValue::Value(
-                            RangeBoundaryValueType::IntegerNonNegative(1),
-                            RangeBoundaryType::Inclusive,
-                        ),
-                        max_value.to_owned(),
-                    );
-                }
-                RangeBoundaryValue::Value(range_value_type, _) => match range_value_type {
-                    RangeBoundaryValueType::IntegerNonNegative(integer_value)
-                        if integer_value < &1 =>
-                    {
-                        return invalid_schema_error(format!(
-                            "Expected precision to be greater than or equal to 1 found {}",
-                            integer_value
-                        ));
-                    }
-                    _ => Ok(precision_range.to_owned()),
-                },
-            },
-            _ => Ok(precision_range.to_owned()),
-        }
-    }
-
     pub fn from_ion_element(value: &OwnedElement, range_type: RangeType) -> IonSchemaResult<Range> {
         // if an integer value is passed here then convert it into a range
         // eg. if `1` is passed as value then return a range [1,1]
@@ -280,6 +252,7 @@ impl Range {
             let non_negative_integer_value =
                 Range::validate_non_negative_integer_range_boundary_value(
                     value.as_integer().unwrap(),
+                    &range_type,
                 )?;
             return Ok(non_negative_integer_value.into());
         }
@@ -304,10 +277,15 @@ impl Range {
     // helper method to which validates a non negative integer range boundary value
     pub fn validate_non_negative_integer_range_boundary_value(
         value: &IntegerValue,
+        range_type: &RangeType,
     ) -> IonSchemaResult<usize> {
         match value.as_i64() {
             Some(v) => {
-                if v >= 0 {
+                // minimum precision must be greater than or equal to 1
+                // for more information: https://amzn.github.io/ion-schema/docs/spec.html#precision
+                if (range_type == &RangeType::PrecisionRange && v >= 1)
+                    || (range_type != &RangeType::PrecisionRange && v >= 0)
+                {
                     match v.try_into() {
                         Err(_) => invalid_schema_error(format!(
                             "Expected non negative integer for range boundary values, found {}",
@@ -327,7 +305,9 @@ impl Range {
                     unreachable!("Expected range boundary values must be a non negative integer")
                 }
                 Some(v) => {
-                    if !v.is_negative() {
+                    if (range_type == &RangeType::PrecisionRange && v >= &BigInt::from(1))
+                        || (range_type != &RangeType::PrecisionRange && !v.is_negative())
+                    {
                         match v.try_into() {
                             Err(_) => invalid_schema_error(format!(
                                 "Expected non negative integer for range boundary values, found {}",
@@ -455,10 +435,11 @@ impl RangeBoundaryValue {
                 }
             }
             IonType::Integer => match range_type {
-                RangeType::NonNegativeInteger => {
+                RangeType::PrecisionRange | RangeType::NonNegativeInteger => {
                     let non_negative_integer_value =
                         Range::validate_non_negative_integer_range_boundary_value(
                             value.as_integer().unwrap(),
+                            range_type,
                         )?;
                     Ok(RangeBoundaryValue::int_non_negative_value(
                         non_negative_integer_value,
@@ -497,7 +478,9 @@ pub enum RangeBoundaryType {
 /// Represents if the range is non negative integer range or not
 /// This will be used while creating an integer range from OwnedElement
 /// to explicitly state if its non negative or not
+#[derive(Debug, Clone, PartialEq)]
 pub enum RangeType {
+    PrecisionRange, // used by precision constraint to specify non negative integer precision with minimum value as `1`
     NonNegativeInteger, // used by byte_length, container_length and codepoint_length to specify non negative integer range
     Any,                // used for any other range types (e.g. Integer, Float, Timestamp, Decimal)
 }
