@@ -482,6 +482,13 @@ mod type_definition_tests {
         IslType::anonymous([IslConstraint::annotations(vec!["closed"], vec![text_token("red").into(), text_token("blue").into(), text_token("green").into()])]),
         TypeDefinition::anonymous([Constraint::annotations(vec!["closed"], vec![text_token("red").into(), text_token("blue").into(), text_token("green").into()]), Constraint::type_constraint(25)])
     ),
+    case::precision_constraint(
+        /* For a schema with precision constraint as below:
+            { precision: 3 }
+        */
+        IslType::anonymous([IslConstraint::precision(3.into())]),
+        TypeDefinition::anonymous([Constraint::precision(3.into()), Constraint::type_constraint(25)])
+    ),
     )]
     fn isl_type_to_type_definition(isl_type: IslType, type_def: TypeDefinition) {
         // assert if both the TypeDefinition are same in terms of constraints and name

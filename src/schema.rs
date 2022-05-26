@@ -616,6 +616,27 @@ mod schema_tests {
                         "#),
                 "annotations_type"
         ),
+        case::precision_constraint(
+            load(r#"
+                          42.
+                          42d0
+                          42d-0
+                          4.2d1
+                          0.42d2
+                        "#),
+            load(r#"
+                          null
+                          null.null
+                          null.decimal
+                          null.string
+                          4.
+                          42.0
+                        "#),
+            load_schema_from_text(r#" // For a schema with precision constraint as below:
+                                type::{ name: precision_type, precision: 2 }
+                        "#),
+            "precision_type"
+        ),
     )]
     fn type_validation(
         valid_values: Vec<OwnedElement>,
