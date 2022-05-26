@@ -6,7 +6,6 @@ use ion_rs::value::owned::{text_token, OwnedElement};
 use ion_rs::value::{Element, Sequence, SymbolToken};
 use ion_rs::{Integer as IntegerValue, IonType};
 use num_bigint::BigInt;
-use num_traits::Signed;
 use std::convert::TryInto;
 
 /// Represents ISL [Range]s where some constraints can be defined by a range
@@ -279,24 +278,27 @@ impl Range {
         value: &IntegerValue,
         range_type: &RangeType,
     ) -> IonSchemaResult<usize> {
+        // minimum precision must be greater than or equal to 1
+        // for more information: https://amzn.github.io/ion-schema/docs/spec.html#precision
+        let min_value = if range_type == &RangeType::PrecisionRange {
+            1
+        } else {
+            0
+        };
         match value.as_i64() {
             Some(v) => {
-                // minimum precision must be greater than or equal to 1
-                // for more information: https://amzn.github.io/ion-schema/docs/spec.html#precision
-                if (range_type == &RangeType::PrecisionRange && v >= 1)
-                    || (range_type != &RangeType::PrecisionRange && v >= 0)
-                {
+                if v >= min_value {
                     match v.try_into() {
                         Err(_) => invalid_schema_error(format!(
-                            "Expected non negative integer for range boundary values, found {}",
-                            v
+                            "Expected non negative integer greater than {} for range boundary values, found {}",
+                            min_value, v
                         )),
                         Ok(non_negative_int_value) => Ok(non_negative_int_value),
                     }
                 } else {
                     invalid_schema_error(format!(
-                        "Expected non negative integer for range boundary values, found {}",
-                        v
+                        "Expected non negative integer greater than {} for range boundary values, found {}",
+                        min_value, v
                     ))
                 }
             }
@@ -305,20 +307,18 @@ impl Range {
                     unreachable!("Expected range boundary values must be a non negative integer")
                 }
                 Some(v) => {
-                    if (range_type == &RangeType::PrecisionRange && v >= &BigInt::from(1))
-                        || (range_type != &RangeType::PrecisionRange && !v.is_negative())
-                    {
+                    if v >= &BigInt::from(min_value) {
                         match v.try_into() {
                             Err(_) => invalid_schema_error(format!(
-                                "Expected non negative integer for range boundary values, found {}",
-                                v
+                                "Expected non negative integer greater than {} for range boundary values, found {}",
+                                min_value,v
                             )),
                             Ok(non_negative_int_value) => Ok(non_negative_int_value),
                         }
                     } else {
                         invalid_schema_error(format!(
-                            "Expected non negative integer for range boundary values, found {}",
-                            v
+                            "Expected non negative integer greater than {} for range boundary values, found {}",
+                            min_value, v
                         ))
                     }
                 }
