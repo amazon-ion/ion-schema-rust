@@ -257,6 +257,14 @@ impl Range {
         }
 
         let range = try_to!(value.as_sequence());
+
+        // verify if the value has annotation range
+        if !value.annotations().any(|a| a == &text_token("range")) {
+            return invalid_schema_error(
+                "An element representing range must have annotation `range::` with it.",
+            );
+        }
+
         if range.len() != 2 {
             return invalid_schema_error(
                 "Ranges must contain two values representing minimum and maximum ends of range.",
