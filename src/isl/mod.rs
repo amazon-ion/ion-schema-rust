@@ -288,7 +288,7 @@ mod isl_tests {
         load_anonymous_type(r#" // For a schema with scale constraint as below:
                         { scale: 2 }
                     "#),
-        IslType::anonymous([IslConstraint::scale(2.into())])
+        IslType::anonymous([IslConstraint::scale((&IntegerValue::I64(2)).into())])
     ),
     )]
     fn owned_struct_to_isl_type(isl_type1: IslType, isl_type2: IslType) {

@@ -656,6 +656,7 @@ mod schema_tests {
                           0.432
                           0.4321
                           43d3
+                          0d0
                         "#),
             load(r#"
                           null
@@ -665,7 +666,7 @@ mod schema_tests {
                           0.43210
                         "#),
             load_schema_from_text(r#" // For a schema with scale constraint as below:
-                                type::{ name: scale_type, scale: range::[0, 4] }
+                                type::{ name: scale_type, scale: range::[min, 4] }
                         "#),
             "scale_type"
         ),

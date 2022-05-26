@@ -248,12 +248,18 @@ impl Range {
         // if an integer value is passed here then convert it into a range
         // eg. if `1` is passed as value then return a range [1,1]
         if let Some(integer_value) = value.as_integer() {
-            let non_negative_integer_value =
-                Range::validate_non_negative_integer_range_boundary_value(
-                    value.as_integer().unwrap(),
-                    &range_type,
-                )?;
-            return Ok(non_negative_integer_value.into());
+            return if range_type == RangeType::NonNegativeInteger
+                || range_type == RangeType::PrecisionRange
+            {
+                let non_negative_integer_value =
+                    Range::validate_non_negative_integer_range_boundary_value(
+                        value.as_integer().unwrap(),
+                        &range_type,
+                    )?;
+                Ok(non_negative_integer_value.into())
+            } else {
+                Ok(integer_value.into())
+            };
         }
 
         let range = try_to!(value.as_sequence());
@@ -376,6 +382,16 @@ impl From<usize> for Range {
                 non_negative_int_value,
                 RangeBoundaryType::Inclusive,
             ),
+        )
+    }
+}
+
+/// Provides `Range` for given `usize`
+impl From<&IntegerValue> for Range {
+    fn from(int_value: &IntegerValue) -> Self {
+        Range::Integer(
+            RangeBoundaryValue::int_value(int_value.to_owned(), RangeBoundaryType::Inclusive),
+            RangeBoundaryValue::int_value(int_value.to_owned(), RangeBoundaryType::Inclusive),
         )
     }
 }

@@ -34,43 +34,43 @@ pub enum IslConstraint {
 }
 
 impl IslConstraint {
-    /// Creates a [IslConstraint::Type] using the [IslTypeRef] referenced inside it
+    /// Creates an [IslConstraint::Type] using the [IslTypeRef] referenced inside it
     // type is rust keyword hence this method is named type_constraint unlike other ISL constraint methods
     pub fn type_constraint(isl_type: IslTypeRef) -> IslConstraint {
         IslConstraint::Type(isl_type)
     }
 
-    /// Creates a [IslConstraint::AllOf] using the [IslTypeRef] referenced inside it
+    /// Creates an [IslConstraint::AllOf] using the [IslTypeRef] referenced inside it
     pub fn all_of<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
         IslConstraint::AllOf(isl_types.into())
     }
 
-    /// Creates a [IslConstraint::AnyOf] using the [IslTypeRef] referenced inside it
+    /// Creates an [IslConstraint::AnyOf] using the [IslTypeRef] referenced inside it
     pub fn any_of<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
         IslConstraint::AnyOf(isl_types.into())
     }
 
-    /// Creates a [IslConstraint::OneOf] using the [IslTypeRef] referenced inside it
+    /// Creates an [IslConstraint::OneOf] using the [IslTypeRef] referenced inside it
     pub fn one_of<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
         IslConstraint::OneOf(isl_types.into())
     }
 
-    /// Creates a [IslConstraint::OrderedElements] using the [IslTypeRef] referenced inside it
+    /// Creates an [IslConstraint::OrderedElements] using the [IslTypeRef] referenced inside it
     pub fn ordered_elements<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
         IslConstraint::OrderedElements(isl_types.into())
     }
 
-    /// Creates a [IslConstraint::Precision] using the range specified in it
+    /// Creates an [IslConstraint::Precision] using the range specified in it
     pub fn precision(precision: Range) -> IslConstraint {
         IslConstraint::Precision(precision)
     }
 
-    /// Creates a [IslConstraint::Scale] using the range specified in it
+    /// Creates an [IslConstraint::Scale] using the range specified in it
     pub fn scale(scale: Range) -> IslConstraint {
         IslConstraint::Scale(scale)
     }
 
-    /// Creates a [IslConstraint::Fields] using the field names and [IslTypeRef]s referenced inside it
+    /// Creates an [IslConstraint::Fields] using the field names and [IslTypeRef]s referenced inside it
     pub fn fields<I>(fields: I) -> IslConstraint
     where
         I: Iterator<Item = (String, IslTypeRef)>,
@@ -78,7 +78,7 @@ impl IslConstraint {
         IslConstraint::Fields(fields.collect())
     }
 
-    /// Creates a [IslConstraint::Not] using the [IslTypeRef] referenced inside it
+    /// Creates an [IslConstraint::Not] using the [IslTypeRef] referenced inside it
     pub fn not(isl_type: IslTypeRef) -> IslConstraint {
         IslConstraint::Not(isl_type)
     }
@@ -88,27 +88,27 @@ impl IslConstraint {
         IslConstraint::Contains(values.into())
     }
 
-    /// Creates a [IslConstraint::ContainerLength] using the range specified in it
+    /// Creates an [IslConstraint::ContainerLength] using the range specified in it
     pub fn container_length(length: Range) -> IslConstraint {
         IslConstraint::ContainerLength(length)
     }
 
-    /// Creates a [IslConstraint::ByteLength] using the range specified in it
+    /// Creates an [IslConstraint::ByteLength] using the range specified in it
     pub fn byte_length(length: Range) -> IslConstraint {
         IslConstraint::ByteLength(length)
     }
 
-    /// Creates a [IslConstraint::CodePointLength] using the range specified in it
+    /// Creates an [IslConstraint::CodePointLength] using the range specified in it
     pub fn codepoint_length(length: Range) -> IslConstraint {
         IslConstraint::CodepointLength(length)
     }
 
-    /// Creates a [IslConstraint::Element] using the [IslTypeRef] referenced inside it
+    /// Creates an [IslConstraint::Element] using the [IslTypeRef] referenced inside it
     pub fn element(isl_type: IslTypeRef) -> IslConstraint {
         IslConstraint::Element(isl_type)
     }
 
-    /// Creates a [IslConstraint::Annotations] using [str]s and [OwnedElement]s specified inside it
+    /// Creates an [IslConstraint::Annotations] using [str]s and [OwnedElement]s specified inside it
     pub fn annotations<
         'a,
         A: IntoIterator<Item = &'a str>,
@@ -319,7 +319,7 @@ impl IslConstraint {
             )?)),
             "scale" => Ok(IslConstraint::Scale(Range::from_ion_element(
                 value,
-                RangeType::NonNegativeInteger,
+                RangeType::Any,
             )?)),
             _ => Err(invalid_schema_error_raw(
                 "Type: ".to_owned()

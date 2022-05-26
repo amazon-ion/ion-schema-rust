@@ -1355,7 +1355,7 @@ impl ConstraintValidator for PrecisionConstraint {
 }
 
 /// Implements Ion Schema's `scale` constraint
-/// [precision]: https://amzn.github.io/ion-schema/docs/spec.html#scale
+/// [scale]: https://amzn.github.io/ion-schema/docs/spec.html#scale
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScaleConstraint {
     scale_range: Range,
@@ -1375,13 +1375,7 @@ impl ConstraintValidator for ScaleConstraint {
     fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
         // get the scale of given decimal
         let value_scale = match value.as_decimal() {
-            Some(decimal_value) => {
-                if decimal_value.scale() > 0 {
-                    decimal_value.scale()
-                } else {
-                    0
-                }
-            }
+            Some(decimal_value) => decimal_value.scale(),
             _ => {
                 // return Violation if value is not decimal
                 let error_message = if value.is_null() {
