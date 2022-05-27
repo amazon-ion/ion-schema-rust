@@ -39,6 +39,7 @@ pub enum Constraint {
     OrderedElements(OrderedElementsConstraint),
     Occurs(OccursConstraint),
     Precision(PrecisionConstraint),
+    Scale(ScaleConstraint),
     Type(TypeConstraint),
 }
 
@@ -130,6 +131,11 @@ impl Constraint {
     /// Creates a [Constraint::Precision] from a [Range] specifying a precision range.
     pub fn precision(precision: Range) -> Constraint {
         Constraint::Precision(PrecisionConstraint::new(precision))
+    }
+
+    /// Creates a [Constraint::Scale] from a [Range] specifying a precision range.
+    pub fn scale(scale: Range) -> Constraint {
+        Constraint::Scale(ScaleConstraint::new(scale))
     }
 
     /// Creates a [Constraint::Fields] referring to the fields represented by the provided field name and [TypeId]s.
@@ -246,6 +252,9 @@ impl Constraint {
             IslConstraint::Precision(precision_range) => Ok(Constraint::Precision(
                 PrecisionConstraint::new(precision_range.to_owned()),
             )),
+            IslConstraint::Scale(scale_range) => Ok(Constraint::Scale(ScaleConstraint::new(
+                scale_range.to_owned(),
+            ))),
         }
     }
 
@@ -279,6 +288,7 @@ impl Constraint {
                 ordered_elements.validate(value, type_store)
             }
             Constraint::Precision(precision) => precision.validate(value, type_store),
+            Constraint::Scale(scale) => scale.validate(value, type_store),
         }
     }
 }
@@ -1293,10 +1303,8 @@ pub struct PrecisionConstraint {
 }
 
 impl PrecisionConstraint {
-    pub fn new(length_range: Range) -> Self {
-        Self {
-            precision_range: length_range,
-        }
+    pub fn new(precision_range: Range) -> Self {
+        Self { precision_range }
     }
 
     pub fn precision(&self) -> &Range {
@@ -1339,6 +1347,59 @@ impl ConstraintValidator for PrecisionConstraint {
                     "expected precision {:?} found {}",
                     precision_range, value_precision
                 ),
+            ));
+        }
+
+        Ok(())
+    }
+}
+
+/// Implements Ion Schema's `scale` constraint
+/// [scale]: https://amzn.github.io/ion-schema/docs/spec.html#scale
+#[derive(Debug, Clone, PartialEq)]
+pub struct ScaleConstraint {
+    scale_range: Range,
+}
+
+impl ScaleConstraint {
+    pub fn new(scale_range: Range) -> Self {
+        Self { scale_range }
+    }
+
+    pub fn scale(&self) -> &Range {
+        &self.scale_range
+    }
+}
+
+impl ConstraintValidator for ScaleConstraint {
+    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
+        // get the scale of given decimal
+        let value_scale = match value.as_decimal() {
+            Some(decimal_value) => decimal_value.scale(),
+            _ => {
+                // return Violation if value is not decimal
+                let error_message = if value.is_null() {
+                    format!("expected a decimal but found {:?}", value)
+                } else {
+                    format!("expected a decimal but found {}", value.ion_type())
+                };
+                return Err(Violation::new(
+                    "scale",
+                    ViolationCode::TypeMismatched,
+                    &error_message,
+                ));
+            }
+        };
+
+        // get isl decimal scale as a range
+        let scale_range: &Range = self.scale();
+
+        // return a Violation if the value didn't follow scale constraint
+        if !scale_range.contains(&(value_scale).into()).unwrap() {
+            return Err(Violation::new(
+                "scale",
+                ViolationCode::InvalidLength,
+                &format!("expected scale {:?} found {}", scale_range, value_scale),
             ));
         }
 

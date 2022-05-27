@@ -489,6 +489,13 @@ mod type_definition_tests {
         IslType::anonymous([IslConstraint::precision(3.into())]),
         TypeDefinition::anonymous([Constraint::precision(3.into()), Constraint::type_constraint(25)])
     ),
+    case::scale_constraint(
+        /* For a schema with scale constraint as below:
+            { scale: 2 }
+        */
+        IslType::anonymous([IslConstraint::scale(2.into())]),
+        TypeDefinition::anonymous([Constraint::scale(2.into()), Constraint::type_constraint(25)])
+    ),
     )]
     fn isl_type_to_type_definition(isl_type: IslType, type_def: TypeDefinition) {
         // assert if both the TypeDefinition are same in terms of constraints and name

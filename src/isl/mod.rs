@@ -284,6 +284,12 @@ mod isl_tests {
                     "#),
         IslType::anonymous([IslConstraint::precision(2.into())])
     ),
+    case::scale_constraint(
+        load_anonymous_type(r#" // For a schema with scale constraint as below:
+                        { scale: 2 }
+                    "#),
+        IslType::anonymous([IslConstraint::scale((&IntegerValue::I64(2)).into())])
+    ),
     )]
     fn owned_struct_to_isl_type(isl_type1: IslType, isl_type2: IslType) {
         // assert if both the IslType are same in terms of constraints and name

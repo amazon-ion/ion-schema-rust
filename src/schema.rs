@@ -234,11 +234,23 @@ mod schema_tests {
         1 // this includes named type element_type
     ),
     case::annotations_constraint(
-    load(r#" // For a schema with annotations constraint as below:
+        load(r#" // For a schema with annotations constraint as below:
                     type:: { name: annotations_type, annotations: closed::[red, blue, green] }
                  "#).into_iter(),
-    1 // this includes named type annotations_type
+        1 // this includes named type annotations_type
     ),
+    case::precision_constraint(
+        load(r#" // For a schema with precision constraint as below:
+                        type:: { name: precision_type, precision: 2 }
+                     "#).into_iter(),
+        1 // this includes named type precision_type
+    ),
+    case::scale_constraint(
+        load(r#" // For a schema with scale constraint as below:
+                    type:: { name: scale_type, scale: 2 }
+                 "#).into_iter(),
+        1 // this includes named type scale_type
+    )
     )]
     fn owned_elements_to_schema<I: Iterator<Item = OwnedElement>>(
         owned_elements: I,
@@ -636,6 +648,27 @@ mod schema_tests {
                                 type::{ name: precision_type, precision: 2 }
                         "#),
             "precision_type"
+        ),
+        case::scale_constraint(
+            load(r#"
+                          0.4
+                          0.42
+                          0.432
+                          0.4321
+                          43d3
+                          0d0
+                        "#),
+            load(r#"
+                          null
+                          null.null
+                          null.decimal
+                          null.symbol
+                          0.43210
+                        "#),
+            load_schema_from_text(r#" // For a schema with scale constraint as below:
+                                type::{ name: scale_type, scale: range::[min, 4] }
+                        "#),
+            "scale_type"
         ),
     )]
     fn type_validation(
