@@ -125,6 +125,7 @@ mod isl_tests {
     use crate::isl::isl_constraint::IslConstraint;
     use crate::isl::isl_type::{IslType, IslTypeImpl};
     use crate::isl::isl_type_reference::IslTypeRef;
+    use crate::isl::util::TimestampPrecisionValue;
     use crate::isl::util::{Range, RangeBoundaryType, RangeBoundaryValue, RangeType};
     use crate::result::IonSchemaResult;
     use ion_rs::types::decimal::*;
@@ -357,6 +358,17 @@ mod isl_tests {
                 RangeBoundaryValue::timestamp_value(Timestamp::with_year(2020).with_month(1).with_day(1).build().unwrap(), RangeBoundaryType::Inclusive),
                 RangeBoundaryValue::timestamp_value(Timestamp::with_year(2021).with_month(1).with_day(1).build().unwrap(), RangeBoundaryType::Inclusive)
             )
+        ),
+        case::range_with_timestamp_precision(
+            load_range(
+            r#"
+                        range::[year, month]
+                    "#
+            ),
+            Range::range(
+                RangeBoundaryValue::timestamp_precision_value(TimestampPrecisionValue::Year, RangeBoundaryType::Inclusive),
+                RangeBoundaryValue::timestamp_precision_value(TimestampPrecisionValue::Month, RangeBoundaryType::Inclusive)
+            )
         )
     )]
     fn owned_struct_to_range(range1: IonSchemaResult<Range>, range2: IonSchemaResult<Range>) {
@@ -506,13 +518,24 @@ mod isl_tests {
             elements(&[-5e5, 1e2, f64::NAN])
         ),
         case::float_range_with_exclusive(
-        load_range(
+            load_range(
             r#"
                 range::[exclusive::1e2, exclusive::5e2]
             "#
             ),
             elements(&[2e2]),
             elements(&[-1e2 ,1e1, 6e2, 1e2, 5e2, f64::NAN])
+        ),
+        case::timestamp_precision_range(
+            load_range(
+            r#"
+                range::[minute, second]
+            "#
+            ),
+            elements(&[Timestamp::with_ymd(2020, 1, 1).with_hms(0, 1, 0).build_at_offset(4 * 60).unwrap(),
+                Timestamp::with_ymd(2020, 1, 1).with_hour_and_minute(0, 1).build_at_offset(4 * 60).unwrap()]),
+            elements(&[Timestamp::with_year(2020).build().unwrap(),
+                Timestamp::with_ymd(2020, 1, 1).with_hms(0, 1, 0).with_milliseconds(678).build_at_offset(4 * 60).unwrap()])
         ),
     )]
     fn range_contains(

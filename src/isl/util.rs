@@ -1,7 +1,7 @@
 use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
 use ion_rs::types::decimal::Decimal;
 use ion_rs::types::integer::IntAccess;
-use ion_rs::types::timestamp::Timestamp;
+use ion_rs::types::timestamp::{Precision, Timestamp};
 use ion_rs::value::owned::{text_token, OwnedElement};
 use ion_rs::value::{Element, Sequence, SymbolToken};
 use ion_rs::{Integer as IntegerValue, IonType};
@@ -26,6 +26,7 @@ pub enum Range {
     Integer(RangeBoundaryValue, RangeBoundaryValue),
     IntegerNonNegative(RangeBoundaryValue, RangeBoundaryValue),
     Timestamp(RangeBoundaryValue, RangeBoundaryValue),
+    TimestampPrecision(RangeBoundaryValue, RangeBoundaryValue),
 }
 
 impl Range {
@@ -188,6 +189,40 @@ impl Range {
                 // TODO: Implement this section once the timestamp comparator for ion-rust is implemented
                 todo!()
             }
+            Range::TimestampPrecision(start, end) => {
+                let value = &value.as_timestamp().ok_or_else(|| {
+                    invalid_schema_error_raw(
+                        "Timestamp Precision ranges can only have timestamp value for validation",
+                    )
+                })?;
+
+                let precision: Precision = value.precision();
+                let value = TimestampPrecisionValue::from_timestamp(precision, value)?;
+                let is_in_lower_bound = match start {
+                    Min => true,
+                    Value(start_value, boundary_type) => match start_value {
+                        TimestampPrecision(min_value) => match boundary_type {
+                            RangeBoundaryType::Inclusive => min_value <= &value,
+                            RangeBoundaryType::Exclusive => min_value < &value,
+                        },
+                        _ => unreachable!("TimestampPrecision range can only have timestamp precisions as lower and upper range boundary value"),
+                    },
+                    Max => unreachable!("Cannot have 'Max' as the lower range boundary")
+                };
+
+                let is_in_upper_bound = match end {
+                    Max => true,
+                    Min => unreachable!("Cannot have 'Min' as the upper range boundary"),
+                    Value(end_value, boundary_type) => match end_value {
+                        TimestampPrecision(max_value) => match boundary_type {
+                            RangeBoundaryType::Inclusive => max_value >= &value,
+                            RangeBoundaryType::Exclusive => max_value > &value,
+                        },
+                        _ => unreachable!("TimestampPrecision range can only have timestamp precisions as lower and upper range boundary value"),
+                    }
+                };
+                Ok(is_in_upper_bound && is_in_lower_bound)
+            }
         }
     }
 
@@ -216,6 +251,7 @@ impl Range {
                     (Decimal(_), Decimal(_)) => {}
                     (Float(_), Float(_)) => {}
                     (Timestamp(_), Timestamp(_)) => {},
+                    (TimestampPrecision(_), TimestampPrecision(_)) => {},
                     _ => {
                         return invalid_schema_error("Both range boundary values must be of same type")
                     }
@@ -241,6 +277,7 @@ impl Range {
             Float(_) => Range::Float(start, end),
             Timestamp(_) => Range::Timestamp(start, end),
             IntegerNonNegative(_) => Range::IntegerNonNegative(start, end),
+            TimestampPrecision(_) => Range::TimestampPrecision(start, end),
         })
     }
 
@@ -404,6 +441,7 @@ pub enum RangeBoundaryValueType {
     Integer(IntegerValue),
     IntegerNonNegative(usize),
     Timestamp(Timestamp),
+    TimestampPrecision(TimestampPrecisionValue),
 }
 
 /// Represents a range boundary value (i.e. min, max or a value in terms of [RangeBoundaryValueType])
@@ -418,21 +456,35 @@ impl RangeBoundaryValue {
     pub fn int_value(value: IntegerValue, range_boundary_type: RangeBoundaryType) -> Self {
         RangeBoundaryValue::Value(RangeBoundaryValueType::Integer(value), range_boundary_type)
     }
+
     pub fn int_non_negative_value(value: usize, range_boundary_type: RangeBoundaryType) -> Self {
         RangeBoundaryValue::Value(
             RangeBoundaryValueType::IntegerNonNegative(value),
             range_boundary_type,
         )
     }
+
     pub fn float_value(value: f64, range_boundary_type: RangeBoundaryType) -> Self {
         RangeBoundaryValue::Value(RangeBoundaryValueType::Float(value), range_boundary_type)
     }
+
     pub fn timestamp_value(value: Timestamp, range_boundary_type: RangeBoundaryType) -> Self {
         RangeBoundaryValue::Value(
             RangeBoundaryValueType::Timestamp(value),
             range_boundary_type,
         )
     }
+
+    pub fn timestamp_precision_value(
+        value: TimestampPrecisionValue,
+        range_boundary_type: RangeBoundaryType,
+    ) -> Self {
+        RangeBoundaryValue::Value(
+            RangeBoundaryValueType::TimestampPrecision(value),
+            range_boundary_type,
+        )
+    }
+
     pub fn decimal_value(value: Decimal, range_boundary_type: RangeBoundaryType) -> Self {
         RangeBoundaryValue::Value(RangeBoundaryValueType::Decimal(value), range_boundary_type)
     }
@@ -450,6 +502,44 @@ impl RangeBoundaryValue {
                 match sym {
                     "min" => Ok(RangeBoundaryValue::Min),
                     "max" => Ok(RangeBoundaryValue::Max),
+                    "year" => Ok(RangeBoundaryValue::Value(
+                        RangeBoundaryValueType::TimestampPrecision(TimestampPrecisionValue::Year),
+                        range_boundary_type,
+                    )),
+                    "month" => Ok(RangeBoundaryValue::Value(
+                        RangeBoundaryValueType::TimestampPrecision(TimestampPrecisionValue::Month),
+                        range_boundary_type,
+                    )),
+                    "day" => Ok(RangeBoundaryValue::Value(
+                        RangeBoundaryValueType::TimestampPrecision(TimestampPrecisionValue::Day),
+                        range_boundary_type,
+                    )),
+                    "minute" | "hour" => Ok(RangeBoundaryValue::Value(
+                        RangeBoundaryValueType::TimestampPrecision(TimestampPrecisionValue::Minute),
+                        range_boundary_type,
+                    )),
+                    "second" => Ok(RangeBoundaryValue::Value(
+                        RangeBoundaryValueType::TimestampPrecision(TimestampPrecisionValue::Second),
+                        range_boundary_type,
+                    )),
+                    "millisecond" => Ok(RangeBoundaryValue::Value(
+                        RangeBoundaryValueType::TimestampPrecision(
+                            TimestampPrecisionValue::Millisecond,
+                        ),
+                        range_boundary_type,
+                    )),
+                    "microsecond" => Ok(RangeBoundaryValue::Value(
+                        RangeBoundaryValueType::TimestampPrecision(
+                            TimestampPrecisionValue::Microsecond,
+                        ),
+                        range_boundary_type,
+                    )),
+                    "nanosecond" => Ok(RangeBoundaryValue::Value(
+                        RangeBoundaryValueType::TimestampPrecision(
+                            TimestampPrecisionValue::Nanosecond,
+                        ),
+                        range_boundary_type,
+                    )),
                     _ => {
                         return invalid_schema_error(format!(
                             "Range boundary value: {} is not supported",
@@ -544,5 +634,46 @@ impl Annotation {
             // for any value the default annotation is `optional`
             false
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub enum TimestampPrecisionValue {
+    Year = -4,
+    Month = -3,
+    Day = -2,
+    Minute = -1,
+    Second = 0,
+    Millisecond = 3,
+    Microsecond = 6,
+    Nanosecond = 9,
+}
+
+impl TimestampPrecisionValue {
+    fn from_timestamp(
+        precision_value: Precision,
+        timestamp_value: &Timestamp,
+    ) -> IonSchemaResult<Self> {
+        use TimestampPrecisionValue::*;
+        Ok(match precision_value {
+            Precision::Year => Year,
+            Precision::Month => Month,
+            Precision::Day => Day,
+            Precision::HourAndMinute => Minute,
+            Precision::Second => Second,
+            Precision::FractionalSeconds => {
+                match timestamp_value.fractional_seconds_scale().unwrap() {
+                    3 => Millisecond,
+                    6 => Microsecond,
+                    9 => Nanosecond,
+                    _ => {
+                        return invalid_schema_error(&format!(
+                            "invalid timestamp precision provided with given timestamp: {:?}",
+                            timestamp_value
+                        ));
+                    }
+                }
+            }
+        })
     }
 }
