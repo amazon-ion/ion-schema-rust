@@ -291,6 +291,12 @@ mod isl_tests {
                     "#),
         IslType::anonymous([IslConstraint::scale((&IntegerValue::I64(2)).into())])
     ),
+    case::timestamp_precision_constraint(
+        load_anonymous_type(r#" // For a schema with timestamp_precision constraint as below:
+                            { timestamp_precision: year }
+                        "#),
+        IslType::anonymous([IslConstraint::timestamp_precision("year".try_into().unwrap())])
+    ),
     )]
     fn owned_struct_to_isl_type(isl_type1: IslType, isl_type2: IslType) {
         // assert if both the IslType are same in terms of constraints and name
@@ -304,6 +310,16 @@ mod isl_tests {
                 .read_one(text.as_bytes())
                 .expect("parsing failed unexpectedly"),
             RangeType::Any,
+        )
+    }
+
+    // helper function to create a timestamp precision range
+    fn load_timestamp_precision_range(text: &str) -> IonSchemaResult<Range> {
+        Range::from_ion_element(
+            &element_reader()
+                .read_one(text.as_bytes())
+                .expect("parsing failed unexpectedly"),
+            RangeType::TimestampPrecision,
         )
     }
 
@@ -360,7 +376,7 @@ mod isl_tests {
             )
         ),
         case::range_with_timestamp_precision(
-            load_range(
+            load_timestamp_precision_range(
             r#"
                         range::[year, month]
                     "#
@@ -527,7 +543,7 @@ mod isl_tests {
             elements(&[-1e2 ,1e1, 6e2, 1e2, 5e2, f64::NAN])
         ),
         case::timestamp_precision_range(
-            load_range(
+            load_timestamp_precision_range(
             r#"
                 range::[minute, second]
             "#

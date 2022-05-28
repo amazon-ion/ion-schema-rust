@@ -40,6 +40,7 @@ pub enum Constraint {
     Occurs(OccursConstraint),
     Precision(PrecisionConstraint),
     Scale(ScaleConstraint),
+    TimestampPrecision(TimestampPrecisionConstraint),
     Type(TypeConstraint),
 }
 
@@ -136,6 +137,11 @@ impl Constraint {
     /// Creates a [Constraint::Scale] from a [Range] specifying a precision range.
     pub fn scale(scale: Range) -> Constraint {
         Constraint::Scale(ScaleConstraint::new(scale))
+    }
+
+    /// Creates a [Constraint::TimestampPrecision] from a [Range] specifying a precision range.
+    pub fn timestamp_precision(precision: Range) -> Constraint {
+        Constraint::TimestampPrecision(TimestampPrecisionConstraint::new(precision))
     }
 
     /// Creates a [Constraint::Fields] referring to the fields represented by the provided field name and [TypeId]s.
@@ -255,6 +261,11 @@ impl Constraint {
             IslConstraint::Scale(scale_range) => Ok(Constraint::Scale(ScaleConstraint::new(
                 scale_range.to_owned(),
             ))),
+            IslConstraint::TimestampPrecision(timestamp_precision_range) => {
+                Ok(Constraint::TimestampPrecision(
+                    TimestampPrecisionConstraint::new(timestamp_precision_range.to_owned()),
+                ))
+            }
         }
     }
 
@@ -289,6 +300,9 @@ impl Constraint {
             }
             Constraint::Precision(precision) => precision.validate(value, type_store),
             Constraint::Scale(scale) => scale.validate(value, type_store),
+            Constraint::TimestampPrecision(timestamp_precision) => {
+                timestamp_precision.validate(value, type_store)
+            }
         }
     }
 }
@@ -1404,5 +1418,30 @@ impl ConstraintValidator for ScaleConstraint {
         }
 
         Ok(())
+    }
+}
+
+/// Implements Ion Schema's `timestamp_precision` constraint
+/// [scale]: https://amzn.github.io/ion-schema/docs/spec.html#timestamp_precision
+#[derive(Debug, Clone, PartialEq)]
+pub struct TimestampPrecisionConstraint {
+    timestamp_precision_range: Range,
+}
+
+impl TimestampPrecisionConstraint {
+    pub fn new(scale_range: Range) -> Self {
+        Self {
+            timestamp_precision_range: scale_range,
+        }
+    }
+
+    pub fn timestamp_precision(&self) -> &Range {
+        &self.timestamp_precision_range
+    }
+}
+
+impl ConstraintValidator for TimestampPrecisionConstraint {
+    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
+        todo!()
     }
 }

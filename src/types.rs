@@ -496,6 +496,13 @@ mod type_definition_tests {
         IslType::anonymous([IslConstraint::scale(2.into())]),
         TypeDefinition::anonymous([Constraint::scale(2.into()), Constraint::type_constraint(25)])
     ),
+    case::timestamp_precision_constraint(
+        /* For a schema with timestamp_precision constraint as below:
+            { timestamp_precision: month }
+        */
+        IslType::anonymous([IslConstraint::timestamp_precision("month".try_into().unwrap())]),
+        TypeDefinition::anonymous([Constraint::timestamp_precision("month".try_into().unwrap()), Constraint::type_constraint(25)])
+    ),
     )]
     fn isl_type_to_type_definition(isl_type: IslType, type_def: TypeDefinition) {
         // assert if both the TypeDefinition are same in terms of constraints and name

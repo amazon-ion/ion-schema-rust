@@ -30,6 +30,7 @@ pub enum IslConstraint {
     OrderedElements(Vec<IslTypeRef>),
     Precision(Range),
     Scale(Range),
+    TimestampPrecision(Range),
     Type(IslTypeRef),
 }
 
@@ -101,6 +102,11 @@ impl IslConstraint {
     /// Creates an [IslConstraint::CodePointLength] using the range specified in it
     pub fn codepoint_length(length: Range) -> IslConstraint {
         IslConstraint::CodepointLength(length)
+    }
+
+    /// Creates an [IslConstraint::TimestampPrecision] using the range specified in it
+    pub fn timestamp_precision(precision: Range) -> IslConstraint {
+        IslConstraint::TimestampPrecision(precision)
     }
 
     /// Creates an [IslConstraint::Element] using the [IslTypeRef] referenced inside it
@@ -315,12 +321,15 @@ impl IslConstraint {
             }
             "precision" => Ok(IslConstraint::Precision(Range::from_ion_element(
                 value,
-                RangeType::PrecisionRange,
+                RangeType::Precision,
             )?)),
             "scale" => Ok(IslConstraint::Scale(Range::from_ion_element(
                 value,
                 RangeType::Any,
             )?)),
+            "timestamp_precision" => Ok(IslConstraint::TimestampPrecision(
+                Range::from_ion_element(value, RangeType::TimestampPrecision)?,
+            )),
             _ => Err(invalid_schema_error_raw(
                 "Type: ".to_owned()
                     + type_name
