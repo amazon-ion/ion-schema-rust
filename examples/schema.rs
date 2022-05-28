@@ -1,11 +1,13 @@
 #[macro_use]
 extern crate clap;
 use clap::{App, ArgMatches};
+use ion_rs::value::native_writer::NativeElementWriter;
+use ion_rs::value::owned::OwnedElement;
 use ion_rs::value::reader::element_reader;
 use ion_rs::value::reader::ElementReader;
-use ion_rs::value::writer::{ElementWriter, Format, TextKind};
-use ion_rs::IonType;
-use ion_rs::{RawTextWriter, Writer};
+use ion_rs::value::writer::ElementWriter;
+use ion_rs::Writer;
+use ion_rs::{IonResult, IonType, TextWriterBuilder};
 use ion_schema::authority::{DocumentAuthority, FileSystemDocumentAuthority};
 use ion_schema::result::IonSchemaResult;
 use ion_schema::system::SchemaSystem;
@@ -91,7 +93,7 @@ fn validate(command_args: &ArgMatches) -> IonSchemaResult<()> {
 
     // create a text writer to make the output
     let mut output = vec![];
-    let mut writer = RawTextWriter::new(&mut output);
+    let mut writer = TextWriterBuilder::pretty().build(&mut output)?;
 
     // validate owned_elements according to type_ref
     for owned_element in owned_elements {
@@ -103,14 +105,7 @@ fn validate(command_args: &ArgMatches) -> IonSchemaResult<()> {
             Ok(_) => {
                 writer.write_string("Valid")?;
                 writer.set_field_name("value");
-                const TEST_BUF_LEN: usize = 4 * 1024 * 1024;
-                let mut buf = vec![0u8; TEST_BUF_LEN];
-                let mut element_writer =
-                    Format::Text(TextKind::Pretty).element_writer_for_slice(&mut buf)?;
-                element_writer.write(&owned_element)?;
-                let slice = element_writer.finish()?;
-                let slice = from_utf8(slice).unwrap_or("<INVALID UTF-8>");
-                writer.write_string(slice)?;
+                writer.write_string(element_to_string(&owned_element)?)?;
                 writer.set_field_name("schema");
                 writer.write_string(schema_id)?;
             }
@@ -126,4 +121,16 @@ fn validate(command_args: &ArgMatches) -> IonSchemaResult<()> {
     println!("Validation report:");
     println!("{}", from_utf8(&output).unwrap());
     Ok(())
+}
+
+// TODO: this will be provided by OwnedElement's implementation of `Display` in a future release
+fn element_to_string(element: &OwnedElement) -> IonResult<String> {
+    let mut buffer = Vec::new();
+    let text_writer = TextWriterBuilder::new().build(std::io::Cursor::new(&mut buffer))?;
+    let mut element_writer = NativeElementWriter::new(text_writer);
+    element_writer.write(element)?;
+    let mut text_writer = element_writer.finish()?;
+    text_writer.flush()?;
+    drop(text_writer);
+    Ok(from_utf8(buffer.as_slice()).unwrap().to_string())
 }
