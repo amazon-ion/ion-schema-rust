@@ -1,6 +1,6 @@
 use crate::isl::isl_constraint::IslConstraint;
 use crate::isl::isl_type_reference::IslTypeRef;
-use crate::isl::util::{Annotation, Range};
+use crate::isl::util::{Annotation, Range, TimestampPrecisionValue};
 use crate::result::{IonSchemaResult, ValidationResult};
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::types::{TypeDefinition, TypeValidator};
@@ -1442,6 +1442,45 @@ impl TimestampPrecisionConstraint {
 
 impl ConstraintValidator for TimestampPrecisionConstraint {
     fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
-        todo!()
+        // get the precision of given timestamp
+        let timestamp_value = match value.as_timestamp() {
+            Some(timestamp_value) => timestamp_value,
+            _ => {
+                // return Violation if value is not timestamp
+                let error_message = if value.is_null() {
+                    format!("expected a timestamp but found {:?}", value)
+                } else {
+                    format!("expected a timestamp but found {}", value.ion_type())
+                };
+                return Err(Violation::new(
+                    "timestamp_precision",
+                    ViolationCode::TypeMismatched,
+                    &error_message,
+                ));
+            }
+        };
+
+        let value_precision = TimestampPrecisionValue::from_timestamp(&timestamp_value);
+
+        // get isl timestamp precision as a range
+        let precision_range: &Range = self.timestamp_precision();
+
+        // return a Violation if the value didn't follow timestamp precision constraint
+        if !precision_range
+            .contains(&(timestamp_value.to_owned()).into())
+            .unwrap()
+        {
+            return Err(Violation::new(
+                "precision",
+                ViolationCode::InvalidLength,
+                &format!(
+                    "expected precision {:?} found {:?}",
+                    precision_range,
+                    timestamp_value.precision()
+                ),
+            ));
+        }
+
+        Ok(())
     }
 }
