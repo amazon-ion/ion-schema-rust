@@ -63,11 +63,17 @@ impl IslConstraint {
 
     /// Creates an [IslConstraint::Precision] using the range specified in it
     pub fn precision(precision: Range) -> IslConstraint {
+        if !matches!(precision, Range::IntegerNonNegative(_, _)) {
+            panic!("precision constraint  must have a range of type IntegerNonNegative")
+        }
         IslConstraint::Precision(precision)
     }
 
     /// Creates an [IslConstraint::Scale] using the range specified in it
     pub fn scale(scale: Range) -> IslConstraint {
+        if !matches!(scale, Range::Integer(_, _)) {
+            panic!("scale constraint  must have a range of type Integer")
+        }
         IslConstraint::Scale(scale)
     }
 
@@ -91,16 +97,25 @@ impl IslConstraint {
 
     /// Creates an [IslConstraint::ContainerLength] using the range specified in it
     pub fn container_length(length: Range) -> IslConstraint {
+        if !matches!(length, Range::IntegerNonNegative(_, _)) {
+            panic!("container_length constraint  must have a range of type IntegerNonNegative")
+        }
         IslConstraint::ContainerLength(length)
     }
 
     /// Creates an [IslConstraint::ByteLength] using the range specified in it
     pub fn byte_length(length: Range) -> IslConstraint {
+        if !matches!(length, Range::IntegerNonNegative(_, _)) {
+            panic!("byte_length constraint  must have a range of type IntegerNonNegative")
+        }
         IslConstraint::ByteLength(length)
     }
 
     /// Creates an [IslConstraint::CodePointLength] using the range specified in it
     pub fn codepoint_length(length: Range) -> IslConstraint {
+        if !matches!(length, Range::IntegerNonNegative(_, _)) {
+            panic!("codepoint_length constraint  must have a range of type IntegerNonNegative")
+        }
         IslConstraint::CodepointLength(length)
     }
 

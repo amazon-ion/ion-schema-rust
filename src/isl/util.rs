@@ -1,3 +1,4 @@
+use crate::isl::util::TimestampPrecision as TimestampPrecisionValue;
 use crate::result::{
     invalid_schema_error, invalid_schema_error_raw, IonSchemaError, IonSchemaResult,
 };
@@ -198,7 +199,7 @@ impl Range {
                     )
                 })?;
 
-                let value = TimestampPrecisionValue::from_timestamp(value);
+                let value = TimestampPrecisionValue::scale(value);
                 let is_in_lower_bound = match start {
                     Min => true,
                     Value(start_value, boundary_type) => match start_value {
@@ -456,15 +457,14 @@ impl TryFrom<&str> for Range {
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         let timestamp_precision = match value {
-            "year" => TimestampPrecisionValue::Year,
-            "month" => TimestampPrecisionValue::Month,
-
-            "day" => TimestampPrecisionValue::Day,
-            "minute" | "hour" => TimestampPrecisionValue::Minute,
-            "second" => TimestampPrecisionValue::Second,
-            "millisecond" => TimestampPrecisionValue::Millisecond,
-            "microsecond" => TimestampPrecisionValue::Microsecond,
-            "nanosecond" => TimestampPrecisionValue::Nanosecond,
+            "year" => TimestampPrecision::Year,
+            "month" => TimestampPrecision::Month,
+            "day" => TimestampPrecision::Day,
+            "minute" | "hour" => TimestampPrecision::Minute,
+            "second" => TimestampPrecision::Second,
+            "millisecond" => TimestampPrecision::Millisecond,
+            "microsecond" => TimestampPrecision::Microsecond,
+            "nanosecond" => TimestampPrecision::Nanosecond,
             _ => {
                 return invalid_schema_error(format!(
                     "Timestamp precision value: {} is not allowed",
@@ -528,7 +528,7 @@ impl RangeBoundaryValue {
     }
 
     pub fn timestamp_precision_value(
-        value: TimestampPrecisionValue,
+        value: TimestampPrecision,
         range_boundary_type: RangeBoundaryType,
     ) -> Self {
         RangeBoundaryValue::Value(
@@ -550,7 +550,7 @@ impl RangeBoundaryValue {
 
         match value.ion_type() {
             IonType::Symbol => {
-                use TimestampPrecisionValue::*;
+                use TimestampPrecision::*;
                 let sym = try_to!(try_to!(value.as_sym()).text());
                 match sym {
                     "min" => Ok(RangeBoundaryValue::Min),
@@ -611,7 +611,7 @@ impl RangeBoundaryValue {
                     value.as_integer().unwrap().to_owned(),
                     range_boundary_type,
                 )),
-                RangeType::TimestampPrecision => return invalid_schema_error(
+                RangeType::TimestampPrecision => invalid_schema_error(
                     "Timestamp precision ranges can not be constructed for integer boundary values",
                 ),
             },
@@ -689,7 +689,7 @@ impl Annotation {
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub enum TimestampPrecisionValue {
+pub enum TimestampPrecision {
     Year = -4,
     Month = -3,
     Day = -2,
@@ -700,9 +700,9 @@ pub enum TimestampPrecisionValue {
     Nanosecond = 9,
 }
 
-impl TimestampPrecisionValue {
-    pub fn from_timestamp(timestamp_value: &Timestamp) -> i64 {
-        use TimestampPrecisionValue::*;
+impl TimestampPrecision {
+    pub fn scale(timestamp_value: &Timestamp) -> i64 {
+        use TimestampPrecision::*;
         let precision_value = timestamp_value.precision();
         match precision_value {
             Precision::Year => Year as i64,

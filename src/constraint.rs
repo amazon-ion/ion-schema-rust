@@ -1,6 +1,6 @@
 use crate::isl::isl_constraint::IslConstraint;
 use crate::isl::isl_type_reference::IslTypeRef;
-use crate::isl::util::{Annotation, Range, TimestampPrecisionValue};
+use crate::isl::util::{Annotation, Range, TimestampPrecision};
 use crate::result::{IonSchemaResult, ValidationResult};
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::types::{TypeDefinition, TypeValidator};
@@ -82,16 +82,25 @@ impl Constraint {
 
     /// Creates a [Constraint::ContainerLength] from a [Range] specifying a length range.
     pub fn container_length(length: Range) -> Constraint {
+        if !matches!(length, Range::IntegerNonNegative(_, _)) {
+            panic!("container_length constraint  must have a range of type IntegerNonNegative")
+        }
         Constraint::ContainerLength(ContainerLengthConstraint::new(length))
     }
 
     /// Creates a [Constraint::ByteLength] from a [Range] specifying a length range.
     pub fn byte_length(length: Range) -> Constraint {
+        if !matches!(length, Range::IntegerNonNegative(_, _)) {
+            panic!("byte_length constraint  must have a range of type IntegerNonNegative")
+        }
         Constraint::ByteLength(ByteLengthConstraint::new(length))
     }
 
     /// Creates a [Constraint::CodePointLength] from a [Range] specifying a length range.
     pub fn codepoint_length(length: Range) -> Constraint {
+        if !matches!(length, Range::IntegerNonNegative(_, _)) {
+            panic!("codepoint_length constraint  must have a range of type IntegerNonNegative")
+        }
         Constraint::CodepointLength(CodepointLengthConstraint::new(length))
     }
 
@@ -131,16 +140,25 @@ impl Constraint {
 
     /// Creates a [Constraint::Precision] from a [Range] specifying a precision range.
     pub fn precision(precision: Range) -> Constraint {
+        if !matches!(precision, Range::IntegerNonNegative(_, _)) {
+            panic!("precision constraint  must have a range of type IntegerNonNegative")
+        }
         Constraint::Precision(PrecisionConstraint::new(precision))
     }
 
     /// Creates a [Constraint::Scale] from a [Range] specifying a precision range.
     pub fn scale(scale: Range) -> Constraint {
+        if !matches!(scale, Range::Integer(_, _)) {
+            panic!("scale constraint  must have a range of type Integer")
+        }
         Constraint::Scale(ScaleConstraint::new(scale))
     }
 
     /// Creates a [Constraint::TimestampPrecision] from a [Range] specifying a precision range.
     pub fn timestamp_precision(precision: Range) -> Constraint {
+        if !matches!(precision, Range::TimestampPrecision(_, _)) {
+            panic!("timestamp_precision constraint  must have a range of type TimestampPrecision")
+        }
         Constraint::TimestampPrecision(TimestampPrecisionConstraint::new(precision))
     }
 
@@ -1422,7 +1440,7 @@ impl ConstraintValidator for ScaleConstraint {
 }
 
 /// Implements Ion Schema's `timestamp_precision` constraint
-/// [scale]: https://amzn.github.io/ion-schema/docs/spec.html#timestamp_precision
+/// [timestamp_precision]: https://amzn.github.io/ion-schema/docs/spec.html#timestamp_precision
 #[derive(Debug, Clone, PartialEq)]
 pub struct TimestampPrecisionConstraint {
     timestamp_precision_range: Range,
@@ -1460,7 +1478,7 @@ impl ConstraintValidator for TimestampPrecisionConstraint {
             }
         };
 
-        let value_precision = TimestampPrecisionValue::from_timestamp(&timestamp_value);
+        let value_precision = TimestampPrecision::scale(timestamp_value);
 
         // get isl timestamp precision as a range
         let precision_range: &Range = self.timestamp_precision();

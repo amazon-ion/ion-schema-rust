@@ -125,7 +125,7 @@ mod isl_tests {
     use crate::isl::isl_constraint::IslConstraint;
     use crate::isl::isl_type::{IslType, IslTypeImpl};
     use crate::isl::isl_type_reference::IslTypeRef;
-    use crate::isl::util::TimestampPrecisionValue;
+    use crate::isl::util::TimestampPrecision;
     use crate::isl::util::{Range, RangeBoundaryType, RangeBoundaryValue, RangeType};
     use crate::result::IonSchemaResult;
     use ion_rs::types::decimal::*;
@@ -382,8 +382,8 @@ mod isl_tests {
                     "#
             ),
             Range::range(
-                RangeBoundaryValue::timestamp_precision_value(TimestampPrecisionValue::Year, RangeBoundaryType::Inclusive),
-                RangeBoundaryValue::timestamp_precision_value(TimestampPrecisionValue::Month, RangeBoundaryType::Inclusive)
+                RangeBoundaryValue::timestamp_precision_value(TimestampPrecision::Year, RangeBoundaryType::Inclusive),
+                RangeBoundaryValue::timestamp_precision_value(TimestampPrecision::Month, RangeBoundaryType::Inclusive)
             )
         )
     )]
