@@ -1,3 +1,24 @@
+//! Provides functions for instantiating instances of [Schema] using [SchemaSystem].
+//!
+//! ## Example:
+//! In general, users will create a [DocumentAuhtority] and then use it to build the [SchemaSystem].
+//! Then this [SchemaSystem] is used instantiating instances of [Schema].
+//!
+//! ```
+//! use ion_schema::authority::{MapDocumentAuthority, FileSystemDocumentAuthority, DocumentAuthority};
+//! use ion_schema::system::SchemaSystem;
+//! use std::path::Path;
+//!
+//! // create a vector of authorities and construct schema system
+//! let authorities: Vec<Box<dyn DocumentAuthority>> = vec![Box::new(
+//!             FileSystemDocumentAuthority::new(Path::new("schemas")),
+//!         )];
+//! let mut schema_system = SchemaSystem::new(authorities);
+//!
+//! // use this schema_system to load a schema as following
+//! let schema = schema_system.load_schema("sample.isl");
+//! ```
+
 use crate::authority::DocumentAuthority;
 use crate::isl::isl_import::{IslImport, IslImportType};
 use crate::isl::isl_type::{IslType, IslTypeImpl};
@@ -16,6 +37,7 @@ use std::collections::HashMap;
 use std::io::ErrorKind;
 use std::rc::Rc;
 
+// TODO: Shift PendingTypes and TypeStore implementations to a separate module
 /// Stores information about types that are in the process of being defined.
 ///
 /// An ISL type definition can include types that are not yet fully defined.
@@ -224,13 +246,17 @@ impl PendingTypes {
     }
 
     /// Returns total number of types stored in the [TypeStore]
-    pub fn get_total_types(&self, type_store: &mut TypeStore) -> usize {
+    pub(crate) fn get_total_types(&self, type_store: &mut TypeStore) -> usize {
         self.types_by_id.len() + type_store.types_by_id.len()
     }
 
     /// Provides the [TypeId] associated with given name if it exists in the [TypeStore] or [PendingTypes]  
     /// Otherwise returns None
-    pub fn get_type_id_by_name(&self, name: &str, type_store: &mut TypeStore) -> Option<TypeId> {
+    pub(crate) fn get_type_id_by_name(
+        &self,
+        name: &str,
+        type_store: &mut TypeStore,
+    ) -> Option<TypeId> {
         match self.ids_by_name.get(name) {
             Some(id) => Some(*id + type_store.types_by_id.len()),
             None => type_store.get_type_id_by_name(name).copied(),
@@ -239,7 +265,7 @@ impl PendingTypes {
 
     /// Adds the [NamedTypeDefinition] and the associated name in the [PendingTypes] and returns the [TypeId] for it
     /// If the given name already exists in the [TypeStore] or [PendingTypes] it returns the associated [TypeId]
-    pub fn add_named_type(
+    pub(crate) fn add_named_type(
         &mut self,
         name: &str,
         type_def: TypeDefinitionImpl,
@@ -259,7 +285,7 @@ impl PendingTypes {
 
     /// Adds the [BuiltInTypeDefinition] in the [PendingTypes] and returns the [TypeId] for it
     /// If the given name already exists in the [TypeStore] or [PendingTypes] it returns the associated [TypeId]
-    pub fn add_builtin_type(
+    pub(crate) fn add_builtin_type(
         &mut self,
         builtin_type_definition: &BuiltInTypeDefinition,
         type_store: &mut TypeStore,
@@ -289,7 +315,7 @@ impl PendingTypes {
 
     /// Updates the unresolved named type that was added as None while loading types in a schema
     /// with a resolved [TypeDefinition]
-    pub fn update_named_type(
+    pub(crate) fn update_named_type(
         &mut self,
         type_id: TypeId,
         name: &str,
@@ -310,7 +336,7 @@ impl PendingTypes {
 
     /// Updates the unresolved anonymous type that was added as None while loading types in a schema
     /// with a resolved [TypeDefinition]
-    pub fn update_anonymous_type(
+    pub(crate) fn update_anonymous_type(
         &mut self,
         type_id: TypeId,
         type_def: TypeDefinitionImpl,
@@ -322,22 +348,22 @@ impl PendingTypes {
     }
 
     /// Adds parent information storing the name and possible TypeId of the parent
-    pub fn add_parent(&mut self, name: String) {
+    pub(crate) fn add_parent(&mut self, name: String) {
         self.parent = Some((name, self.types_by_id.len()))
     }
 
     /// Provides parent information: (parent name, type id)
-    pub fn get_parent(&self) -> &Option<(String, TypeId)> {
+    pub(crate) fn get_parent(&self) -> &Option<(String, TypeId)> {
         &self.parent
     }
 
     /// Clears parent information once that tree of types is traversed
-    pub fn clear_parent(&mut self) {
+    pub(crate) fn clear_parent(&mut self) {
         self.parent = None
     }
 
     /// Adds the unresolved type as None before it gets resolved and gets the associated [TypeId]
-    pub fn add_type(&mut self, type_store: &mut TypeStore) -> TypeId {
+    pub(crate) fn add_type(&mut self, type_store: &mut TypeStore) -> TypeId {
         let type_id = self.types_by_id.len();
         self.types_by_id.push(None);
         type_id + type_store.types_by_id.len()
@@ -363,7 +389,7 @@ static DERIVED_ISL_TYPES: [&str; 8] = [
 
 pub type TypeId = usize;
 
-/// Defines a cache that can be used to store resolved [Type]s of a [Schema]
+/// Defines a cache that can be used to store resolved [TypeDefinition]s of a [Schema]
 #[derive(Debug, Clone)]
 pub struct TypeStore {
     builtin_type_ids_by_name: HashMap<String, TypeId>, // stores all the builtin types used within this schema
@@ -391,7 +417,7 @@ impl TypeStore {
     /// Preloads all [builtin isl types] into the TypeStore
     /// [builtin isl types]: https://amzn.github.io/ion-schema/docs/spec.html#type-system
     /// TODO: add document builtin type
-    pub fn preload(&mut self) -> IonSchemaResult<()> {
+    pub(crate) fn preload(&mut self) -> IonSchemaResult<()> {
         // add all ion types to the type store
         // TODO: this array can be turned into an iterator implementation in ion-rust for IonType
         use IonType::*;
@@ -446,18 +472,18 @@ impl TypeStore {
     }
 
     /// Returns [TypeId]s stored in the [TypeStore] to be used by [SchemaTypeIterator]
-    pub fn get_types(&self) -> Vec<TypeId> {
+    pub(crate) fn get_types(&self) -> Vec<TypeId> {
         self.ids_by_name.values().cloned().collect()
     }
 
     /// Returns import [TypeId]s stored in the [TypeStore] to be used by [SchemaTypeIterator]
-    pub fn get_imports(&self) -> Vec<TypeId> {
+    pub(crate) fn get_imports(&self) -> Vec<TypeId> {
         self.imported_type_ids_by_name.values().cloned().collect()
     }
 
     /// Provides the [Type] associated with given name if it exists in the [TypeStore]  
     /// Otherwise returns None
-    pub fn get_type_by_name(&self, name: &str) -> Option<&TypeDefinition> {
+    pub(crate) fn get_type_by_name(&self, name: &str) -> Option<&TypeDefinition> {
         self.ids_by_name
             .get(name)
             .and_then(|id| self.types_by_id.get(*id))
@@ -470,7 +496,7 @@ impl TypeStore {
 
     /// Provides the [TypeId] associated with given name if it exists in the [TypeStore]  
     /// Otherwise returns None
-    pub fn get_type_id_by_name(&self, name: &str) -> Option<&TypeId> {
+    pub(crate) fn get_type_id_by_name(&self, name: &str) -> Option<&TypeId> {
         self.ids_by_name
             .get(name)
             .or_else(|| self.imported_type_ids_by_name.get(name))
@@ -478,7 +504,7 @@ impl TypeStore {
 
     /// Provides the [TypeId] associated with given type name if it exists in the [TypeStore]  
     /// Otherwise returns None
-    pub fn get_builtin_type_id(&self, type_name: &str) -> Option<TypeId> {
+    pub(crate) fn get_builtin_type_id(&self, type_name: &str) -> Option<TypeId> {
         let type_name = match type_name {
             "int" => "integer",
             "bool" => "boolean",
@@ -493,13 +519,13 @@ impl TypeStore {
 
     /// Provides the [Type] associated with given [TypeId] if it exists in the [TypeStore]  
     /// Otherwise returns None
-    pub fn get_type_by_id(&self, id: TypeId) -> Option<&TypeDefinition> {
+    pub(crate) fn get_type_by_id(&self, id: TypeId) -> Option<&TypeDefinition> {
         self.types_by_id.get(id)
     }
 
     /// Adds the [NamedTypeDefinition] and the associated name in the [TypeStore] and returns the [TypeId] for it
     /// If the name already exists in the [TypeStore] it returns the associated [TypeId]
-    pub fn add_named_type(&mut self, type_def: TypeDefinitionImpl) -> TypeId {
+    pub(crate) fn add_named_type(&mut self, type_def: TypeDefinitionImpl) -> TypeId {
         let name = type_def.name().as_ref().unwrap();
         if let Some(exists) = self.ids_by_name.get(name) {
             return exists.to_owned();
@@ -512,7 +538,10 @@ impl TypeStore {
 
     /// Adds the [BuiltInTypeDefinition] in the [TypeStore] and returns the [TypeId] for it
     /// If the name already exists in the [TypeStore] it returns the associated [TypeId]
-    pub fn add_builtin_type(&mut self, builtin_type_definition: &BuiltInTypeDefinition) -> TypeId {
+    pub(crate) fn add_builtin_type(
+        &mut self,
+        builtin_type_definition: &BuiltInTypeDefinition,
+    ) -> TypeId {
         let builtin_type_name = match builtin_type_definition {
             BuiltInTypeDefinition::Atomic(ion_type, is_nullable) => match is_nullable {
                 Nullability::Nullable => format!("${}", ion_type),
@@ -534,7 +563,7 @@ impl TypeStore {
 
     /// Adds the [NamedTypeDefinition] and the associated name as the imports of [TypeStore]
     ///  and returns the [TypeId] for it. If the name already exists in the [TypeStore] it returns the associated [TypeId]
-    pub fn add_isl_imported_type(
+    pub(crate) fn add_isl_imported_type(
         &mut self,
         alias: Option<&String>,
         type_def: TypeDefinitionImpl,
@@ -555,7 +584,7 @@ impl TypeStore {
     }
 
     /// Adds the [Type] in the [TypeStore] and returns the [TypeId] for it
-    pub fn add_anonymous_type(&mut self, type_def: TypeDefinitionImpl) -> TypeId {
+    pub(crate) fn add_anonymous_type(&mut self, type_def: TypeDefinitionImpl) -> TypeId {
         let type_id = self.types_by_id.len();
         self.types_by_id.push(TypeDefinition::Anonymous(type_def));
         type_id
@@ -800,6 +829,7 @@ impl SchemaSystem {
     }
 
     /// Creates a schema from given [IslType]s
+    /// Note: This method assumes that there are no imported type definitions used for these [IslType]s
     pub fn schema_from_isl_types<A: AsRef<str>, B: Into<Vec<IslType>>>(
         &self,
         id: A,
@@ -808,7 +838,7 @@ impl SchemaSystem {
         self.resolver.schema_from_isl_types(id, isl_types)
     }
 
-    /// Creates a type from given OwnedElement using type_store
+    /// Creates a type from given OwnedElement using [TypeStore]
     pub fn schema_type_from_element(
         &mut self,
         type_content: &OwnedElement,
