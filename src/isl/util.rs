@@ -532,7 +532,7 @@ impl RangeBoundaryValue {
         range_boundary_type: RangeBoundaryType,
     ) -> Self {
         RangeBoundaryValue::Value(
-            RangeBoundaryValueType::TimestampPrecision(value as i64),
+            RangeBoundaryValueType::TimestampPrecision(value.into()),
             range_boundary_type,
         )
     }
@@ -556,35 +556,35 @@ impl RangeBoundaryValue {
                     "min" => Ok(RangeBoundaryValue::Min),
                     "max" => Ok(RangeBoundaryValue::Max),
                     "year" => Ok(RangeBoundaryValue::Value(
-                        RangeBoundaryValueType::TimestampPrecision(Year as i64),
+                        RangeBoundaryValueType::TimestampPrecision(Year.into()),
                         range_boundary_type,
                     )),
                     "month" => Ok(RangeBoundaryValue::Value(
-                        RangeBoundaryValueType::TimestampPrecision(Month as i64),
+                        RangeBoundaryValueType::TimestampPrecision(Month.into()),
                         range_boundary_type,
                     )),
                     "day" => Ok(RangeBoundaryValue::Value(
-                        RangeBoundaryValueType::TimestampPrecision(Day as i64),
+                        RangeBoundaryValueType::TimestampPrecision(Day.into()),
                         range_boundary_type,
                     )),
                     "minute" | "hour" => Ok(RangeBoundaryValue::Value(
-                        RangeBoundaryValueType::TimestampPrecision(Minute as i64),
+                        RangeBoundaryValueType::TimestampPrecision(Minute.into()),
                         range_boundary_type,
                     )),
                     "second" => Ok(RangeBoundaryValue::Value(
-                        RangeBoundaryValueType::TimestampPrecision(Second as i64),
+                        RangeBoundaryValueType::TimestampPrecision(Second.into()),
                         range_boundary_type,
                     )),
                     "millisecond" => Ok(RangeBoundaryValue::Value(
-                        RangeBoundaryValueType::TimestampPrecision(Millisecond as i64),
+                        RangeBoundaryValueType::TimestampPrecision(Millisecond.into()),
                         range_boundary_type,
                     )),
                     "microsecond" => Ok(RangeBoundaryValue::Value(
-                        RangeBoundaryValueType::TimestampPrecision(Microsecond as i64),
+                        RangeBoundaryValueType::TimestampPrecision(Microsecond.into()),
                         range_boundary_type,
                     )),
                     "nanosecond" => Ok(RangeBoundaryValue::Value(
-                        RangeBoundaryValueType::TimestampPrecision(Nanosecond as i64),
+                        RangeBoundaryValueType::TimestampPrecision(Nanosecond.into()),
                         range_boundary_type,
                     )),
                     _ => {
@@ -688,29 +688,43 @@ impl Annotation {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TimestampPrecision {
-    Year = -4,
-    Month = -3,
-    Day = -2,
-    Minute = -1,
-    Second = 0,
-    Millisecond = 3,
-    Microsecond = 6,
-    Nanosecond = 9,
+    Year,
+    Month,
+    Day,
+    Minute,
+    Second,
+    Millisecond,
+    Microsecond,
+    Nanosecond,
 }
 
 impl TimestampPrecision {
     pub fn scale(timestamp_value: &Timestamp) -> i64 {
-        use TimestampPrecision::*;
         let precision_value = timestamp_value.precision();
         match precision_value {
-            Precision::Year => Year as i64,
-            Precision::Month => Month as i64,
-            Precision::Day => Day as i64,
-            Precision::HourAndMinute => Minute as i64,
-            Precision::Second => Second as i64,
+            Precision::Year => -4,
+            Precision::Month => -3,
+            Precision::Day => -2,
+            Precision::HourAndMinute => -1,
+            Precision::Second => 0,
             Precision::FractionalSeconds => timestamp_value.fractional_seconds_scale().unwrap(),
+        }
+    }
+}
+
+impl Into<i64> for TimestampPrecision {
+    fn into(self) -> i64 {
+        match self {
+            TimestampPrecision::Year => -4,
+            TimestampPrecision::Month => -3,
+            TimestampPrecision::Day => -2,
+            TimestampPrecision::Minute => -1,
+            TimestampPrecision::Second => 0,
+            TimestampPrecision::Millisecond => 3,
+            TimestampPrecision::Microsecond => 6,
+            TimestampPrecision::Nanosecond => 9,
         }
     }
 }

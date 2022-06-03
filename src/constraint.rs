@@ -83,7 +83,7 @@ impl Constraint {
     /// Creates a [Constraint::ContainerLength] from a [Range] specifying a length range.
     pub fn container_length(length: Range) -> Constraint {
         if !matches!(length, Range::IntegerNonNegative(_, _)) {
-            panic!("container_length constraint  must have a range of type IntegerNonNegative")
+            panic!("container_length constraint must have a range of type IntegerNonNegative")
         }
         Constraint::ContainerLength(ContainerLengthConstraint::new(length))
     }
@@ -91,7 +91,7 @@ impl Constraint {
     /// Creates a [Constraint::ByteLength] from a [Range] specifying a length range.
     pub fn byte_length(length: Range) -> Constraint {
         if !matches!(length, Range::IntegerNonNegative(_, _)) {
-            panic!("byte_length constraint  must have a range of type IntegerNonNegative")
+            panic!("byte_length constraint must have a range of type IntegerNonNegative")
         }
         Constraint::ByteLength(ByteLengthConstraint::new(length))
     }
@@ -99,7 +99,7 @@ impl Constraint {
     /// Creates a [Constraint::CodePointLength] from a [Range] specifying a length range.
     pub fn codepoint_length(length: Range) -> Constraint {
         if !matches!(length, Range::IntegerNonNegative(_, _)) {
-            panic!("codepoint_length constraint  must have a range of type IntegerNonNegative")
+            panic!("codepoint_length constraint must have a range of type IntegerNonNegative")
         }
         Constraint::CodepointLength(CodepointLengthConstraint::new(length))
     }
@@ -141,7 +141,7 @@ impl Constraint {
     /// Creates a [Constraint::Precision] from a [Range] specifying a precision range.
     pub fn precision(precision: Range) -> Constraint {
         if !matches!(precision, Range::IntegerNonNegative(_, _)) {
-            panic!("precision constraint  must have a range of type IntegerNonNegative")
+            panic!("precision constraint must have a range of type IntegerNonNegative")
         }
         Constraint::Precision(PrecisionConstraint::new(precision))
     }
@@ -149,7 +149,7 @@ impl Constraint {
     /// Creates a [Constraint::Scale] from a [Range] specifying a precision range.
     pub fn scale(scale: Range) -> Constraint {
         if !matches!(scale, Range::Integer(_, _)) {
-            panic!("scale constraint  must have a range of type Integer")
+            panic!("scale constraint must have a range of type Integer")
         }
         Constraint::Scale(ScaleConstraint::new(scale))
     }
@@ -157,7 +157,7 @@ impl Constraint {
     /// Creates a [Constraint::TimestampPrecision] from a [Range] specifying a precision range.
     pub fn timestamp_precision(precision: Range) -> Constraint {
         if !matches!(precision, Range::TimestampPrecision(_, _)) {
-            panic!("timestamp_precision constraint  must have a range of type TimestampPrecision")
+            panic!("timestamp_precision constraint must have a range of type TimestampPrecision")
         }
         Constraint::TimestampPrecision(TimestampPrecisionConstraint::new(precision))
     }
