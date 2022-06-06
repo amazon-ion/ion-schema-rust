@@ -9,6 +9,7 @@ use ion_rs::value::owned::{text_token, OwnedElement};
 use ion_rs::value::{Element, Sequence, SymbolToken};
 use ion_rs::{Integer as IntegerValue, IonType};
 use num_bigint::BigInt;
+use std::cmp::Ordering;
 use std::convert::{TryFrom, TryInto};
 
 /// Represents ISL [Range]s where some constraints can be defined by a range
@@ -199,7 +200,7 @@ impl Range {
                     )
                 })?;
 
-                let value = TimestampPrecisionValue::scale(value);
+                let value = TimestampPrecisionValue::from_timestamp(value);
                 let is_in_lower_bound = match start {
                     Min => true,
                     Value(start_value, boundary_type) => match start_value {
@@ -493,7 +494,7 @@ pub enum RangeBoundaryValueType {
     Integer(IntegerValue),
     IntegerNonNegative(usize),
     Timestamp(Timestamp),
-    TimestampPrecision(i64),
+    TimestampPrecision(TimestampPrecision),
 }
 
 /// Represents a range boundary value (i.e. min, max or a value in terms of [RangeBoundaryValueType])
@@ -532,7 +533,7 @@ impl RangeBoundaryValue {
         range_boundary_type: RangeBoundaryType,
     ) -> Self {
         RangeBoundaryValue::Value(
-            RangeBoundaryValueType::TimestampPrecision(value.into()),
+            RangeBoundaryValueType::TimestampPrecision(value),
             range_boundary_type,
         )
     }
@@ -556,35 +557,35 @@ impl RangeBoundaryValue {
                     "min" => Ok(RangeBoundaryValue::Min),
                     "max" => Ok(RangeBoundaryValue::Max),
                     "year" => Ok(RangeBoundaryValue::Value(
-                        RangeBoundaryValueType::TimestampPrecision(Year.into()),
+                        RangeBoundaryValueType::TimestampPrecision(Year),
                         range_boundary_type,
                     )),
                     "month" => Ok(RangeBoundaryValue::Value(
-                        RangeBoundaryValueType::TimestampPrecision(Month.into()),
+                        RangeBoundaryValueType::TimestampPrecision(Month),
                         range_boundary_type,
                     )),
                     "day" => Ok(RangeBoundaryValue::Value(
-                        RangeBoundaryValueType::TimestampPrecision(Day.into()),
+                        RangeBoundaryValueType::TimestampPrecision(Day),
                         range_boundary_type,
                     )),
                     "minute" | "hour" => Ok(RangeBoundaryValue::Value(
-                        RangeBoundaryValueType::TimestampPrecision(Minute.into()),
+                        RangeBoundaryValueType::TimestampPrecision(Minute),
                         range_boundary_type,
                     )),
                     "second" => Ok(RangeBoundaryValue::Value(
-                        RangeBoundaryValueType::TimestampPrecision(Second.into()),
+                        RangeBoundaryValueType::TimestampPrecision(Second),
                         range_boundary_type,
                     )),
                     "millisecond" => Ok(RangeBoundaryValue::Value(
-                        RangeBoundaryValueType::TimestampPrecision(Millisecond.into()),
+                        RangeBoundaryValueType::TimestampPrecision(Millisecond),
                         range_boundary_type,
                     )),
                     "microsecond" => Ok(RangeBoundaryValue::Value(
-                        RangeBoundaryValueType::TimestampPrecision(Microsecond.into()),
+                        RangeBoundaryValueType::TimestampPrecision(Microsecond),
                         range_boundary_type,
                     )),
                     "nanosecond" => Ok(RangeBoundaryValue::Value(
-                        RangeBoundaryValueType::TimestampPrecision(Nanosecond.into()),
+                        RangeBoundaryValueType::TimestampPrecision(Nanosecond),
                         range_boundary_type,
                     )),
                     _ => {
@@ -698,33 +699,85 @@ pub enum TimestampPrecision {
     Millisecond,
     Microsecond,
     Nanosecond,
+    OtherFractionalSeconds(i64),
 }
 
 impl TimestampPrecision {
-    pub fn scale(timestamp_value: &Timestamp) -> i64 {
+    pub fn from_timestamp(timestamp_value: &Timestamp) -> TimestampPrecision {
+        use TimestampPrecision::*;
         let precision_value = timestamp_value.precision();
         match precision_value {
-            Precision::Year => -4,
-            Precision::Month => -3,
-            Precision::Day => -2,
-            Precision::HourAndMinute => -1,
-            Precision::Second => 0,
-            Precision::FractionalSeconds => timestamp_value.fractional_seconds_scale().unwrap(),
+            Precision::Year => Year,
+            Precision::Month => Month,
+            Precision::Day => Day,
+            Precision::HourAndMinute => Minute,
+            Precision::Second => Second,
+            Precision::FractionalSeconds => {
+                match timestamp_value.fractional_seconds_scale().unwrap() {
+                    3 => Millisecond,
+                    6 => Microsecond,
+                    9 => Nanosecond,
+                    scale => OtherFractionalSeconds(scale),
+                }
+            }
         }
     }
 }
 
-impl Into<i64> for TimestampPrecision {
-    fn into(self) -> i64 {
-        match self {
-            TimestampPrecision::Year => -4,
-            TimestampPrecision::Month => -3,
-            TimestampPrecision::Day => -2,
-            TimestampPrecision::Minute => -1,
-            TimestampPrecision::Second => 0,
-            TimestampPrecision::Millisecond => 3,
-            TimestampPrecision::Microsecond => 6,
-            TimestampPrecision::Nanosecond => 9,
-        }
+impl PartialOrd for TimestampPrecision {
+    fn partial_cmp(&self, other: &TimestampPrecision) -> Option<Ordering> {
+        use TimestampPrecision::*;
+        Some(match self {
+            Year => match other {
+                Year => Ordering::Equal,
+                _ => Ordering::Less,
+            },
+            Month => match other {
+                Year => Ordering::Greater,
+                Month => Ordering::Equal,
+                _ => Ordering::Less,
+            },
+            Day => match other {
+                Year | Month => Ordering::Greater,
+                Day => Ordering::Equal,
+                _ => Ordering::Less,
+            },
+            Minute => match other {
+                Year | Month | Day => Ordering::Greater,
+                Minute => Ordering::Equal,
+                _ => Ordering::Less,
+            },
+            Second => match other {
+                Second => Ordering::Equal,
+                Millisecond | Microsecond | Nanosecond | OtherFractionalSeconds(_) => {
+                    Ordering::Less
+                }
+                _ => Ordering::Greater,
+            },
+            Millisecond => match other {
+                Millisecond => Ordering::Equal,
+                Microsecond | Nanosecond => Ordering::Less,
+                OtherFractionalSeconds(other_scale) => return 3.partial_cmp(other_scale),
+                _ => Ordering::Greater,
+            },
+            Microsecond => match other {
+                Microsecond => Ordering::Equal,
+                Nanosecond => Ordering::Less,
+                OtherFractionalSeconds(other_scale) => return 6.partial_cmp(other_scale),
+                _ => Ordering::Greater,
+            },
+            Nanosecond => match other {
+                Nanosecond => Ordering::Equal,
+                OtherFractionalSeconds(other_scale) => return 9.partial_cmp(other_scale),
+                _ => Ordering::Greater,
+            },
+            OtherFractionalSeconds(scale) => match other {
+                OtherFractionalSeconds(other_scale) => return scale.partial_cmp(other_scale),
+                Millisecond => return scale.partial_cmp(&3),
+                Microsecond => return scale.partial_cmp(&6),
+                Nanosecond => return scale.partial_cmp(&9),
+                _ => Ordering::Greater,
+            },
+        })
     }
 }

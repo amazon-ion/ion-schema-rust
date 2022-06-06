@@ -1,6 +1,6 @@
 use crate::isl::isl_constraint::IslConstraint;
 use crate::isl::isl_type_reference::IslTypeRef;
-use crate::isl::util::{Annotation, Range, TimestampPrecision};
+use crate::isl::util::{Annotation, Range};
 use crate::result::{IonSchemaResult, ValidationResult};
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::types::{TypeDefinition, TypeValidator};
@@ -1477,8 +1477,6 @@ impl ConstraintValidator for TimestampPrecisionConstraint {
                 ));
             }
         };
-
-        let value_precision = TimestampPrecision::scale(timestamp_value);
 
         // get isl timestamp precision as a range
         let precision_range: &Range = self.timestamp_precision();
