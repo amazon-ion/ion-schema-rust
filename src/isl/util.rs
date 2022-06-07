@@ -711,15 +711,13 @@ impl TimestampPrecision {
             Precision::Month => Month,
             Precision::Day => Day,
             Precision::HourAndMinute => Minute,
-            Precision::Second => Second,
-            Precision::FractionalSeconds => {
-                match timestamp_value.fractional_seconds_scale().unwrap() {
-                    3 => Millisecond,
-                    6 => Microsecond,
-                    9 => Nanosecond,
-                    scale => OtherFractionalSeconds(scale),
-                }
-            }
+            Precision::Second => match timestamp_value.fractional_seconds_scale().unwrap_or(0) {
+                0 => Second,
+                3 => Millisecond,
+                6 => Microsecond,
+                9 => Nanosecond,
+                scale => OtherFractionalSeconds(scale),
+            },
         }
     }
 }
