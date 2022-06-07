@@ -711,6 +711,9 @@ impl TimestampPrecision {
             Precision::Month => Month,
             Precision::Day => Day,
             Precision::HourAndMinute => Minute,
+            // `unwrap_or(0)` is a default to set second as timestamp precision.
+            // currently `fractional_seconds_scale` doesn't return 0 for Precision::Second,
+            // once that is fixed in ion-rust we can remove unwrap_or from here
             Precision::Second => match timestamp_value.fractional_seconds_scale().unwrap_or(0) {
                 0 => Second,
                 3 => Millisecond,
