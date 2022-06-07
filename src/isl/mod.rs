@@ -125,7 +125,6 @@ mod isl_tests {
     use crate::isl::isl_constraint::IslConstraint;
     use crate::isl::isl_type::{IslType, IslTypeImpl};
     use crate::isl::isl_type_reference::IslTypeRef;
-    use crate::isl::util::TimestampPrecision;
     use crate::isl::util::{Range, RangeBoundaryType, RangeBoundaryValue, RangeType};
     use crate::result::IonSchemaResult;
     use ion_rs::types::decimal::*;
@@ -291,12 +290,6 @@ mod isl_tests {
                     "#),
         IslType::anonymous([IslConstraint::scale((&IntegerValue::I64(2)).into())])
     ),
-    case::timestamp_precision_constraint(
-        load_anonymous_type(r#" // For a schema with timestamp_precision constraint as below:
-                            { timestamp_precision: year }
-                        "#),
-        IslType::anonymous([IslConstraint::timestamp_precision("year".try_into().unwrap())])
-    ),
     )]
     fn owned_struct_to_isl_type(isl_type1: IslType, isl_type2: IslType) {
         // assert if both the IslType are same in terms of constraints and name
@@ -310,16 +303,6 @@ mod isl_tests {
                 .read_one(text.as_bytes())
                 .expect("parsing failed unexpectedly"),
             RangeType::Any,
-        )
-    }
-
-    // helper function to create a timestamp precision range
-    fn load_timestamp_precision_range(text: &str) -> IonSchemaResult<Range> {
-        Range::from_ion_element(
-            &element_reader()
-                .read_one(text.as_bytes())
-                .expect("parsing failed unexpectedly"),
-            RangeType::TimestampPrecision,
         )
     }
 
@@ -373,17 +356,6 @@ mod isl_tests {
             Range::range(
                 RangeBoundaryValue::timestamp_value(Timestamp::with_year(2020).with_month(1).with_day(1).build().unwrap(), RangeBoundaryType::Inclusive),
                 RangeBoundaryValue::timestamp_value(Timestamp::with_year(2021).with_month(1).with_day(1).build().unwrap(), RangeBoundaryType::Inclusive)
-            )
-        ),
-        case::range_with_timestamp_precision(
-            load_timestamp_precision_range(
-            r#"
-                        range::[year, month]
-                    "#
-            ),
-            Range::range(
-                RangeBoundaryValue::timestamp_precision_value(TimestampPrecision::Year, RangeBoundaryType::Inclusive),
-                RangeBoundaryValue::timestamp_precision_value(TimestampPrecision::Month, RangeBoundaryType::Inclusive)
             )
         )
     )]
@@ -534,24 +506,13 @@ mod isl_tests {
             elements(&[-5e5, 1e2, f64::NAN])
         ),
         case::float_range_with_exclusive(
-            load_range(
+        load_range(
             r#"
                 range::[exclusive::1e2, exclusive::5e2]
             "#
             ),
             elements(&[2e2]),
             elements(&[-1e2 ,1e1, 6e2, 1e2, 5e2, f64::NAN])
-        ),
-        case::timestamp_precision_range(
-            load_timestamp_precision_range(
-            r#"
-                range::[minute, second]
-            "#
-            ),
-            elements(&[Timestamp::with_ymd(2020, 1, 1).with_hms(0, 1, 0).build_at_offset(4 * 60).unwrap(),
-                Timestamp::with_ymd(2020, 1, 1).with_hour_and_minute(0, 1).build_at_offset(4 * 60).unwrap()]),
-            elements(&[Timestamp::with_year(2020).build().unwrap(),
-                Timestamp::with_ymd(2020, 1, 1).with_hms(0, 1, 0).with_milliseconds(678).build_at_offset(4 * 60).unwrap()])
         ),
     )]
     fn range_contains(

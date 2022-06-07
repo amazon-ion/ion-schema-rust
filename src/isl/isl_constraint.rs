@@ -30,7 +30,6 @@ pub enum IslConstraint {
     OrderedElements(Vec<IslTypeRef>),
     Precision(Range),
     Scale(Range),
-    TimestampPrecision(Range),
     Type(IslTypeRef),
 }
 
@@ -63,17 +62,11 @@ impl IslConstraint {
 
     /// Creates an [IslConstraint::Precision] using the range specified in it
     pub fn precision(precision: Range) -> IslConstraint {
-        if !matches!(precision, Range::IntegerNonNegative(_, _)) {
-            panic!("precision constraint must have a range of type IntegerNonNegative")
-        }
         IslConstraint::Precision(precision)
     }
 
     /// Creates an [IslConstraint::Scale] using the range specified in it
     pub fn scale(scale: Range) -> IslConstraint {
-        if !matches!(scale, Range::Integer(_, _)) {
-            panic!("scale constraint must have a range of type Integer")
-        }
         IslConstraint::Scale(scale)
     }
 
@@ -97,31 +90,17 @@ impl IslConstraint {
 
     /// Creates an [IslConstraint::ContainerLength] using the range specified in it
     pub fn container_length(length: Range) -> IslConstraint {
-        if !matches!(length, Range::IntegerNonNegative(_, _)) {
-            panic!("container_length constraint must have a range of type IntegerNonNegative")
-        }
         IslConstraint::ContainerLength(length)
     }
 
     /// Creates an [IslConstraint::ByteLength] using the range specified in it
     pub fn byte_length(length: Range) -> IslConstraint {
-        if !matches!(length, Range::IntegerNonNegative(_, _)) {
-            panic!("byte_length constraint must have a range of type IntegerNonNegative")
-        }
         IslConstraint::ByteLength(length)
     }
 
     /// Creates an [IslConstraint::CodePointLength] using the range specified in it
     pub fn codepoint_length(length: Range) -> IslConstraint {
-        if !matches!(length, Range::IntegerNonNegative(_, _)) {
-            panic!("codepoint_length constraint must have a range of type IntegerNonNegative")
-        }
         IslConstraint::CodepointLength(length)
-    }
-
-    /// Creates an [IslConstraint::TimestampPrecision] using the range specified in it
-    pub fn timestamp_precision(precision: Range) -> IslConstraint {
-        IslConstraint::TimestampPrecision(precision)
     }
 
     /// Creates an [IslConstraint::Element] using the [IslTypeRef] referenced inside it
@@ -336,15 +315,12 @@ impl IslConstraint {
             }
             "precision" => Ok(IslConstraint::Precision(Range::from_ion_element(
                 value,
-                RangeType::Precision,
+                RangeType::PrecisionRange,
             )?)),
             "scale" => Ok(IslConstraint::Scale(Range::from_ion_element(
                 value,
                 RangeType::Any,
             )?)),
-            "timestamp_precision" => Ok(IslConstraint::TimestampPrecision(
-                Range::from_ion_element(value, RangeType::TimestampPrecision)?,
-            )),
             _ => Err(invalid_schema_error_raw(
                 "Type: ".to_owned()
                     + type_name
