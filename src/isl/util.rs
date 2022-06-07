@@ -727,57 +727,30 @@ impl TimestampPrecision {
 impl PartialOrd for TimestampPrecision {
     fn partial_cmp(&self, other: &TimestampPrecision) -> Option<Ordering> {
         use TimestampPrecision::*;
-        Some(match self {
-            Year => match other {
-                Year => Ordering::Equal,
-                _ => Ordering::Less,
-            },
-            Month => match other {
-                Year => Ordering::Greater,
-                Month => Ordering::Equal,
-                _ => Ordering::Less,
-            },
-            Day => match other {
-                Year | Month => Ordering::Greater,
-                Day => Ordering::Equal,
-                _ => Ordering::Less,
-            },
-            Minute => match other {
-                Year | Month | Day => Ordering::Greater,
-                Minute => Ordering::Equal,
-                _ => Ordering::Less,
-            },
-            Second => match other {
-                Second => Ordering::Equal,
-                Millisecond | Microsecond | Nanosecond | OtherFractionalSeconds(_) => {
-                    Ordering::Less
-                }
-                _ => Ordering::Greater,
-            },
-            Millisecond => match other {
-                Millisecond => Ordering::Equal,
-                Microsecond | Nanosecond => Ordering::Less,
-                OtherFractionalSeconds(other_scale) => return 3.partial_cmp(other_scale),
-                _ => Ordering::Greater,
-            },
-            Microsecond => match other {
-                Microsecond => Ordering::Equal,
-                Nanosecond => Ordering::Less,
-                OtherFractionalSeconds(other_scale) => return 6.partial_cmp(other_scale),
-                _ => Ordering::Greater,
-            },
-            Nanosecond => match other {
-                Nanosecond => Ordering::Equal,
-                OtherFractionalSeconds(other_scale) => return 9.partial_cmp(other_scale),
-                _ => Ordering::Greater,
-            },
-            OtherFractionalSeconds(scale) => match other {
-                OtherFractionalSeconds(other_scale) => return scale.partial_cmp(other_scale),
-                Millisecond => return scale.partial_cmp(&3),
-                Microsecond => return scale.partial_cmp(&6),
-                Nanosecond => return scale.partial_cmp(&9),
-                _ => Ordering::Greater,
-            },
-        })
+        let self_value = match self {
+            Year => -4,
+            Month => -3,
+            Day => -2,
+            Minute => -1,
+            Second => 0,
+            Millisecond => 3,
+            Microsecond => 6,
+            Nanosecond => 9,
+            OtherFractionalSeconds(scale) => *scale,
+        };
+
+        let other_value = match other {
+            Year => -4,
+            Month => -3,
+            Day => -2,
+            Minute => -1,
+            Second => 0,
+            Millisecond => 3,
+            Microsecond => 6,
+            Nanosecond => 9,
+            OtherFractionalSeconds(scale) => *scale,
+        };
+
+        Some(self_value.cmp(&other_value))
     }
 }
