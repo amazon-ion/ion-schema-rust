@@ -1,12 +1,16 @@
-use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
+use crate::isl::util::TimestampPrecision as TimestampPrecisionValue;
+use crate::result::{
+    invalid_schema_error, invalid_schema_error_raw, IonSchemaError, IonSchemaResult,
+};
 use ion_rs::types::decimal::Decimal;
 use ion_rs::types::integer::IntAccess;
-use ion_rs::types::timestamp::Timestamp;
+use ion_rs::types::timestamp::{Precision, Timestamp};
 use ion_rs::value::owned::{text_token, OwnedElement};
 use ion_rs::value::{Element, Sequence, SymbolToken};
 use ion_rs::{Integer as IntegerValue, IonType};
 use num_bigint::BigInt;
-use std::convert::TryInto;
+use std::cmp::Ordering;
+use std::convert::{TryFrom, TryInto};
 
 /// Represents ISL [Range]s where some constraints can be defined by a range
 /// <RANGE<RANGE_TYPE>> ::= range::[ <EXCLUSIVITY><RANGE_TYPE>, <EXCLUSIVITY><RANGE_TYPE> ]
@@ -26,6 +30,7 @@ pub enum Range {
     Integer(RangeBoundaryValue, RangeBoundaryValue),
     IntegerNonNegative(RangeBoundaryValue, RangeBoundaryValue),
     Timestamp(RangeBoundaryValue, RangeBoundaryValue),
+    TimestampPrecision(RangeBoundaryValue, RangeBoundaryValue),
 }
 
 impl Range {
@@ -188,6 +193,39 @@ impl Range {
                 // TODO: Implement this section once the timestamp comparator for ion-rust is implemented
                 todo!()
             }
+            Range::TimestampPrecision(start, end) => {
+                let value = &value.as_timestamp().ok_or_else(|| {
+                    invalid_schema_error_raw(
+                        "Timestamp Precision ranges can only have timestamp value for validation",
+                    )
+                })?;
+
+                let value = TimestampPrecisionValue::from_timestamp(value);
+                let is_in_lower_bound = match start {
+                    Min => true,
+                    Value(start_value, boundary_type) => match start_value {
+                        TimestampPrecision(min_value) => match boundary_type {
+                            RangeBoundaryType::Inclusive => min_value <= &value,
+                            RangeBoundaryType::Exclusive => min_value < &value,
+                        },
+                        _ => unreachable!("TimestampPrecision range can only have timestamp precisions as lower and upper range boundary value"),
+                    },
+                    Max => unreachable!("Cannot have 'Max' as the lower range boundary")
+                };
+
+                let is_in_upper_bound = match end {
+                    Max => true,
+                    Min => unreachable!("Cannot have 'Min' as the upper range boundary"),
+                    Value(end_value, boundary_type) => match end_value {
+                        TimestampPrecision(max_value) => match boundary_type {
+                            RangeBoundaryType::Inclusive => max_value >= &value,
+                            RangeBoundaryType::Exclusive => max_value > &value,
+                        },
+                        _ => unreachable!("TimestampPrecision range can only have timestamp precisions as lower and upper range boundary value"),
+                    }
+                };
+                Ok(is_in_upper_bound && is_in_lower_bound)
+            }
         }
     }
 
@@ -216,6 +254,7 @@ impl Range {
                     (Decimal(_), Decimal(_)) => {}
                     (Float(_), Float(_)) => {}
                     (Timestamp(_), Timestamp(_)) => {},
+                    (TimestampPrecision(_), TimestampPrecision(_)) => {},
                     _ => {
                         return invalid_schema_error("Both range boundary values must be of same type")
                     }
@@ -241,50 +280,67 @@ impl Range {
             Float(_) => Range::Float(start, end),
             Timestamp(_) => Range::Timestamp(start, end),
             IntegerNonNegative(_) => Range::IntegerNonNegative(start, end),
+            TimestampPrecision(_) => Range::TimestampPrecision(start, end),
         })
     }
 
     pub fn from_ion_element(value: &OwnedElement, range_type: RangeType) -> IonSchemaResult<Range> {
         // if an integer value is passed here then convert it into a range
         // eg. if `1` is passed as value then return a range [1,1]
-        if let Some(integer_value) = value.as_integer() {
-            return if range_type == RangeType::NonNegativeInteger
-                || range_type == RangeType::PrecisionRange
-            {
-                let non_negative_integer_value =
-                    Range::validate_non_negative_integer_range_boundary_value(
-                        value.as_integer().unwrap(),
-                        &range_type,
-                    )?;
-                Ok(non_negative_integer_value.into())
+        return if let Some(integer_value) = value.as_integer() {
+            match range_type {
+                RangeType::Precision | RangeType::NonNegativeInteger => {
+                    let non_negative_integer_value =
+                        Range::validate_non_negative_integer_range_boundary_value(
+                            value.as_integer().unwrap(),
+                            &range_type,
+                        )?;
+                    Ok(non_negative_integer_value.into())
+                }
+                RangeType::TimestampPrecision => invalid_schema_error(format!(
+                    "Timestamp precision ranges can not be constructed from value of type {}",
+                    value.ion_type()
+                )),
+                RangeType::Any => Ok(integer_value.into()),
+            }
+        } else if let Some(timestamp_precision) = value.as_str() {
+            if range_type == RangeType::TimestampPrecision {
+                timestamp_precision.try_into()
             } else {
-                Ok(integer_value.into())
-            };
-        }
+                invalid_schema_error(format!(
+                    "{:?} ranges can not be constructed from value of type {}",
+                    range_type,
+                    value.ion_type()
+                ))
+            }
+        } else if let Some(range) = value.as_sequence() {
+            // verify if the value has annotation range
+            if !value.annotations().any(|a| a == &text_token("range")) {
+                return invalid_schema_error(
+                    "An element representing range must have annotation `range::` with it.",
+                );
+            }
 
-        let range = try_to!(value.as_sequence());
+            if range.len() != 2 {
+                return invalid_schema_error(
+                    "Ranges must contain two values representing minimum and maximum ends of range.",
+                );
+            }
 
-        // verify if the value has annotation range
-        if !value.annotations().any(|a| a == &text_token("range")) {
-            return invalid_schema_error(
-                "An element representing range must have annotation `range::` with it.",
-            );
-        }
+            // set start of the range
+            let start = RangeBoundaryValue::from_ion_element(try_to!(range.get(0)), &range_type)?;
 
-        if range.len() != 2 {
-            return invalid_schema_error(
-                "Ranges must contain two values representing minimum and maximum ends of range.",
-            );
-        }
+            // set end of the range
+            let end = RangeBoundaryValue::from_ion_element(try_to!(range.get(1)), &range_type)?;
 
-        // set start of the range
-        let start = RangeBoundaryValue::from_ion_element(try_to!(range.get(0)), &range_type)?;
-
-        // set end of the range
-        let end = RangeBoundaryValue::from_ion_element(try_to!(range.get(1)), &range_type)?;
-
-        // validate both range boundary values and returns created `Range`
-        Range::range(start, end)
+            // validate both range boundary values and returns created `Range`
+            Range::range(start, end)
+        } else {
+            invalid_schema_error(format!(
+                "Ranges can not be constructed for type {}",
+                value.ion_type()
+            ))
+        };
     }
 
     // helper method to which validates a non negative integer range boundary value
@@ -294,7 +350,7 @@ impl Range {
     ) -> IonSchemaResult<usize> {
         // minimum precision must be greater than or equal to 1
         // for more information: https://amzn.github.io/ion-schema/docs/spec.html#precision
-        let min_value = if range_type == &RangeType::PrecisionRange {
+        let min_value = if range_type == &RangeType::Precision {
             1
         } else {
             0
@@ -386,13 +442,47 @@ impl From<usize> for Range {
     }
 }
 
-/// Provides `Range` for given `usize`
+/// Provides `Range` for given `Integer`
 impl From<&IntegerValue> for Range {
     fn from(int_value: &IntegerValue) -> Self {
         Range::Integer(
             RangeBoundaryValue::int_value(int_value.to_owned(), RangeBoundaryType::Inclusive),
             RangeBoundaryValue::int_value(int_value.to_owned(), RangeBoundaryType::Inclusive),
         )
+    }
+}
+
+/// Provides `Range` for given `&str`
+impl TryFrom<&str> for Range {
+    type Error = IonSchemaError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        let timestamp_precision = match value {
+            "year" => TimestampPrecision::Year,
+            "month" => TimestampPrecision::Month,
+            "day" => TimestampPrecision::Day,
+            "minute" | "hour" => TimestampPrecision::Minute,
+            "second" => TimestampPrecision::Second,
+            "millisecond" => TimestampPrecision::Millisecond,
+            "microsecond" => TimestampPrecision::Microsecond,
+            "nanosecond" => TimestampPrecision::Nanosecond,
+            _ => {
+                return invalid_schema_error(format!(
+                    "Timestamp precision value: {} is not allowed",
+                    value
+                ))
+            }
+        };
+        Ok(Range::TimestampPrecision(
+            RangeBoundaryValue::timestamp_precision_value(
+                timestamp_precision.to_owned(),
+                RangeBoundaryType::Inclusive,
+            ),
+            RangeBoundaryValue::timestamp_precision_value(
+                timestamp_precision,
+                RangeBoundaryType::Inclusive,
+            ),
+        ))
     }
 }
 
@@ -404,6 +494,7 @@ pub enum RangeBoundaryValueType {
     Integer(IntegerValue),
     IntegerNonNegative(usize),
     Timestamp(Timestamp),
+    TimestampPrecision(TimestampPrecision),
 }
 
 /// Represents a range boundary value (i.e. min, max or a value in terms of [RangeBoundaryValueType])
@@ -418,21 +509,35 @@ impl RangeBoundaryValue {
     pub fn int_value(value: IntegerValue, range_boundary_type: RangeBoundaryType) -> Self {
         RangeBoundaryValue::Value(RangeBoundaryValueType::Integer(value), range_boundary_type)
     }
+
     pub fn int_non_negative_value(value: usize, range_boundary_type: RangeBoundaryType) -> Self {
         RangeBoundaryValue::Value(
             RangeBoundaryValueType::IntegerNonNegative(value),
             range_boundary_type,
         )
     }
+
     pub fn float_value(value: f64, range_boundary_type: RangeBoundaryType) -> Self {
         RangeBoundaryValue::Value(RangeBoundaryValueType::Float(value), range_boundary_type)
     }
+
     pub fn timestamp_value(value: Timestamp, range_boundary_type: RangeBoundaryType) -> Self {
         RangeBoundaryValue::Value(
             RangeBoundaryValueType::Timestamp(value),
             range_boundary_type,
         )
     }
+
+    pub fn timestamp_precision_value(
+        value: TimestampPrecision,
+        range_boundary_type: RangeBoundaryType,
+    ) -> Self {
+        RangeBoundaryValue::Value(
+            RangeBoundaryValueType::TimestampPrecision(value),
+            range_boundary_type,
+        )
+    }
+
     pub fn decimal_value(value: Decimal, range_boundary_type: RangeBoundaryType) -> Self {
         RangeBoundaryValue::Value(RangeBoundaryValueType::Decimal(value), range_boundary_type)
     }
@@ -446,10 +551,43 @@ impl RangeBoundaryValue {
 
         match value.ion_type() {
             IonType::Symbol => {
+                use TimestampPrecision::*;
                 let sym = try_to!(try_to!(value.as_sym()).text());
                 match sym {
                     "min" => Ok(RangeBoundaryValue::Min),
                     "max" => Ok(RangeBoundaryValue::Max),
+                    "year" => Ok(RangeBoundaryValue::Value(
+                        RangeBoundaryValueType::TimestampPrecision(Year),
+                        range_boundary_type,
+                    )),
+                    "month" => Ok(RangeBoundaryValue::Value(
+                        RangeBoundaryValueType::TimestampPrecision(Month),
+                        range_boundary_type,
+                    )),
+                    "day" => Ok(RangeBoundaryValue::Value(
+                        RangeBoundaryValueType::TimestampPrecision(Day),
+                        range_boundary_type,
+                    )),
+                    "minute" | "hour" => Ok(RangeBoundaryValue::Value(
+                        RangeBoundaryValueType::TimestampPrecision(Minute),
+                        range_boundary_type,
+                    )),
+                    "second" => Ok(RangeBoundaryValue::Value(
+                        RangeBoundaryValueType::TimestampPrecision(Second),
+                        range_boundary_type,
+                    )),
+                    "millisecond" => Ok(RangeBoundaryValue::Value(
+                        RangeBoundaryValueType::TimestampPrecision(Millisecond),
+                        range_boundary_type,
+                    )),
+                    "microsecond" => Ok(RangeBoundaryValue::Value(
+                        RangeBoundaryValueType::TimestampPrecision(Microsecond),
+                        range_boundary_type,
+                    )),
+                    "nanosecond" => Ok(RangeBoundaryValue::Value(
+                        RangeBoundaryValueType::TimestampPrecision(Nanosecond),
+                        range_boundary_type,
+                    )),
                     _ => {
                         return invalid_schema_error(format!(
                             "Range boundary value: {} is not supported",
@@ -459,7 +597,7 @@ impl RangeBoundaryValue {
                 }
             }
             IonType::Integer => match range_type {
-                RangeType::PrecisionRange | RangeType::NonNegativeInteger => {
+                RangeType::Precision | RangeType::NonNegativeInteger => {
                     let non_negative_integer_value =
                         Range::validate_non_negative_integer_range_boundary_value(
                             value.as_integer().unwrap(),
@@ -474,6 +612,9 @@ impl RangeBoundaryValue {
                     value.as_integer().unwrap().to_owned(),
                     range_boundary_type,
                 )),
+                RangeType::TimestampPrecision => invalid_schema_error(
+                    "Timestamp precision ranges can not be constructed for integer boundary values",
+                ),
             },
             IonType::Decimal => Ok(RangeBoundaryValue::decimal_value(
                 value.as_decimal().unwrap().to_owned(),
@@ -504,9 +645,10 @@ pub enum RangeBoundaryType {
 /// to explicitly state if its non negative or not
 #[derive(Debug, Clone, PartialEq)]
 pub enum RangeType {
-    PrecisionRange, // used by precision constraint to specify non negative integer precision with minimum value as `1`
+    Precision, // used by precision constraint to specify non negative integer precision with minimum value as `1`
     NonNegativeInteger, // used by byte_length, container_length and codepoint_length to specify non negative integer range
-    Any,                // used for any other range types (e.g. Integer, Float, Timestamp, Decimal)
+    TimestampPrecision, //used by timestamp_precision to specify timestamp precision range
+    Any,                // used for any range types (e.g. Integer, Float, Timestamp, Decimal)
 }
 
 /// Represents an annotation for [annotations] constraint.
@@ -544,5 +686,72 @@ impl Annotation {
             // for any value the default annotation is `optional`
             false
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TimestampPrecision {
+    Year,
+    Month,
+    Day,
+    Minute,
+    Second,
+    Millisecond,
+    Microsecond,
+    Nanosecond,
+    OtherFractionalSeconds(i64),
+}
+
+impl TimestampPrecision {
+    pub fn from_timestamp(timestamp_value: &Timestamp) -> TimestampPrecision {
+        use TimestampPrecision::*;
+        let precision_value = timestamp_value.precision();
+        match precision_value {
+            Precision::Year => Year,
+            Precision::Month => Month,
+            Precision::Day => Day,
+            Precision::HourAndMinute => Minute,
+            // `unwrap_or(0)` is a default to set second as timestamp precision.
+            // currently `fractional_seconds_scale` doesn't return 0 for Precision::Second,
+            // once that is fixed in ion-rust we can remove unwrap_or from here
+            Precision::Second => match timestamp_value.fractional_seconds_scale().unwrap_or(0) {
+                0 => Second,
+                3 => Millisecond,
+                6 => Microsecond,
+                9 => Nanosecond,
+                scale => OtherFractionalSeconds(scale),
+            },
+        }
+    }
+}
+
+impl PartialOrd for TimestampPrecision {
+    fn partial_cmp(&self, other: &TimestampPrecision) -> Option<Ordering> {
+        use TimestampPrecision::*;
+        let self_value = match self {
+            Year => -4,
+            Month => -3,
+            Day => -2,
+            Minute => -1,
+            Second => 0,
+            Millisecond => 3,
+            Microsecond => 6,
+            Nanosecond => 9,
+            OtherFractionalSeconds(scale) => *scale,
+        };
+
+        let other_value = match other {
+            Year => -4,
+            Month => -3,
+            Day => -2,
+            Minute => -1,
+            Second => 0,
+            Millisecond => 3,
+            Microsecond => 6,
+            Nanosecond => 9,
+            OtherFractionalSeconds(scale) => *scale,
+        };
+
+        Some(self_value.cmp(&other_value))
     }
 }
