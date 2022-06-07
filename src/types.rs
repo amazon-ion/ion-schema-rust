@@ -351,6 +351,7 @@ mod type_definition_tests {
     use crate::isl::isl_type::IslType;
     use crate::isl::isl_type_reference::IslTypeRef;
     use crate::system::PendingTypes;
+    use ion_rs::Integer;
     use rstest::*;
 
     // TODO: Remove type ids for assertion to make tests more readable
@@ -493,8 +494,15 @@ mod type_definition_tests {
         /* For a schema with scale constraint as below:
             { scale: 2 }
         */
-        IslType::anonymous([IslConstraint::scale(2.into())]),
-        TypeDefinition::anonymous([Constraint::scale(2.into()), Constraint::type_constraint(25)])
+        IslType::anonymous([IslConstraint::scale((&Integer::I64(2)).into())]),
+        TypeDefinition::anonymous([Constraint::scale((&Integer::I64(2)).into()), Constraint::type_constraint(25)])
+    ),
+    case::timestamp_precision_constraint(
+        /* For a schema with timestamp_precision constraint as below:
+            { timestamp_precision: month }
+        */
+        IslType::anonymous([IslConstraint::timestamp_precision("month".try_into().unwrap())]),
+        TypeDefinition::anonymous([Constraint::timestamp_precision("month".try_into().unwrap()), Constraint::type_constraint(25)])
     ),
     )]
     fn isl_type_to_type_definition(isl_type: IslType, type_def: TypeDefinition) {
