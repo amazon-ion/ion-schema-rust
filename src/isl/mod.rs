@@ -297,6 +297,24 @@ mod isl_tests {
                         "#),
         IslType::anonymous([IslConstraint::timestamp_precision("year".try_into().unwrap())])
     ),
+    case::valid_values_constraint(
+        load_anonymous_type(r#" // For a schema with valid_values constraint as below:
+                        { valid_values: [2, 3.5, 5e7, "hello", hi] }
+                    "#),
+        IslType::anonymous([IslConstraint::valid_values_with_values(vec![2.into(), Decimal::new(35, -1).into(), 5e7.into(), "hello".to_owned().into(), text_token("hi").into()])])
+    ),
+    case::valid_values_wiht_range_constraint(
+        load_anonymous_type(r#" // For a schema with valid_values constraint as below:
+                        { valid_values: range::[1, 5.5] }
+                    "#),
+        IslType::anonymous(
+            [IslConstraint::valid_values_with_range(
+                Range::range(
+                    RangeBoundaryValue::number_value((&IntegerValue::I64(1)).into(), RangeBoundaryType::Inclusive),
+                    RangeBoundaryValue::number_value((&Decimal::new(55, -1)).try_into().unwrap(), RangeBoundaryType::Inclusive)
+                ).unwrap())
+            ])
+        ),
     )]
     fn owned_struct_to_isl_type(isl_type1: IslType, isl_type2: IslType) {
         // assert if both the IslType are same in terms of constraints and name

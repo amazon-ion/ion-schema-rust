@@ -4,7 +4,7 @@ use crate::isl::util::{Annotation, Range, RangeType};
 use crate::result::{
     invalid_schema_error, invalid_schema_error_raw, IonSchemaError, IonSchemaResult,
 };
-use ion_rs::value::owned::OwnedElement;
+use ion_rs::value::owned::{text_token, OwnedElement};
 use ion_rs::value::{Element, Sequence};
 use ion_rs::value::{Struct, SymbolToken};
 use ion_rs::IonType;
@@ -32,6 +32,7 @@ pub enum IslConstraint {
     Scale(Range),
     TimestampPrecision(Range),
     Type(IslTypeRef),
+    ValidValues(IslValidValuesConstraint),
 }
 
 impl IslConstraint {
@@ -156,6 +157,16 @@ impl IslConstraint {
             annotations_modifiers.contains(&"ordered"),
             annotations,
         ))
+    }
+
+    /// Creates a [IslConstraint::ValidValues] using the [OwnedElements] specified inside it
+    pub fn valid_values_with_values(values: Vec<OwnedElement>) -> IslConstraint {
+        IslConstraint::ValidValues(IslValidValuesConstraint::Values(values))
+    }
+
+    /// Creates a [IslConstraint::ValidValues] using the [Range] specified inside it
+    pub fn valid_values_with_range(values: Range) -> IslConstraint {
+        IslConstraint::ValidValues(IslValidValuesConstraint::Range(values))
     }
 
     /// Parse constraints inside an [OwnedElement] to an [IslConstraint]
@@ -345,6 +356,7 @@ impl IslConstraint {
             "timestamp_precision" => Ok(IslConstraint::TimestampPrecision(
                 Range::from_ion_element(value, RangeType::TimestampPrecision)?,
             )),
+            "valid_values" => Ok(IslConstraint::ValidValues(value.try_into()?)),
             _ => Err(invalid_schema_error_raw(
                 "Type: ".to_owned()
                     + type_name
@@ -460,6 +472,47 @@ impl TryFrom<&OwnedElement> for IslAnnotationsConstraint {
             annotation_modifiers.contains(&"closed"),
             annotation_modifiers.contains(&"ordered"),
             annotations,
+        ))
+    }
+}
+
+/// Represents the `valid_values` constraint
+/// [valid_Values]: https://amzn.github.io/ion-schema/docs/spec.html#annotations
+#[derive(Debug, Clone, PartialEq)]
+pub enum IslValidValuesConstraint {
+    Range(Range),
+    Values(Vec<OwnedElement>),
+}
+
+impl TryFrom<&OwnedElement> for IslValidValuesConstraint {
+    type Error = IonSchemaError;
+
+    fn try_from(value: &OwnedElement) -> IonSchemaResult<Self> {
+        if value.annotations().any(|a| a == &text_token("range")) {
+            return Ok(IslValidValuesConstraint::Range(Range::from_ion_element(
+                value,
+                RangeType::Number,
+            )?));
+        }
+        if let Some(values) = value.as_sequence() {
+            if value.ion_type() == IonType::List {
+                let values: IonSchemaResult<Vec<OwnedElement>> = values
+                    .iter()
+                    .map(|e| {
+                        if e.annotations().next().is_some() {
+                            return invalid_schema_error(
+                                "Annotations are not allowed for valid_values constraint",
+                            );
+                        }
+                        Ok(e.to_owned())
+                    })
+                    .collect();
+                return Ok(IslValidValuesConstraint::Values(values?));
+            }
+        }
+        invalid_schema_error(format!(
+            "Expected valid_values to be a range or a list of valid values, found {}",
+            value.ion_type()
         ))
     }
 }

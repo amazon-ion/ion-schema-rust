@@ -1,4 +1,4 @@
-use crate::isl::isl_constraint::IslConstraint;
+use crate::isl::isl_constraint::{IslConstraint, IslValidValuesConstraint};
 use crate::isl::isl_type_reference::IslTypeRef;
 use crate::isl::util::{Annotation, Range};
 use crate::result::{IonSchemaResult, ValidationResult};
@@ -42,6 +42,7 @@ pub enum Constraint {
     Scale(ScaleConstraint),
     TimestampPrecision(TimestampPrecisionConstraint),
     Type(TypeConstraint),
+    ValidValues(ValidValuesConstraint),
 }
 
 impl Constraint {
@@ -171,6 +172,16 @@ impl Constraint {
         Constraint::Fields(FieldsConstraint::new(fields.collect(), true))
     }
 
+    /// Creates a [Constraint::ValidValues] using the [OwnedElements] specified inside it
+    pub fn valid_values_with_values(values: Vec<OwnedElement>) -> Constraint {
+        Constraint::ValidValues(ValidValuesConstraint::Values(values))
+    }
+
+    /// Creates a [Constraint::ValidValues] using the [Range] specified inside it
+    pub fn valid_values_with_range(values: Range) -> Constraint {
+        Constraint::ValidValues(ValidValuesConstraint::Range(values))
+    }
+
     /// Parse an [IslConstraint] to a [Constraint]
     pub fn resolve_from_isl_constraint(
         isl_constraint: &IslConstraint,
@@ -284,6 +295,16 @@ impl Constraint {
                     TimestampPrecisionConstraint::new(timestamp_precision_range.to_owned()),
                 ))
             }
+            IslConstraint::ValidValues(valid_values) => {
+                Ok(Constraint::ValidValues(match valid_values {
+                    IslValidValuesConstraint::Range(range) => {
+                        ValidValuesConstraint::Range(range.to_owned())
+                    }
+                    IslValidValuesConstraint::Values(values) => {
+                        ValidValuesConstraint::Values(values.to_owned())
+                    }
+                }))
+            }
         }
     }
 
@@ -321,6 +342,7 @@ impl Constraint {
             Constraint::TimestampPrecision(timestamp_precision) => {
                 timestamp_precision.validate(value, type_store)
             }
+            Constraint::ValidValues(valid_values) => valid_values.validate(value, type_store),
         }
     }
 }
@@ -1498,5 +1520,63 @@ impl ConstraintValidator for TimestampPrecisionConstraint {
         }
 
         Ok(())
+    }
+}
+
+/// Implements Ion Schema's `valid_values` constraint
+/// [valid_values]: https://amzn.github.io/ion-schema/docs/spec.html#valid_values
+#[derive(Debug, Clone, PartialEq)]
+pub enum ValidValuesConstraint {
+    Range(Range),
+    Values(Vec<OwnedElement>),
+}
+
+impl ValidValuesConstraint {}
+
+impl ConstraintValidator for ValidValuesConstraint {
+    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
+        return match self {
+            ValidValuesConstraint::Range(range) => match value.ion_type() {
+                IonType::Integer | IonType::Float | IonType::Decimal | IonType::Timestamp => {
+                    if range.contains(value).unwrap() {
+                        Ok(())
+                    } else {
+                        Err(Violation::new(
+                            "valid_values",
+                            ViolationCode::InvalidValue,
+                            &format!(
+                                "expected valid_values to be from {:?} found {:?}",
+                                &self, value
+                            ),
+                        ))
+                    }
+                }
+                _ => Err(Violation::new(
+                    "valid_values",
+                    ViolationCode::TypeMismatched,
+                    &format!(
+                        "expected valid_values to be a range or list but found {:?}",
+                        value.ion_type()
+                    ),
+                )),
+            },
+            ValidValuesConstraint::Values(values) => {
+                // get value without annotations
+                let value = value.to_owned().with_annotations(vec![]);
+
+                if values.contains(&value) {
+                    Ok(())
+                } else {
+                    Err(Violation::new(
+                        "valid_values",
+                        ViolationCode::InvalidValue,
+                        &format!(
+                            "expected valid_values to be from {:?}, found {:?}",
+                            &self, value
+                        ),
+                    ))
+                }
+            }
+        };
     }
 }

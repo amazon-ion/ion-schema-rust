@@ -56,6 +56,7 @@ pub enum ViolationCode {
     InvalidLength, // this is ued for any length related constraints (e.g. container_length, byte_length, codepoint_length)
     InvalidNull,   // if the value is a null for type references that doesn't allow null
     InvalidOpenContent, // if a container contains open content when `content: closed` is specified
+    InvalidValue,  // this is used for valid_values constraint
     MissingAnnotation, // if the annotation is missing for annotations constraint
     MissingValue,  // if the ion value is missing for a particular constraint
     MoreThanOneTypeMatched,
@@ -79,6 +80,7 @@ impl fmt::Display for ViolationCode {
                 ViolationCode::InvalidLength => "invalid_length",
                 ViolationCode::InvalidNull => "invalid_null",
                 ViolationCode::InvalidOpenContent => "invalid_open_content",
+                ViolationCode::InvalidValue => "invalid_value",
                 ViolationCode::MissingAnnotation => "missing_annotation",
                 ViolationCode::MissingValue => "missing_value",
                 ViolationCode::MoreThanOneTypeMatched => "more_than_one_type_matched",

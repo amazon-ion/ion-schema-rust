@@ -54,6 +54,19 @@ const SKIP_LIST: &[&str] = &[
     "ion-schema-tests/constraints/scale/invalid.isl",
     "ion-schema-tests/constraints/timestamp_precision/validation.isl",
     "ion-schema-tests/constraints/timestamp_precision/invalid.isl",
+    "ion-schema-tests/constraints/valid_values/all_types.isl",
+    "ion-schema-tests/constraints/valid_values/invalid.isl",
+    "ion-schema-tests/constraints/valid_values/range_timestamp.isl",
+    "ion-schema-tests/constraints/valid_values/range_timestamp_exclusive.isl",
+    "ion-schema-tests/constraints/valid_values/range_timestamp_invalid.isl",
+    "ion-schema-tests/constraints/valid_values/range_timestamp_max.isl",
+    "ion-schema-tests/constraints/valid_values/range_timestamp_min.isl",
+    "ion-schema-tests/constraints/valid_values/validation_list.isl",
+    "ion-schema-tests/constraints/valid_values/validation_int_range.isl",
+    "ion-schema-tests/constraints/valid_values/validation_list_mix_types_ranges.isl",
+    "ion-schema-tests/constraints/valid_values/validation_list_timestamp_ranges.isl",
+    "ion-schema-tests/constraints/valid_values/validation_ranges.isl",
+    "ion-schema-tests/constraints/valid_values/validation_timestamp_range.isl",
 ];
 
 #[test_resources("ion-schema-tests/core_types/*.isl")]
@@ -72,6 +85,7 @@ const SKIP_LIST: &[&str] = &[
 #[test_resources("ion-schema-tests/constraints/precision/*.isl")]
 #[test_resources("ion-schema-tests/constraints/scale/*.isl")]
 #[test_resources("ion-schema-tests/constraints/timestamp_precision/*.isl")]
+#[test_resources("ion-schema-tests/constraints/valid_values/*.isl")]
 // `test_resources` breaks for test-case names containing `$` and it doesn't allow
 // to rename test-case names hence using `rstest` for `$*.isl` test files
 // For more information: https://github.com/frehberg/test-generator/issues/11
