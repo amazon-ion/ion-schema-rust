@@ -323,6 +323,16 @@ mod isl_tests {
         )
     }
 
+    // helper function to create a timestamp precision range
+    fn load_number_range(text: &str) -> IonSchemaResult<Range> {
+        Range::from_ion_element(
+            &element_reader()
+                .read_one(text.as_bytes())
+                .expect("parsing failed unexpectedly"),
+            RangeType::Number,
+        )
+    }
+
     // helper function to return OwnedElements for range `contains` tests
     fn elements<T: Into<OwnedElement> + std::clone::Clone>(values: &[T]) -> Vec<OwnedElement> {
         values.iter().cloned().map(|v| v.into()).collect()
@@ -377,13 +387,24 @@ mod isl_tests {
         ),
         case::range_with_timestamp_precision(
             load_timestamp_precision_range(
-            r#"
-                        range::[year, month]
-                    "#
+                r#"
+                    range::[year, month]
+                "#
             ),
             Range::range(
                 RangeBoundaryValue::timestamp_precision_value(TimestampPrecision::Year, RangeBoundaryType::Inclusive),
                 RangeBoundaryValue::timestamp_precision_value(TimestampPrecision::Month, RangeBoundaryType::Inclusive)
+            )
+        ),
+        case::range_with_number(
+            load_number_range(
+                r#"
+                    range::[1, 5.5]
+                "#
+            ),
+            Range::range(
+                RangeBoundaryValue::number_value((&IntegerValue::I64(1)).into(), RangeBoundaryType::Inclusive),
+                RangeBoundaryValue::number_value((&Decimal::new(55, -1)).try_into().unwrap(), RangeBoundaryType::Inclusive)
             )
         )
     )]
@@ -552,6 +573,15 @@ mod isl_tests {
                 Timestamp::with_ymd(2020, 1, 1).with_hour_and_minute(0, 1).build_at_offset(4 * 60).unwrap()]),
             elements(&[Timestamp::with_year(2020).build().unwrap(),
                 Timestamp::with_ymd(2020, 1, 1).with_hms(0, 1, 0).with_milliseconds(678).build_at_offset(4 * 60).unwrap()])
+        ),
+        case::number_range(
+            load_number_range(
+                r#"
+                    range::[-1, 5.5]
+                "#
+            ),
+            vec![0.into(), (-1).into(), 1.into(), Decimal::new(55, -1).into(), 5e0.into()],
+            vec![(-2).into() , Decimal::new(-15, -1).into(), Decimal::new(56, -1).into(), 5e1.into()]
         ),
     )]
     fn range_contains(
