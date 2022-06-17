@@ -349,6 +349,10 @@ impl PendingTypes {
 
     /// Adds parent information storing the name and possible TypeId of the parent
     pub(crate) fn add_parent(&mut self, name: String, type_store: &mut TypeStore) {
+        // Parent information is used when resolving a self referencing type
+        // while we resolve a type using the PendingTypes (a temporary type store used while we resolve a type definition)
+        // the type id for any type definition should be the PendingType's types_by_id length in  + TypeStore's types_by_id length
+        // This gives a correct type id when all the types within PendingTypes are shifted to TypeStore
         self.parent = Some((name, self.types_by_id.len() + type_store.types_by_id.len()))
     }
 
