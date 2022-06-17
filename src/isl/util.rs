@@ -917,9 +917,9 @@ impl TryFrom<&OwnedElement> for ValidValue {
                 RangeType::Number,
             )?))
         } else if annotations.any(|a| a != &text_token("range")) {
-            return invalid_schema_error(
+            invalid_schema_error(
                 "Annotations are not allowed for valid_values constraint except `range` annotation",
-            );
+            )
         } else {
             Ok(ValidValue::Element(value.to_owned()))
         }
