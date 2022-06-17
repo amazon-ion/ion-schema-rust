@@ -348,8 +348,8 @@ impl PendingTypes {
     }
 
     /// Adds parent information storing the name and possible TypeId of the parent
-    pub(crate) fn add_parent(&mut self, name: String) {
-        self.parent = Some((name, self.types_by_id.len()))
+    pub(crate) fn add_parent(&mut self, name: String, type_store: &mut TypeStore) {
+        self.parent = Some((name, self.types_by_id.len() + type_store.types_by_id.len()))
     }
 
     /// Provides parent information: (parent name, type id)

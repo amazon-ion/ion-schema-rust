@@ -241,7 +241,7 @@ impl TypeDefinitionImpl {
 
         // add parent information for named type
         if type_name.is_some() {
-            pending_types.add_parent(type_name.to_owned().unwrap());
+            pending_types.add_parent(type_name.to_owned().unwrap(), type_store);
         }
 
         // add this unresolved type to context for type_id
