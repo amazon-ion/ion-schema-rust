@@ -301,9 +301,9 @@ mod isl_tests {
         load_anonymous_type(r#" // For a schema with valid_values constraint as below:
                         { valid_values: [2, 3.5, 5e7, "hello", hi] }
                     "#),
-        IslType::anonymous([IslConstraint::valid_values_with_values(vec![2.into(), Decimal::new(35, -1).into(), 5e7.into(), "hello".to_owned().into(), text_token("hi").into()])])
+        IslType::anonymous([IslConstraint::valid_values_with_values(vec![2.into(), Decimal::new(35, -1).into(), 5e7.into(), "hello".to_owned().into(), text_token("hi").into()]).unwrap()])
     ),
-    case::valid_values_wiht_range_constraint(
+    case::valid_values_with_range_constraint(
         load_anonymous_type(r#" // For a schema with valid_values constraint as below:
                         { valid_values: range::[1, 5.5] }
                     "#),

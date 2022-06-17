@@ -893,3 +893,35 @@ impl PartialOrd for TimestampPrecision {
         Some(self_value.cmp(&other_value))
     }
 }
+
+/// Represents a valid value to be ued within `valid_values` constraint
+/// ValidValue could either be a range or OwnedElement
+/// Grammar: <VALID_VALUE> ::= <VALUE>
+///                | <RANGE<TIMESTAMP>>
+///                | <RANGE<NUMBER>>
+/// [valid_values]: https://amzn.github.io/ion-schema/docs/spec.html#valid_values
+#[derive(Debug, Clone, PartialEq)]
+pub enum ValidValue {
+    Range(Range),
+    Element(OwnedElement),
+}
+
+impl TryFrom<&OwnedElement> for ValidValue {
+    type Error = IonSchemaError;
+
+    fn try_from(value: &OwnedElement) -> Result<Self, Self::Error> {
+        let mut annotations = value.annotations();
+        if annotations.any(|a| a == &text_token("range")) {
+            Ok(ValidValue::Range(Range::from_ion_element(
+                value,
+                RangeType::Number,
+            )?))
+        } else if annotations.any(|a| a != &text_token("range")) {
+            return invalid_schema_error(
+                "Annotations are not allowed for valid_values constraint except `range` annotation",
+            );
+        } else {
+            Ok(ValidValue::Element(value.to_owned()))
+        }
+    }
+}

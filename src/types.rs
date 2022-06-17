@@ -510,8 +510,8 @@ mod type_definition_tests {
         /* For a schema with valid_values constraint as below:
             { valid_values: [2, 3.5, 5e7, "hello", hi] }        
         */
-        IslType::anonymous([IslConstraint::valid_values_with_values(vec![2.into(), Decimal::new(35, -1).into(), 5e7.into(), "hello".to_owned().into(), text_token("hi").into()])]),
-        TypeDefinition::anonymous([Constraint::valid_values_with_values(vec![2.into(), Decimal::new(35, -1).into(), 5e7.into(), "hello".to_owned().into(), text_token("hi").into()]), Constraint::type_constraint(25)])
+        IslType::anonymous([IslConstraint::valid_values_with_values(vec![2.into(), Decimal::new(35, -1).into(), 5e7.into(), "hello".to_owned().into(), text_token("hi").into()]).unwrap()]),
+        TypeDefinition::anonymous([Constraint::valid_values_with_values(vec![2.into(), Decimal::new(35, -1).into(), 5e7.into(), "hello".to_owned().into(), text_token("hi").into()]).unwrap(), Constraint::type_constraint(25)])
     ),
     case::valid_values_wiht_range_constraint(
         /* For a schema with valid_values constraint as below:

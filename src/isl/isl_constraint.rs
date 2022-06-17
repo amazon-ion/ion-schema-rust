@@ -1,6 +1,6 @@
 use crate::isl::isl_import::IslImportType;
 use crate::isl::isl_type_reference::IslTypeRef;
-use crate::isl::util::{Annotation, Range, RangeType};
+use crate::isl::util::{Annotation, Range, RangeType, ValidValue};
 use crate::result::{
     invalid_schema_error, invalid_schema_error_raw, IonSchemaError, IonSchemaResult,
 };
@@ -160,13 +160,19 @@ impl IslConstraint {
     }
 
     /// Creates a [IslConstraint::ValidValues] using the [OwnedElements] specified inside it
-    pub fn valid_values_with_values(values: Vec<OwnedElement>) -> IslConstraint {
-        IslConstraint::ValidValues(IslValidValuesConstraint::Values(values))
+    pub fn valid_values_with_values(values: Vec<OwnedElement>) -> IonSchemaResult<IslConstraint> {
+        let valid_values: IonSchemaResult<Vec<ValidValue>> =
+            values.iter().map(|e| e.try_into()).collect();
+        Ok(IslConstraint::ValidValues(IslValidValuesConstraint {
+            valid_values: valid_values?,
+        }))
     }
 
     /// Creates a [IslConstraint::ValidValues] using the [Range] specified inside it
     pub fn valid_values_with_range(values: Range) -> IslConstraint {
-        IslConstraint::ValidValues(IslValidValuesConstraint::Range(values))
+        IslConstraint::ValidValues(IslValidValuesConstraint {
+            valid_values: vec![ValidValue::Range(values)],
+        })
     }
 
     /// Parse constraints inside an [OwnedElement] to an [IslConstraint]
@@ -479,9 +485,30 @@ impl TryFrom<&OwnedElement> for IslAnnotationsConstraint {
 /// Represents the `valid_values` constraint
 /// [valid_Values]: https://amzn.github.io/ion-schema/docs/spec.html#annotations
 #[derive(Debug, Clone, PartialEq)]
-pub enum IslValidValuesConstraint {
-    Range(Range),
-    Values(Vec<OwnedElement>),
+pub struct IslValidValuesConstraint {
+    valid_values: Vec<ValidValue>,
+}
+
+impl IslValidValuesConstraint {
+    /// Provides a way to programmatically construct valid_values constraint
+    /// Returns IonSchemaError whenever annotations are provided within ValidValue::Element
+    /// only `range` annotations are accepted for ValidValue::Element
+    pub fn new(valid_values: Vec<ValidValue>) -> IonSchemaResult<Self> {
+        let valid_values: IonSchemaResult<Vec<ValidValue>> = valid_values
+            .iter()
+            .map(|v| match v {
+                ValidValue::Range(r) => Ok(v.to_owned()),
+                ValidValue::Element(e) => e.try_into(),
+            })
+            .collect();
+        Ok(Self {
+            valid_values: valid_values?,
+        })
+    }
+
+    pub fn values(&self) -> &Vec<ValidValue> {
+        &self.valid_values
+    }
 }
 
 impl TryFrom<&OwnedElement> for IslValidValuesConstraint {
@@ -489,25 +516,22 @@ impl TryFrom<&OwnedElement> for IslValidValuesConstraint {
 
     fn try_from(value: &OwnedElement) -> IonSchemaResult<Self> {
         if value.annotations().any(|a| a == &text_token("range")) {
-            return Ok(IslValidValuesConstraint::Range(Range::from_ion_element(
-                value,
-                RangeType::Number,
-            )?));
+            return Ok(IslValidValuesConstraint::new(vec![ValidValue::Range(
+                Range::from_ion_element(value, RangeType::Number)?,
+            )])?);
         }
         if let Some(values) = value.as_sequence() {
             if value.ion_type() == IonType::List {
-                let values: IonSchemaResult<Vec<OwnedElement>> = values
+                let mut valid_values = vec![];
+                let values: IonSchemaResult<Vec<()>> = values
                     .iter()
                     .map(|e| {
-                        if e.annotations().next().is_some() {
-                            return invalid_schema_error(
-                                "Annotations are not allowed for valid_values constraint",
-                            );
-                        }
-                        Ok(e.to_owned())
+                        valid_values.push(e.try_into()?);
+                        Ok(())
                     })
                     .collect();
-                return Ok(IslValidValuesConstraint::Values(values?));
+                values?;
+                return Ok(IslValidValuesConstraint { valid_values });
             }
         }
         invalid_schema_error(format!(

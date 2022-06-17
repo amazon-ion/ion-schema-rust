@@ -1,6 +1,6 @@
-use crate::isl::isl_constraint::{IslConstraint, IslValidValuesConstraint};
+use crate::isl::isl_constraint::IslConstraint;
 use crate::isl::isl_type_reference::IslTypeRef;
-use crate::isl::util::{Annotation, Range};
+use crate::isl::util::{Annotation, Range, ValidValue};
 use crate::result::{IonSchemaResult, ValidationResult};
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::types::{TypeDefinition, TypeValidator};
@@ -9,6 +9,7 @@ use ion_rs::value::owned::OwnedElement;
 use ion_rs::value::{Element, Sequence, Struct, SymbolToken};
 use ion_rs::IonType;
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::iter::Peekable;
 
 /// Provides validation for schema Constraint
@@ -173,13 +174,20 @@ impl Constraint {
     }
 
     /// Creates a [Constraint::ValidValues] using the [OwnedElements] specified inside it
-    pub fn valid_values_with_values(values: Vec<OwnedElement>) -> Constraint {
-        Constraint::ValidValues(ValidValuesConstraint::Values(values))
+    /// Returns an IonSchemaError if the OwnedElement contains annotation except `range` annotation
+    pub fn valid_values_with_values(values: Vec<OwnedElement>) -> IonSchemaResult<Constraint> {
+        let valid_values: IonSchemaResult<Vec<ValidValue>> =
+            values.iter().map(|e| e.try_into()).collect();
+        Ok(Constraint::ValidValues(ValidValuesConstraint {
+            valid_values: valid_values?,
+        }))
     }
 
     /// Creates a [Constraint::ValidValues] using the [Range] specified inside it
-    pub fn valid_values_with_range(values: Range) -> Constraint {
-        Constraint::ValidValues(ValidValuesConstraint::Range(values))
+    pub fn valid_values_with_range(value: Range) -> Constraint {
+        Constraint::ValidValues(ValidValuesConstraint {
+            valid_values: vec![ValidValue::Range(value)],
+        })
     }
 
     /// Parse an [IslConstraint] to a [Constraint]
@@ -296,13 +304,8 @@ impl Constraint {
                 ))
             }
             IslConstraint::ValidValues(valid_values) => {
-                Ok(Constraint::ValidValues(match valid_values {
-                    IslValidValuesConstraint::Range(range) => {
-                        ValidValuesConstraint::Range(range.to_owned())
-                    }
-                    IslValidValuesConstraint::Values(values) => {
-                        ValidValuesConstraint::Values(values.to_owned())
-                    }
+                Ok(Constraint::ValidValues(ValidValuesConstraint {
+                    valid_values: valid_values.values().to_owned(),
                 }))
             }
         }
@@ -1526,57 +1529,57 @@ impl ConstraintValidator for TimestampPrecisionConstraint {
 /// Implements Ion Schema's `valid_values` constraint
 /// [valid_values]: https://amzn.github.io/ion-schema/docs/spec.html#valid_values
 #[derive(Debug, Clone, PartialEq)]
-pub enum ValidValuesConstraint {
-    Range(Range),
-    Values(Vec<OwnedElement>),
+pub struct ValidValuesConstraint {
+    valid_values: Vec<ValidValue>,
 }
 
-impl ValidValuesConstraint {}
+impl ValidValuesConstraint {
+    /// Provides a way to programmatically construct valid_values constraint
+    /// Returns IonSchemaError whenever annotations are provided within ValidValue::Element
+    /// only `range` annotations are accepted for ValidValue::Element
+    pub fn new(valid_values: Vec<ValidValue>) -> IonSchemaResult<Self> {
+        let valid_values: IonSchemaResult<Vec<ValidValue>> = valid_values
+            .iter()
+            .map(|v| match v {
+                ValidValue::Range(r) => Ok(v.to_owned()),
+                ValidValue::Element(e) => e.try_into(),
+            })
+            .collect();
+        Ok(Self {
+            valid_values: valid_values?,
+        })
+    }
+}
 
 impl ConstraintValidator for ValidValuesConstraint {
     fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
-        return match self {
-            ValidValuesConstraint::Range(range) => match value.ion_type() {
-                IonType::Integer | IonType::Float | IonType::Decimal | IonType::Timestamp => {
-                    if range.contains(value).unwrap() {
-                        Ok(())
-                    } else {
-                        Err(Violation::new(
-                            "valid_values",
-                            ViolationCode::InvalidValue,
-                            &format!(
-                                "expected valid_values to be from {:?} found {:?}",
-                                &self, value
-                            ),
-                        ))
+        for valid_value in &self.valid_values {
+            match valid_value {
+                ValidValue::Range(range) => match value.ion_type() {
+                    IonType::Integer | IonType::Float | IonType::Decimal | IonType::Timestamp => {
+                        if range.contains(value).unwrap() {
+                            return Ok(());
+                        }
+                    }
+                    _ => {}
+                },
+                ValidValue::Element(element) => {
+                    // get value without annotations
+                    let value = value.to_owned().with_annotations(vec![]);
+
+                    if element == &value {
+                        return Ok(());
                     }
                 }
-                _ => Err(Violation::new(
-                    "valid_values",
-                    ViolationCode::TypeMismatched,
-                    &format!(
-                        "expected valid_values to be a range or list but found {:?}",
-                        value.ion_type()
-                    ),
-                )),
-            },
-            ValidValuesConstraint::Values(values) => {
-                // get value without annotations
-                let value = value.to_owned().with_annotations(vec![]);
-
-                if values.contains(&value) {
-                    Ok(())
-                } else {
-                    Err(Violation::new(
-                        "valid_values",
-                        ViolationCode::InvalidValue,
-                        &format!(
-                            "expected valid_values to be from {:?}, found {:?}",
-                            &self, value
-                        ),
-                    ))
-                }
-            }
-        };
+            };
+        }
+        Err(Violation::new(
+            "valid_values",
+            ViolationCode::InvalidValue,
+            &format!(
+                "expected valid_values to be from {:?}, found {:?}",
+                &self, value
+            ),
+        ))
     }
 }
