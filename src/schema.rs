@@ -250,6 +250,12 @@ mod schema_tests {
                     type:: { name: scale_type, scale: 2 }
                  "#).into_iter(),
         1 // this includes named type scale_type
+    ),
+    case::timestamp_precision_constraint(
+        load(r#" // For a schema with timestamp_precision constraint as below:
+                    type:: { name: timestamp_precision_type, timestamp_precision: month }
+                 "#).into_iter(),
+        1 // this includes named type timestamp_precision_type
     )
     )]
     fn owned_elements_to_schema<I: Iterator<Item = OwnedElement>>(
@@ -669,6 +675,25 @@ mod schema_tests {
                                 type::{ name: scale_type, scale: range::[min, 4] }
                         "#),
             "scale_type"
+        ),
+        case::timestamp_precision_constraint(
+            load(r#"
+                          2000-01T
+                          2000-01-01T
+                          2000-01-01T00:00Z
+                          2000-01-01T00:00:00Z
+                        "#),
+            load(r#"
+                          2000T
+                          2000-01-01T00:00:00.0Z
+                          null
+                          null.timestamp
+                          null.symbol
+                        "#),
+            load_schema_from_text(r#" // For a schema with timestamp precision constraint as below:
+                                type::{ name: timestamp_precision_type, timestamp_precision: range::[month, second] }
+                        "#),
+            "timestamp_precision_type"
         ),
     )]
     fn type_validation(
