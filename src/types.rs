@@ -241,7 +241,7 @@ impl TypeDefinitionImpl {
 
         // add parent information for named type
         if type_name.is_some() {
-            pending_types.add_parent(type_name.to_owned().unwrap());
+            pending_types.add_parent(type_name.to_owned().unwrap(), type_store);
         }
 
         // add this unresolved type to context for type_id
@@ -378,7 +378,7 @@ mod type_definition_tests {
             { name: my_int, type: my_int }
          */
         IslType::named("my_int", [IslConstraint::type_constraint(IslTypeRef::named("my_int"))]),
-        TypeDefinition::named("my_int", [Constraint::type_constraint(0)])
+        TypeDefinition::named("my_int", [Constraint::type_constraint(33)])
     ),
     case::type_constraint_with_nested_self_reference_type(
         /* For a schema with nested self reference type as below:
