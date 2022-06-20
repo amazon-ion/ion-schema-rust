@@ -517,7 +517,7 @@ impl TryFrom<&OwnedElement> for IslValidValuesConstraint {
     fn try_from(value: &OwnedElement) -> IonSchemaResult<Self> {
         if value.annotations().any(|a| a == &text_token("range")) {
             return IslValidValuesConstraint::new(vec![ValidValue::Range(
-                Range::from_ion_element(value, RangeType::Number)?,
+                Range::from_ion_element(value, RangeType::NumberOrTimestamp)?,
             )]);
         }
         if let Some(values) = value.as_sequence() {

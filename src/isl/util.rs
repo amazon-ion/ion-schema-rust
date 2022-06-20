@@ -350,7 +350,7 @@ impl Range {
                     value.ion_type()
                 )),
                 RangeType::Any => Ok(integer_value.into()),
-                RangeType::Number => {
+                RangeType::NumberOrTimestamp => {
                     Range::number_range(integer_value.into(), integer_value.into())
                 }
             }
@@ -736,35 +736,51 @@ impl RangeBoundaryValue {
                 RangeType::TimestampPrecision => invalid_schema_error(
                     "Timestamp precision ranges can not be constructed for integer boundary values",
                 ),
-                RangeType::Number => Ok(RangeBoundaryValue::number_value(
+                RangeType::NumberOrTimestamp => Ok(RangeBoundaryValue::number_value(
                     value.as_integer().unwrap().into(),
                     range_boundary_type,
                 )),
             },
             IonType::Decimal => match range_type {
-                RangeType::Number => Ok(RangeBoundaryValue::number_value(
+                RangeType::NumberOrTimestamp => Ok(RangeBoundaryValue::number_value(
                     value.as_decimal().unwrap().try_into()?,
                     range_boundary_type,
                 )),
-                _ => Ok(RangeBoundaryValue::decimal_value(
+                RangeType::Any => Ok(RangeBoundaryValue::decimal_value(
                     value.as_decimal().unwrap().to_owned(),
                     range_boundary_type,
                 )),
+                _ => invalid_schema_error(format!(
+                    "{:?} ranges can not be constructed for decimal boundary values",
+                    range_type
+                )),
             },
             IonType::Float => match range_type {
-                RangeType::Number => Ok(RangeBoundaryValue::number_value(
+                RangeType::NumberOrTimestamp => Ok(RangeBoundaryValue::number_value(
                     value.as_f64().unwrap().try_into()?,
                     range_boundary_type,
                 )),
-                _ => Ok(RangeBoundaryValue::float_value(
+                RangeType::Any => Ok(RangeBoundaryValue::float_value(
                     value.as_f64().unwrap(),
                     range_boundary_type,
                 )),
+                _ => invalid_schema_error(format!(
+                    "{:?} ranges can not be constructed for float boundary values",
+                    range_type
+                )),
             },
-            IonType::Timestamp => Ok(RangeBoundaryValue::timestamp_value(
-                value.as_timestamp().unwrap().to_owned(),
-                range_boundary_type,
-            )),
+            IonType::Timestamp => match range_type {
+                RangeType::NumberOrTimestamp | RangeType::Any => {
+                    Ok(RangeBoundaryValue::timestamp_value(
+                        value.as_timestamp().unwrap().to_owned(),
+                        range_boundary_type,
+                    ))
+                }
+                _ => invalid_schema_error(format!(
+                    "{:?} ranges can not be constructed for timestamp boundary values",
+                    range_type
+                )),
+            },
             _ => invalid_schema_error("Unsupported range type specified"),
         }
     }
@@ -785,7 +801,7 @@ pub enum RangeType {
     Precision, // used by precision constraint to specify non negative integer precision with minimum value as `1`
     NonNegativeInteger, // used by byte_length, container_length and codepoint_length to specify non negative integer range
     TimestampPrecision, // used by timestamp_precision to specify timestamp precision range
-    Number,             // used by valid_values constraint
+    NumberOrTimestamp,  // used by valid_values constraint
     Any,                // used for any range types (e.g. Integer, Float, Timestamp, Decimal)
 }
 
@@ -914,7 +930,7 @@ impl TryFrom<&OwnedElement> for ValidValue {
         if annotations.any(|a| a == &text_token("range")) {
             Ok(ValidValue::Range(Range::from_ion_element(
                 value,
-                RangeType::Number,
+                RangeType::NumberOrTimestamp,
             )?))
         } else if annotations.any(|a| a != &text_token("range")) {
             invalid_schema_error(
