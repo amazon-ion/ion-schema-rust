@@ -610,6 +610,46 @@ mod schema_tests {
                         "#),
                 "element_type"
         ),
+        case::element_with_self_ref_type_constraint(
+                load(r#"
+                          5
+                          "hello"
+                          [1, 5]
+                          ["hi", "hello"]
+                        "#),
+                load(r#"
+                          5.5
+                          null
+                          null.list
+                          null.int
+                          null.string
+                          (1 2 3)
+                        "#),
+                load_schema_from_text(r#" // For a schema with element constraint with self referencing typeas below:
+                                type::{ name: my_type, one_of: [ int, string, { type: list, element: my_type } ]  }
+                        "#),
+                "my_type"
+        ),
+        case::fields_with_self_ref_type_constraint(
+                load(r#"
+                          5
+                          "hello"
+                          { foo: "hi" }
+                          { foo: 5 }
+                          { foo: { foo: 5 } }
+                        "#),
+                load(r#"
+                          5.5
+                          null
+                          null.struct
+                          { foo: bar } 
+                          { foo: 5.5 }
+                        "#),
+                load_schema_from_text(r#" // For a schema with fields constraint with self referencing typeas below:
+                                type::{ name: my_type, one_of: [ int, string, { type: struct, fields: { foo: my_type} } ]  }
+                        "#),
+                "my_type"
+        ),
         case::annotations_constraint(
                 load(r#"
                           b::d::5
