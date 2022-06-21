@@ -297,6 +297,24 @@ mod isl_tests {
                         "#),
         IslType::anonymous([IslConstraint::timestamp_precision("year".try_into().unwrap())])
     ),
+    case::valid_values_constraint(
+        load_anonymous_type(r#" // For a schema with valid_values constraint as below:
+                        { valid_values: [2, 3.5, 5e7, "hello", hi] }
+                    "#),
+        IslType::anonymous([IslConstraint::valid_values_with_values(vec![2.into(), Decimal::new(35, -1).into(), 5e7.into(), "hello".to_owned().into(), text_token("hi").into()]).unwrap()])
+    ),
+    case::valid_values_with_range_constraint(
+        load_anonymous_type(r#" // For a schema with valid_values constraint as below:
+                        { valid_values: range::[1, 5.5] }
+                    "#),
+        IslType::anonymous(
+            [IslConstraint::valid_values_with_range(
+                Range::range(
+                    RangeBoundaryValue::number_value((&IntegerValue::I64(1)).into(), RangeBoundaryType::Inclusive),
+                    RangeBoundaryValue::number_value((&Decimal::new(55, -1)).try_into().unwrap(), RangeBoundaryType::Inclusive)
+                ).unwrap())
+            ])
+        ),
     )]
     fn owned_struct_to_isl_type(isl_type1: IslType, isl_type2: IslType) {
         // assert if both the IslType are same in terms of constraints and name
@@ -320,6 +338,16 @@ mod isl_tests {
                 .read_one(text.as_bytes())
                 .expect("parsing failed unexpectedly"),
             RangeType::TimestampPrecision,
+        )
+    }
+
+    // helper function to create a timestamp precision range
+    fn load_number_range(text: &str) -> IonSchemaResult<Range> {
+        Range::from_ion_element(
+            &element_reader()
+                .read_one(text.as_bytes())
+                .expect("parsing failed unexpectedly"),
+            RangeType::NumberOrTimestamp,
         )
     }
 
@@ -377,13 +405,24 @@ mod isl_tests {
         ),
         case::range_with_timestamp_precision(
             load_timestamp_precision_range(
-            r#"
-                        range::[year, month]
-                    "#
+                r#"
+                    range::[year, month]
+                "#
             ),
             Range::range(
                 RangeBoundaryValue::timestamp_precision_value(TimestampPrecision::Year, RangeBoundaryType::Inclusive),
                 RangeBoundaryValue::timestamp_precision_value(TimestampPrecision::Month, RangeBoundaryType::Inclusive)
+            )
+        ),
+        case::range_with_number(
+            load_number_range(
+                r#"
+                    range::[1, 5.5]
+                "#
+            ),
+            Range::range(
+                RangeBoundaryValue::number_value((&IntegerValue::I64(1)).into(), RangeBoundaryType::Inclusive),
+                RangeBoundaryValue::number_value((&Decimal::new(55, -1)).try_into().unwrap(), RangeBoundaryType::Inclusive)
             )
         )
     )]
@@ -552,6 +591,15 @@ mod isl_tests {
                 Timestamp::with_ymd(2020, 1, 1).with_hour_and_minute(0, 1).build_at_offset(4 * 60).unwrap()]),
             elements(&[Timestamp::with_year(2020).build().unwrap(),
                 Timestamp::with_ymd(2020, 1, 1).with_hms(0, 1, 0).with_milliseconds(678).build_at_offset(4 * 60).unwrap()])
+        ),
+        case::number_range(
+            load_number_range(
+                r#"
+                    range::[-1, 5.5]
+                "#
+            ),
+            vec![0.into(), (-1).into(), 1.into(), Decimal::new(55, -1).into(), 5e0.into()],
+            vec![(-2).into() , Decimal::new(-15, -1).into(), Decimal::new(56, -1).into(), 5e1.into()]
         ),
     )]
     fn range_contains(

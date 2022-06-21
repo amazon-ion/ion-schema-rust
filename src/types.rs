@@ -350,7 +350,9 @@ mod type_definition_tests {
     use crate::isl::isl_constraint::IslConstraint;
     use crate::isl::isl_type::IslType;
     use crate::isl::isl_type_reference::IslTypeRef;
+    use crate::isl::util::{RangeBoundaryType, RangeBoundaryValue};
     use crate::system::PendingTypes;
+    use ion_rs::Decimal;
     use ion_rs::Integer;
     use rstest::*;
 
@@ -504,6 +506,34 @@ mod type_definition_tests {
         IslType::anonymous([IslConstraint::timestamp_precision("month".try_into().unwrap())]),
         TypeDefinition::anonymous([Constraint::timestamp_precision("month".try_into().unwrap()), Constraint::type_constraint(25)])
     ),
+    case::valid_values_constraint(
+        /* For a schema with valid_values constraint as below:
+            { valid_values: [2, 3.5, 5e7, "hello", hi] }        
+        */
+        IslType::anonymous([IslConstraint::valid_values_with_values(vec![2.into(), Decimal::new(35, -1).into(), 5e7.into(), "hello".to_owned().into(), text_token("hi").into()]).unwrap()]),
+        TypeDefinition::anonymous([Constraint::valid_values_with_values(vec![2.into(), Decimal::new(35, -1).into(), 5e7.into(), "hello".to_owned().into(), text_token("hi").into()]).unwrap(), Constraint::type_constraint(25)])
+    ),
+    case::valid_values_wiht_range_constraint(
+        /* For a schema with valid_values constraint as below:
+            { valid_values: range::[1, 5.5] }        
+        */
+        IslType::anonymous(
+            [IslConstraint::valid_values_with_range(
+                Range::range(
+                    RangeBoundaryValue::number_value((&Integer::I64(1)).into(), RangeBoundaryType::Inclusive),
+                    RangeBoundaryValue::number_value((&Decimal::new(55, -1)).try_into().unwrap(), RangeBoundaryType::Inclusive)
+                ).unwrap())
+            ]
+        ),
+        TypeDefinition::anonymous([
+            Constraint::valid_values_with_range(
+                Range::range(
+                    RangeBoundaryValue::number_value((&Integer::I64(1)).into(), RangeBoundaryType::Inclusive),
+                    RangeBoundaryValue::number_value((&Decimal::new(55, -1)).try_into().unwrap(), RangeBoundaryType::Inclusive)
+            ).unwrap()),
+            Constraint::type_constraint(25)
+        ])
+    )
     )]
     fn isl_type_to_type_definition(isl_type: IslType, type_def: TypeDefinition) {
         // assert if both the TypeDefinition are same in terms of constraints and name

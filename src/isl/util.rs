@@ -1,7 +1,10 @@
+use crate::external::ion_rs::Integer;
+use crate::isl::util::Number as NumberValue;
 use crate::isl::util::TimestampPrecision as TimestampPrecisionValue;
 use crate::result::{
     invalid_schema_error, invalid_schema_error_raw, IonSchemaError, IonSchemaResult,
 };
+use ion_rs::external::bigdecimal::BigDecimal;
 use ion_rs::types::decimal::Decimal;
 use ion_rs::types::integer::IntAccess;
 use ion_rs::types::timestamp::{Precision, Timestamp};
@@ -11,6 +14,7 @@ use ion_rs::{Integer as IntegerValue, IonType};
 use num_bigint::BigInt;
 use std::cmp::Ordering;
 use std::convert::{TryFrom, TryInto};
+use std::str::FromStr;
 
 /// Represents ISL [Range]s where some constraints can be defined by a range
 /// <RANGE<RANGE_TYPE>> ::= range::[ <EXCLUSIVITY><RANGE_TYPE>, <EXCLUSIVITY><RANGE_TYPE> ]
@@ -25,6 +29,7 @@ use std::convert::{TryFrom, TryInto};
 /// For more information on [Range]: <https://amzn.github.io/ion-schema/docs/spec.html#constraints>
 #[derive(Debug, Clone, PartialEq)]
 pub enum Range {
+    Number(RangeBoundaryValue, RangeBoundaryValue),
     Decimal(RangeBoundaryValue, RangeBoundaryValue),
     Float(RangeBoundaryValue, RangeBoundaryValue),
     Integer(RangeBoundaryValue, RangeBoundaryValue),
@@ -226,6 +231,47 @@ impl Range {
                 };
                 Ok(is_in_upper_bound && is_in_lower_bound)
             }
+            Range::Number(start, end) => {
+                let value: NumberValue = match value.ion_type() {
+                    IonType::Integer => value.as_integer().unwrap().into(),
+                    IonType::Float => value.as_f64().unwrap().try_into()?,
+                    IonType::Decimal => value.as_decimal().unwrap().try_into()?,
+                    _ => {
+                        return invalid_schema_error(
+                            "Number ranges can only have number value for validation",
+                        );
+                    }
+                };
+
+                let is_in_lower_bound = match start {
+                    Min => true,
+                    Value(start_value, boundary_type) => match start_value {
+                        Number(min_value) => {
+                            match boundary_type {
+                            RangeBoundaryType::Inclusive => min_value.big_decimal_value() <= value.big_decimal_value(),
+                            RangeBoundaryType::Exclusive => min_value.big_decimal_value() < value.big_decimal_value(),
+                        }
+                        },
+                        _ => unreachable!("Number range can only have numbers as lower and upper range boundary value"),
+                    },
+                    Max => unreachable!("Cannot have 'Max' as the lower range boundary")
+                };
+
+                let is_in_upper_bound = match end {
+                    Max => true,
+                    Min => unreachable!("Cannot have 'Min' as the upper range boundary"),
+                    Value(end_value, boundary_type) => match end_value {
+                        Number(max_value) => {
+                                match boundary_type {
+                                    RangeBoundaryType::Inclusive => max_value.big_decimal_value() >= value.big_decimal_value(),
+                                    RangeBoundaryType::Exclusive => max_value.big_decimal_value() > value.big_decimal_value(),
+                                }
+                            }
+                        _ => unreachable!("Number range can only have numbers as lower and upper range boundary value"),
+                    }
+                };
+                Ok(is_in_upper_bound && is_in_lower_bound)
+            }
         }
     }
 
@@ -255,6 +301,7 @@ impl Range {
                     (Float(_), Float(_)) => {}
                     (Timestamp(_), Timestamp(_)) => {},
                     (TimestampPrecision(_), TimestampPrecision(_)) => {},
+                    (Number(_), Number(_))=> {},
                     _ => {
                         return invalid_schema_error("Both range boundary values must be of same type")
                     }
@@ -281,6 +328,7 @@ impl Range {
             Timestamp(_) => Range::Timestamp(start, end),
             IntegerNonNegative(_) => Range::IntegerNonNegative(start, end),
             TimestampPrecision(_) => Range::TimestampPrecision(start, end),
+            Number(_) => Range::Number(start, end),
         })
     }
 
@@ -302,6 +350,9 @@ impl Range {
                     value.ion_type()
                 )),
                 RangeType::Any => Ok(integer_value.into()),
+                RangeType::NumberOrTimestamp => {
+                    Range::number_range(integer_value.into(), integer_value.into())
+                }
             }
         } else if let Some(timestamp_precision) = value.as_str() {
             if range_type == RangeType::TimestampPrecision {
@@ -394,6 +445,14 @@ impl Range {
                 }
             },
         }
+    }
+
+    /// Provides number range with given min and max values
+    pub fn number_range(min_value: Number, max_value: Number) -> IonSchemaResult<Range> {
+        Range::range(
+            RangeBoundaryValue::number_value(min_value, RangeBoundaryType::Inclusive),
+            RangeBoundaryValue::number_value(max_value, RangeBoundaryType::Inclusive),
+        )
     }
 
     /// Provides integer range with given min and max values
@@ -493,8 +552,66 @@ pub enum RangeBoundaryValueType {
     Float(f64),
     Integer(IntegerValue),
     IntegerNonNegative(usize),
+    Number(Number),
     Timestamp(Timestamp),
     TimestampPrecision(TimestampPrecision),
+}
+
+/// Represents number boundary values
+/// A number can be float, integer or decimal
+#[derive(Debug, Clone, PartialEq)]
+pub struct Number {
+    big_decimal_value: BigDecimal,
+}
+
+impl Number {
+    pub fn new(big_decimal_value: BigDecimal) -> Self {
+        Self { big_decimal_value }
+    }
+
+    pub fn big_decimal_value(&self) -> &BigDecimal {
+        &self.big_decimal_value
+    }
+}
+
+impl TryFrom<f64> for Number {
+    type Error = IonSchemaError;
+
+    fn try_from(value: f64) -> Result<Self, Self::Error> {
+        // Note: could not use BigDecimal's `try_from` method here as that uses `DIGITS` instead of `MANTISSA_DIGITS`.
+        // `DIGITS` gives an approximate number of significant digits, which failed a test from ion-schema-tests test suite
+        Ok(Number {
+            big_decimal_value: BigDecimal::from_str(&format!(
+                "{:.PRECISION$e}",
+                value,
+                PRECISION = f64::MANTISSA_DIGITS as usize
+            ))
+            .map_err(|err| {
+                invalid_schema_error_raw(format!("Cannot convert f64 to BigDecimal for {}", value))
+            })?,
+        })
+    }
+}
+
+impl TryFrom<&Decimal> for Number {
+    type Error = IonSchemaError;
+
+    fn try_from(value: &Decimal) -> Result<Self, Self::Error> {
+        Ok(Number {
+            big_decimal_value: value.to_owned().try_into()?,
+        })
+    }
+}
+
+impl From<&IntegerValue> for Number {
+    fn from(value: &IntegerValue) -> Self {
+        Number {
+            big_decimal_value: match value {
+                Integer::I64(int_val) => int_val.to_owned().into(),
+                Integer::BigInt(big_int_val) => big_int_val.to_owned().into(),
+            },
+        }
+    }
 }
 
 /// Represents a range boundary value (i.e. min, max or a value in terms of [RangeBoundaryValueType])
@@ -506,6 +623,10 @@ pub enum RangeBoundaryValue {
 }
 
 impl RangeBoundaryValue {
+    pub fn number_value(value: Number, range_boundary_type: RangeBoundaryType) -> Self {
+        RangeBoundaryValue::Value(RangeBoundaryValueType::Number(value), range_boundary_type)
+    }
+
     pub fn int_value(value: IntegerValue, range_boundary_type: RangeBoundaryType) -> Self {
         RangeBoundaryValue::Value(RangeBoundaryValueType::Integer(value), range_boundary_type)
     }
@@ -615,19 +736,51 @@ impl RangeBoundaryValue {
                 RangeType::TimestampPrecision => invalid_schema_error(
                     "Timestamp precision ranges can not be constructed for integer boundary values",
                 ),
+                RangeType::NumberOrTimestamp => Ok(RangeBoundaryValue::number_value(
+                    value.as_integer().unwrap().into(),
+                    range_boundary_type,
+                )),
             },
-            IonType::Decimal => Ok(RangeBoundaryValue::decimal_value(
-                value.as_decimal().unwrap().to_owned(),
-                range_boundary_type,
-            )),
-            IonType::Float => Ok(RangeBoundaryValue::float_value(
-                value.as_f64().unwrap(),
-                range_boundary_type,
-            )),
-            IonType::Timestamp => Ok(RangeBoundaryValue::timestamp_value(
-                value.as_timestamp().unwrap().to_owned(),
-                range_boundary_type,
-            )),
+            IonType::Decimal => match range_type {
+                RangeType::NumberOrTimestamp => Ok(RangeBoundaryValue::number_value(
+                    value.as_decimal().unwrap().try_into()?,
+                    range_boundary_type,
+                )),
+                RangeType::Any => Ok(RangeBoundaryValue::decimal_value(
+                    value.as_decimal().unwrap().to_owned(),
+                    range_boundary_type,
+                )),
+                _ => invalid_schema_error(format!(
+                    "{:?} ranges can not be constructed for decimal boundary values",
+                    range_type
+                )),
+            },
+            IonType::Float => match range_type {
+                RangeType::NumberOrTimestamp => Ok(RangeBoundaryValue::number_value(
+                    value.as_f64().unwrap().try_into()?,
+                    range_boundary_type,
+                )),
+                RangeType::Any => Ok(RangeBoundaryValue::float_value(
+                    value.as_f64().unwrap(),
+                    range_boundary_type,
+                )),
+                _ => invalid_schema_error(format!(
+                    "{:?} ranges can not be constructed for float boundary values",
+                    range_type
+                )),
+            },
+            IonType::Timestamp => match range_type {
+                RangeType::NumberOrTimestamp | RangeType::Any => {
+                    Ok(RangeBoundaryValue::timestamp_value(
+                        value.as_timestamp().unwrap().to_owned(),
+                        range_boundary_type,
+                    ))
+                }
+                _ => invalid_schema_error(format!(
+                    "{:?} ranges can not be constructed for timestamp boundary values",
+                    range_type
+                )),
+            },
             _ => invalid_schema_error("Unsupported range type specified"),
         }
     }
@@ -647,7 +800,8 @@ pub enum RangeBoundaryType {
 pub enum RangeType {
     Precision, // used by precision constraint to specify non negative integer precision with minimum value as `1`
     NonNegativeInteger, // used by byte_length, container_length and codepoint_length to specify non negative integer range
-    TimestampPrecision, //used by timestamp_precision to specify timestamp precision range
+    TimestampPrecision, // used by timestamp_precision to specify timestamp precision range
+    NumberOrTimestamp,  // used by valid_values constraint
     Any,                // used for any range types (e.g. Integer, Float, Timestamp, Decimal)
 }
 
@@ -753,5 +907,37 @@ impl PartialOrd for TimestampPrecision {
         };
 
         Some(self_value.cmp(&other_value))
+    }
+}
+
+/// Represents a valid value to be ued within `valid_values` constraint
+/// ValidValue could either be a range or OwnedElement
+/// Grammar: <VALID_VALUE> ::= <VALUE>
+///                | <RANGE<TIMESTAMP>>
+///                | <RANGE<NUMBER>>
+/// [valid_values]: https://amzn.github.io/ion-schema/docs/spec.html#valid_values
+#[derive(Debug, Clone, PartialEq)]
+pub enum ValidValue {
+    Range(Range),
+    Element(OwnedElement),
+}
+
+impl TryFrom<&OwnedElement> for ValidValue {
+    type Error = IonSchemaError;
+
+    fn try_from(value: &OwnedElement) -> Result<Self, Self::Error> {
+        let mut annotations = value.annotations();
+        if annotations.any(|a| a == &text_token("range")) {
+            Ok(ValidValue::Range(Range::from_ion_element(
+                value,
+                RangeType::NumberOrTimestamp,
+            )?))
+        } else if annotations.any(|a| a != &text_token("range")) {
+            invalid_schema_error(
+                "Annotations are not allowed for valid_values constraint except `range` annotation",
+            )
+        } else {
+            Ok(ValidValue::Element(value.to_owned()))
+        }
     }
 }

@@ -256,6 +256,12 @@ mod schema_tests {
                     type:: { name: timestamp_precision_type, timestamp_precision: month }
                  "#).into_iter(),
         1 // this includes named type timestamp_precision_type
+    ),
+    case::valid_values_constraint(
+        load(r#" // For a schema with valid_values constraint as below:
+                    type:: { name: valid_values_type, valid_values: range::[1, 3] }
+                 "#).into_iter(),
+        1 // this includes named type valid_values_type
     )
     )]
     fn owned_elements_to_schema<I: Iterator<Item = OwnedElement>>(
@@ -735,6 +741,49 @@ mod schema_tests {
                         "#),
             "timestamp_precision_type"
         ),
+        case::valid_values_constraint(
+            load(r#"
+                          2
+                          3
+                          5.5  
+                          "hello"
+                        "#),
+            load(r#"
+                          5.6
+                          1
+                          [1, 2 ,3]
+                          { greetings: "hello" }
+                          {{"hello"}}
+                          null
+                        "#),
+            load_schema_from_text(r#" // For a schema with valid values constraint as below:
+                                type::{ name: valid_values_type, valid_values: [2, 3, 5.5, "hello"] }
+                        "#),
+            "valid_values_type"
+        ),
+        case::valid_values_with_range_constraint(
+            load(r#"
+                      1
+                      2
+                      3
+                      4
+                      5  
+                      4.5
+                      2d0
+                      30e-1
+                    "#),
+            load(r#"
+                      0
+                      -2
+                      5.6
+                      6
+                      null
+                    "#),
+            load_schema_from_text(r#" // For a schema with valid values constraint as below:
+                            type::{ name: valid_values_type, valid_values: range::[1, 5.5] }
+                    "#),
+            "valid_values_type"
+    ),
     )]
     fn type_validation(
         valid_values: Vec<OwnedElement>,
