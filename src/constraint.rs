@@ -173,8 +173,8 @@ impl Constraint {
         Constraint::Fields(FieldsConstraint::new(fields.collect(), true))
     }
 
-    /// Creates a [Constraint::ValidValues] using the [OwnedElements] specified inside it
-    /// Returns an IonSchemaError if the OwnedElement contains annotation except `range` annotation
+    /// Creates a [Constraint::ValidValues] using the [OwnedElement]s specified inside it
+    /// Returns an IonSchemaError if any of the OwnedElements have an annotation other than `range`
     pub fn valid_values_with_values(values: Vec<OwnedElement>) -> IonSchemaResult<Constraint> {
         let valid_values: IonSchemaResult<Vec<ValidValue>> =
             values.iter().map(|e| e.try_into()).collect();
