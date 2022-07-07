@@ -228,14 +228,14 @@ impl Range {
             // verify if the value has annotation range
             if !value.annotations().any(|a| a == &text_token("range")) {
                 return invalid_schema_error(
-                    "An element representing range must have annotation `range::` with it.",
+                    "An element representing a range must have the annotation `range`.",
                 );
             }
 
             // verify that the range sequence has only two values i.e. start and end range boundary values
             if range.len() != 2 {
                 return invalid_schema_error(
-                    "Ranges must contain two values representing minimum and maximum ends of range.",
+                    "Ranges must contain two values representing the minimum and maximum ends of range.",
                 );
             }
 
@@ -429,7 +429,7 @@ impl<T: std::cmp::PartialOrd> RangeImpl<T> {
                 RangeImpl::range(v1, RangeBoundaryValue::Max)
             }
             (TypedRangeBoundaryValue::Integer(Value(v1, _)), _) => {
-                invalid_schema_error("Range boundaries should have same types")
+                invalid_schema_error("Range boundaries must have the same types")
             }
             _ => unreachable!(
                 "Integer ranges can not be constructed with non integer range boundary types"
