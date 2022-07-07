@@ -1,13 +1,14 @@
 use crate::isl::isl_constraint::IslConstraint;
+use crate::isl::isl_range::{Range, RangeImpl};
 use crate::isl::isl_type_reference::IslTypeRef;
-use crate::isl::util::{Annotation, Range, ValidValue};
+use crate::isl::util::{Annotation, TimestampPrecision, ValidValue};
 use crate::result::{IonSchemaResult, ValidationResult};
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::types::{TypeDefinition, TypeValidator};
 use crate::violation::{Violation, ViolationCode};
 use ion_rs::value::owned::OwnedElement;
 use ion_rs::value::{Element, Sequence, Struct, SymbolToken};
-use ion_rs::IonType;
+use ion_rs::{Integer, IonType};
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::iter::Peekable;
@@ -83,27 +84,22 @@ impl Constraint {
     }
 
     /// Creates a [Constraint::ContainerLength] from a [Range] specifying a length range.
-    pub fn container_length(length: Range) -> Constraint {
-        if !matches!(length, Range::IntegerNonNegative(_, _)) {
-            panic!("container_length constraint must have a range of type IntegerNonNegative")
-        }
-        Constraint::ContainerLength(ContainerLengthConstraint::new(length))
+    pub fn container_length(length: RangeImpl<usize>) -> Constraint {
+        Constraint::ContainerLength(ContainerLengthConstraint::new(Range::IntegerNonNegative(
+            length,
+        )))
     }
 
     /// Creates a [Constraint::ByteLength] from a [Range] specifying a length range.
-    pub fn byte_length(length: Range) -> Constraint {
-        if !matches!(length, Range::IntegerNonNegative(_, _)) {
-            panic!("byte_length constraint must have a range of type IntegerNonNegative")
-        }
-        Constraint::ByteLength(ByteLengthConstraint::new(length))
+    pub fn byte_length(length: RangeImpl<usize>) -> Constraint {
+        Constraint::ByteLength(ByteLengthConstraint::new(Range::IntegerNonNegative(length)))
     }
 
     /// Creates a [Constraint::CodePointLength] from a [Range] specifying a length range.
-    pub fn codepoint_length(length: Range) -> Constraint {
-        if !matches!(length, Range::IntegerNonNegative(_, _)) {
-            panic!("codepoint_length constraint must have a range of type IntegerNonNegative")
-        }
-        Constraint::CodepointLength(CodepointLengthConstraint::new(length))
+    pub fn codepoint_length(length: RangeImpl<usize>) -> Constraint {
+        Constraint::CodepointLength(CodepointLengthConstraint::new(Range::IntegerNonNegative(
+            length,
+        )))
     }
 
     /// Creates a [Constraint::Element] referring to the type represented by the provided [TypeId].
@@ -141,27 +137,22 @@ impl Constraint {
     }
 
     /// Creates a [Constraint::Precision] from a [Range] specifying a precision range.
-    pub fn precision(precision: Range) -> Constraint {
-        if !matches!(precision, Range::IntegerNonNegative(_, _)) {
-            panic!("precision constraint must have a range of type IntegerNonNegative")
-        }
-        Constraint::Precision(PrecisionConstraint::new(precision))
+    pub fn precision(precision: RangeImpl<usize>) -> Constraint {
+        Constraint::Precision(PrecisionConstraint::new(Range::IntegerNonNegative(
+            precision,
+        )))
     }
 
     /// Creates a [Constraint::Scale] from a [Range] specifying a precision range.
-    pub fn scale(scale: Range) -> Constraint {
-        if !matches!(scale, Range::Integer(_, _)) {
-            panic!("scale constraint must have a range of type Integer")
-        }
-        Constraint::Scale(ScaleConstraint::new(scale))
+    pub fn scale(scale: RangeImpl<Integer>) -> Constraint {
+        Constraint::Scale(ScaleConstraint::new(Range::Integer(scale)))
     }
 
     /// Creates a [Constraint::TimestampPrecision] from a [Range] specifying a precision range.
-    pub fn timestamp_precision(precision: Range) -> Constraint {
-        if !matches!(precision, Range::TimestampPrecision(_, _)) {
-            panic!("timestamp_precision constraint must have a range of type TimestampPrecision")
-        }
-        Constraint::TimestampPrecision(TimestampPrecisionConstraint::new(precision))
+    pub fn timestamp_precision(precision: RangeImpl<TimestampPrecision>) -> Constraint {
+        Constraint::TimestampPrecision(TimestampPrecisionConstraint::new(
+            Range::TimestampPrecision(precision),
+        ))
     }
 
     /// Creates a [Constraint::Fields] referring to the fields represented by the provided field name and [TypeId]s.
@@ -646,9 +637,7 @@ impl OrderedElementsConstraint {
         let mut count: i64 = 0;
 
         // consume elements to reach the minimum required values for this type
-        while let Some(value) =
-            values_iter.next_if(|v| !occurs_range.contains(&count.into()).unwrap())
-        {
+        while let Some(value) = values_iter.next_if(|v| !occurs_range.contains(&count.into())) {
             if type_def.is_valid(value, type_store) {
                 count += 1;
             } else {
@@ -666,7 +655,7 @@ impl OrderedElementsConstraint {
 
         // greedily take as many values as we can of this type without going out
         // of the maximum of the range
-        while values_iter.peek() != None && occurs_range.contains(&(count + 1).into()).unwrap() {
+        while values_iter.peek() != None && occurs_range.contains(&(count + 1).into()) {
             // don't consume it until we know it's valid for the type
             if let Some(value) = values_iter.peek() {
                 if type_def.is_valid(value, type_store) {
@@ -681,7 +670,7 @@ impl OrderedElementsConstraint {
         }
 
         // verify if there is no values left to validate and if it follows `occurs` constraint for this expected type
-        if values_iter.peek() == None && !occurs_range.contains(&count.into()).unwrap() {
+        if values_iter.peek() == None && !occurs_range.contains(&count.into()) {
             // there's not enough values of this expected type
             return Err(Violation::new(
                 "ordered_elements",
@@ -835,10 +824,7 @@ impl ConstraintValidator for FieldsConstraint {
             let occurs_range: Range = type_def.get_occurs_constraint("fields");
 
             // verify if values follow occurs_range constraint
-            if !occurs_range
-                .contains(&(values.len() as i64).into())
-                .unwrap()
-            {
+            if !occurs_range.contains(&(values.len() as i64).into()) {
                 violations.push(Violation::new(
                     "fields",
                     ViolationCode::TypeMismatched,
@@ -981,7 +967,7 @@ impl ConstraintValidator for ContainerLengthConstraint {
         let length_range: &Range = self.length();
 
         // return a Violation if the container size didn't follow container_length constraint
-        if !length_range.contains(&(size as i64).into()).unwrap() {
+        if !length_range.contains(&(size as i64).into()) {
             return Err(Violation::new(
                 "container_length",
                 ViolationCode::InvalidLength,
@@ -1039,7 +1025,7 @@ impl ConstraintValidator for ByteLengthConstraint {
         let length_range: &Range = self.length();
 
         // return a Violation if the clob/blob size didn't follow byte_length constraint
-        if !length_range.contains(&(size as i64).into()).unwrap() {
+        if !length_range.contains(&(size as i64).into()) {
             return Err(Violation::new(
                 "byte_length",
                 ViolationCode::InvalidLength,
@@ -1094,7 +1080,7 @@ impl ConstraintValidator for CodepointLengthConstraint {
         let length_range: &Range = self.length();
 
         // return a Violation if the string/symbol codepoint size didn't follow codepoint_length constraint
-        if !length_range.contains(&(size as i64).into()).unwrap() {
+        if !length_range.contains(&(size as i64).into()) {
             return Err(Violation::new(
                 "codepoint_length",
                 ViolationCode::InvalidLength,
@@ -1393,10 +1379,7 @@ impl ConstraintValidator for PrecisionConstraint {
         let precision_range: &Range = self.precision();
 
         // return a Violation if the value didn't follow precision constraint
-        if !precision_range
-            .contains(&(value_precision as i64).into())
-            .unwrap()
-        {
+        if !precision_range.contains(&(value_precision as i64).into()) {
             return Err(Violation::new(
                 "precision",
                 ViolationCode::InvalidLength,
@@ -1452,7 +1435,7 @@ impl ConstraintValidator for ScaleConstraint {
         let scale_range: &Range = self.scale();
 
         // return a Violation if the value didn't follow scale constraint
-        if !scale_range.contains(&(value_scale).into()).unwrap() {
+        if !scale_range.contains(&(value_scale).into()) {
             return Err(Violation::new(
                 "scale",
                 ViolationCode::InvalidLength,
@@ -1507,10 +1490,7 @@ impl ConstraintValidator for TimestampPrecisionConstraint {
         let precision_range: &Range = self.timestamp_precision();
 
         // return a Violation if the value didn't follow timestamp precision constraint
-        if !precision_range
-            .contains(&(timestamp_value.to_owned()).into())
-            .unwrap()
-        {
+        if !precision_range.contains(&(timestamp_value.to_owned()).into()) {
             return Err(Violation::new(
                 "precision",
                 ViolationCode::InvalidLength,
@@ -1557,7 +1537,7 @@ impl ConstraintValidator for ValidValuesConstraint {
             match valid_value {
                 ValidValue::Range(range) => match value.ion_type() {
                     IonType::Integer | IonType::Float | IonType::Decimal | IonType::Timestamp => {
-                        if range.contains(value).unwrap() {
+                        if range.contains(value) {
                             return Ok(());
                         }
                     }
