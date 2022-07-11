@@ -14,6 +14,81 @@ use std::cmp::Ordering;
 use std::prelude::rust_2021::TryInto;
 use std::str::FromStr;
 
+/// Provides IntegerRange type to be used to create integer ranges.
+pub type IntegerRange = RangeImpl<Integer>;
+
+impl IntegerRange {
+    pub fn new(
+        start: RangeBoundaryValue<Integer>,
+        end: RangeBoundaryValue<Integer>,
+    ) -> IonSchemaResult<IntegerRange> {
+        Ok(RangeImpl::range(start, end)?.into())
+    }
+}
+
+/// Provides IntegerNonNegativeRange type to be used to create integer non negative ranges.
+pub type IntegerNonNegativeRange = RangeImpl<usize>;
+
+/// Provides FloatRange type alias to be used to create float ranges.
+pub type FloatRange = RangeImpl<f64>;
+
+impl FloatRange {
+    pub fn new(
+        start: RangeBoundaryValue<f64>,
+        end: RangeBoundaryValue<f64>,
+    ) -> IonSchemaResult<FloatRange> {
+        Ok(RangeImpl::range(start, end)?.into())
+    }
+}
+
+/// Provides DecimalRange type alias to be used to create decimal ranges.
+pub type DecimalRange = RangeImpl<Decimal>;
+
+impl DecimalRange {
+    pub fn new(
+        start: RangeBoundaryValue<Decimal>,
+        end: RangeBoundaryValue<Decimal>,
+    ) -> IonSchemaResult<DecimalRange> {
+        Ok(RangeImpl::range(start, end)?.into())
+    }
+}
+
+/// Provides TimestampRange type alias to be used to create timestamp ranges.
+pub type TimestampRange = RangeImpl<Timestamp>;
+
+impl TimestampRange {
+    pub fn new(
+        start: RangeBoundaryValue<Timestamp>,
+        end: RangeBoundaryValue<Timestamp>,
+    ) -> IonSchemaResult<TimestampRange> {
+        Ok(RangeImpl::range(start, end)?.into())
+    }
+}
+
+/// Provides TimestampPrecisionRange type alias to be used to create timestamp precision ranges.
+pub type TimestampPrecisionRange = RangeImpl<TimestampPrecision>;
+
+impl TimestampPrecisionRange {
+    pub fn new(
+        start: RangeBoundaryValue<TimestampPrecision>,
+        end: RangeBoundaryValue<TimestampPrecision>,
+    ) -> IonSchemaResult<TimestampPrecisionRange> {
+        Ok(RangeImpl::range(start, end)?.into())
+    }
+}
+
+/// Provides NumberRange type alias to be used to create number ranges.
+pub type NumberRange = RangeImpl<Number>;
+
+impl NumberRange {
+    pub fn new(
+        start: RangeBoundaryValue<Number>,
+        end: RangeBoundaryValue<Number>,
+    ) -> IonSchemaResult<NumberRange> {
+        Ok(RangeImpl::range(start, end)?.into())
+    }
+}
+
 /// Represents ISL [Range]s where some constraints can be defined using a range
 /// <RANGE<RANGE_TYPE>> ::= range::[ <EXCLUSIVITY><RANGE_TYPE>, <EXCLUSIVITY><RANGE_TYPE> ]
 ///                       | range::[ min, <EXCLUSIVITY><RANGE_TYPE> ]
@@ -38,69 +113,6 @@ pub enum Range {
 }
 
 impl Range {
-    /// Provides integer range with given start and end values
-    /// Returns an [IonSchemaError] if start value is less than end value
-    pub fn int_range(
-        start: RangeBoundaryValue<Integer>,
-        end: RangeBoundaryValue<Integer>,
-    ) -> IonSchemaResult<Range> {
-        Ok(Range::Integer(RangeImpl::range(start, end)?))
-    }
-
-    /// Provides non negative integer range with given start and end values
-    /// Returns an [IonSchemaError] if start value is less than end value
-    pub fn int_non_negative_range(
-        start: RangeBoundaryValue<usize>,
-        end: RangeBoundaryValue<usize>,
-    ) -> IonSchemaResult<Range> {
-        Ok(Range::IntegerNonNegative(RangeImpl::range(start, end)?))
-    }
-
-    /// Provides float range with given start and end values
-    /// Returns an [IonSchemaError] if start value is less than end value
-    pub fn float_range(
-        start: RangeBoundaryValue<f64>,
-        end: RangeBoundaryValue<f64>,
-    ) -> IonSchemaResult<Range> {
-        Ok(Range::Float(RangeImpl::range(start, end)?))
-    }
-
-    /// Provides decimal range with given start and end values    
-    /// Returns an [IonSchemaError] if start value is less than end value
-    pub fn decimal_range(
-        start: RangeBoundaryValue<Decimal>,
-        end: RangeBoundaryValue<Decimal>,
-    ) -> IonSchemaResult<Range> {
-        Ok(Range::Decimal(RangeImpl::range(start, end)?))
-    }
-
-    /// Provides number range with given start and end values    
-    /// Returns an [IonSchemaError] if start value is less than end value
-    pub fn number_range(
-        start: RangeBoundaryValue<Number>,
-        end: RangeBoundaryValue<Number>,
-    ) -> IonSchemaResult<Range> {
-        Ok(Range::Number(RangeImpl::range(start, end)?))
-    }
-
-    /// Provides timestamp precision range with given start and end values    
-    /// Returns an [IonSchemaError] if start value is less than end value
-    pub fn timestamp_precision_range(
-        start: RangeBoundaryValue<TimestampPrecision>,
-        end: RangeBoundaryValue<TimestampPrecision>,
-    ) -> IonSchemaResult<Range> {
-        Ok(Range::TimestampPrecision(RangeImpl::range(start, end)?))
-    }
-
-    /// Provides timestamp range with given start and end values    
-    /// Returns an [IonSchemaError] if start value is less than end value
-    pub fn timestamp_range(
-        start: RangeBoundaryValue<Timestamp>,
-        end: RangeBoundaryValue<Timestamp>,
-    ) -> IonSchemaResult<Range> {
-        Ok(Range::Timestamp(RangeImpl::range(start, end)?))
-    }
-
     /// Provides a boolean value to specify whether the given value is within the range or not
     pub fn contains(&self, value: &OwnedElement) -> bool {
         match self {
@@ -200,14 +212,15 @@ impl Range {
                     value.ion_type()
                 )),
                 RangeType::Any => Ok(Range::Integer(integer_value.to_owned().into())),
-                RangeType::NumberOrTimestamp => Range::number_range(
+                RangeType::NumberOrTimestamp => Ok(NumberRange::new(
                     RangeBoundaryValue::Value(integer_value.into(), RangeBoundaryType::Inclusive),
                     RangeBoundaryValue::Value(integer_value.into(), RangeBoundaryType::Inclusive),
-                ),
+                )?
+                .into()),
             }
         } else if let Some(timestamp_precision) = value.as_str() {
             if range_type == RangeType::TimestampPrecision {
-                Range::timestamp_precision_range(
+                Ok(TimestampPrecisionRange::new(
                     RangeBoundaryValue::Value(
                         timestamp_precision.try_into()?,
                         RangeBoundaryType::Inclusive,
@@ -216,7 +229,8 @@ impl Range {
                         timestamp_precision.try_into()?,
                         RangeBoundaryType::Inclusive,
                     ),
-                )
+                )?
+                .into())
             } else {
                 invalid_schema_error(format!(
                     "{:?} ranges can not be constructed from value of type {}",
@@ -359,6 +373,48 @@ impl Range {
                 Ok(Range::Timestamp(RangeImpl::<Timestamp>::timestamp_range_from_typed_boundary_value(start, end)?))
             }
         }
+    }
+}
+
+impl From<IntegerRange> for Range {
+    fn from(value: IntegerRange) -> Self {
+        Range::Integer(value)
+    }
+}
+
+impl From<IntegerNonNegativeRange> for Range {
+    fn from(value: IntegerNonNegativeRange) -> Self {
+        Range::IntegerNonNegative(value)
+    }
+}
+
+impl From<FloatRange> for Range {
+    fn from(value: FloatRange) -> Self {
+        Range::Float(value)
+    }
+}
+
+impl From<DecimalRange> for Range {
+    fn from(value: DecimalRange) -> Self {
+        Range::Decimal(value)
+    }
+}
+
+impl From<TimestampRange> for Range {
+    fn from(value: TimestampRange) -> Self {
+        Range::Timestamp(value)
+    }
+}
+
+impl From<TimestampPrecisionRange> for Range {
+    fn from(value: TimestampPrecisionRange) -> Self {
+        Range::TimestampPrecision(value)
+    }
+}
+
+impl From<NumberRange> for Range {
+    fn from(value: NumberRange) -> Self {
+        Range::Number(value)
     }
 }
 
@@ -620,6 +676,13 @@ impl TryFrom<&str> for RangeImpl<TimestampPrecision> {
             RangeBoundaryValue::Value(timestamp_precision.to_owned(), RangeBoundaryType::Inclusive),
             RangeBoundaryValue::Value(timestamp_precision, RangeBoundaryType::Inclusive),
         )
+    }
+}
+
+// This lets us turn any `T` into a RangeBoundaryValue<T>::Value(_, Inclusive)
+impl<T> From<T> for RangeBoundaryValue<T> {
+    fn from(value: T) -> RangeBoundaryValue<T> {
+        RangeBoundaryValue::Value(value, RangeBoundaryType::Inclusive)
     }
 }
 

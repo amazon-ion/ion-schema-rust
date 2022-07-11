@@ -1,5 +1,5 @@
 use crate::isl::isl_import::IslImportType;
-use crate::isl::isl_range::{Range, RangeImpl, RangeType};
+use crate::isl::isl_range::{IntegerNonNegativeRange, IntegerRange, Range, RangeImpl, RangeType};
 use crate::isl::isl_type_reference::IslTypeRef;
 use crate::isl::util::{Annotation, TimestampPrecision, ValidValue};
 use crate::result::{
@@ -8,7 +8,7 @@ use crate::result::{
 use ion_rs::value::owned::{text_token, OwnedElement};
 use ion_rs::value::{Element, Sequence};
 use ion_rs::value::{Struct, SymbolToken};
-use ion_rs::{Integer, IonType};
+use ion_rs::IonType;
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 
@@ -64,12 +64,12 @@ impl IslConstraint {
     }
 
     /// Creates an [IslConstraint::Precision] using the range specified in it
-    pub fn precision(precision: RangeImpl<usize>) -> IslConstraint {
+    pub fn precision(precision: IntegerNonNegativeRange) -> IslConstraint {
         IslConstraint::Precision(Range::IntegerNonNegative(precision))
     }
 
     /// Creates an [IslConstraint::Scale] using the range specified in it
-    pub fn scale(scale: RangeImpl<Integer>) -> IslConstraint {
+    pub fn scale(scale: IntegerRange) -> IslConstraint {
         IslConstraint::Scale(Range::Integer(scale))
     }
 
@@ -92,7 +92,7 @@ impl IslConstraint {
     }
 
     /// Creates an [IslConstraint::ContainerLength] using the range specified in it
-    pub fn container_length(length: RangeImpl<usize>) -> IslConstraint {
+    pub fn container_length(length: IntegerNonNegativeRange) -> IslConstraint {
         IslConstraint::ContainerLength(Range::IntegerNonNegative(length))
     }
 

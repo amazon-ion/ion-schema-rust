@@ -348,7 +348,8 @@ mod type_definition_tests {
     use super::*;
     use crate::constraint::Constraint;
     use crate::isl::isl_constraint::IslConstraint;
-    use crate::isl::isl_range::{RangeBoundaryType, RangeBoundaryValue};
+    use crate::isl::isl_range::Number;
+    use crate::isl::isl_range::NumberRange;
     use crate::isl::isl_type::IslType;
     use crate::isl::isl_type_reference::IslTypeRef;
     use crate::system::PendingTypes;
@@ -519,18 +520,18 @@ mod type_definition_tests {
         */
         IslType::anonymous(
             [IslConstraint::valid_values_with_range(
-                Range::number_range(
-                    RangeBoundaryValue::Value((&Integer::I64(1)).into(), RangeBoundaryType::Inclusive),
-                    RangeBoundaryValue::Value((&Decimal::new(55, -1)).try_into().unwrap(), RangeBoundaryType::Inclusive)
-                ).unwrap())
+                NumberRange::new(
+                    Number::from(&Integer::I64(1)).into(),
+                    Number::try_from(&Decimal::new(55, -1)).unwrap().into()
+                ).unwrap().into())
             ]
         ),
         TypeDefinition::anonymous([
             Constraint::valid_values_with_range(
-                Range::number_range(
-                    RangeBoundaryValue::Value((&Integer::I64(1)).into(), RangeBoundaryType::Inclusive),
-                    RangeBoundaryValue::Value((&Decimal::new(55, -1)).try_into().unwrap(), RangeBoundaryType::Inclusive)
-            ).unwrap()),
+            NumberRange::new(
+                Number::from(&Integer::I64(1)).into(),
+                Number::try_from(&Decimal::new(55, -1)).unwrap().into()
+            ).unwrap().into()),
             Constraint::type_constraint(25)
         ])
     )

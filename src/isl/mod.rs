@@ -124,7 +124,14 @@ impl IslSchema {
 #[cfg(test)]
 mod isl_tests {
     use crate::isl::isl_constraint::IslConstraint;
-    use crate::isl::isl_range::{Range, RangeBoundaryType, RangeBoundaryValue, RangeType};
+    use crate::isl::isl_range::DecimalRange;
+    use crate::isl::isl_range::FloatRange;
+    use crate::isl::isl_range::IntegerRange;
+    use crate::isl::isl_range::Number;
+    use crate::isl::isl_range::NumberRange;
+    use crate::isl::isl_range::TimestampPrecisionRange;
+    use crate::isl::isl_range::TimestampRange;
+    use crate::isl::isl_range::{Range, RangeBoundaryValue, RangeType};
     use crate::isl::isl_type::{IslType, IslTypeImpl};
     use crate::isl::isl_type_reference::IslTypeRef;
     use crate::isl::util::TimestampPrecision;
@@ -310,10 +317,10 @@ mod isl_tests {
                     "#),
         IslType::anonymous(
             [IslConstraint::valid_values_with_range(
-                Range::number_range(
-                    RangeBoundaryValue::Value((&IntegerValue::I64(1)).into(), RangeBoundaryType::Inclusive),
-                    RangeBoundaryValue::Value((&Decimal::new(55, -1)).try_into().unwrap(), RangeBoundaryType::Inclusive)
-                ).unwrap())
+                NumberRange::new(
+                    Number::from(&IntegerValue::I64(1)).into(),
+                    Number::try_from(&Decimal::new(55, -1)).unwrap().into()
+                ).unwrap().into())
             ]
         )
     ),
@@ -366,75 +373,75 @@ mod isl_tests {
                 r#"
                     range::[min, 5]
                 "#
-            ),
-            Range::int_range(
+            ).unwrap(),
+            IntegerRange::new(
                 RangeBoundaryValue::Min,
-                RangeBoundaryValue::Value(IntegerValue::I64(5), RangeBoundaryType::Inclusive)
-            )
+                IntegerValue::I64(5).into()
+            ).unwrap().into()
         ),
         case::range_with_float(
             load_range(
                 r#"
                     range::[2e1, 5e1]
                 "#
-            ),
-            Range::float_range(
-                RangeBoundaryValue::Value(2e1, RangeBoundaryType::Inclusive),
-                RangeBoundaryValue::Value(5e1, RangeBoundaryType::Inclusive)
-            )
+            ).unwrap(),
+            FloatRange::new(
+                2e1.into(),
+                5e1.into()
+            ).unwrap().into()
         ),
         case::range_with_decimal(
             load_range(
                 r#"
                     range::[20.4, 50.5]
                 "#
-            ),
-            Range::decimal_range(
-                RangeBoundaryValue::Value(Decimal::new(204, -1), RangeBoundaryType::Inclusive),
-                RangeBoundaryValue::Value(Decimal::new(505, -1), RangeBoundaryType::Inclusive)
-            )
+            ).unwrap(),
+            DecimalRange::new(
+                Decimal::new(204, -1).into(),
+                Decimal::new(505, -1).into()
+            ).unwrap().into()
         ),
         case::range_with_timestamp(
             load_range(
                 r#"
                     range::[2020-01-01T, 2021-01-01T]
                 "#
-            ),
-            Range::timestamp_range(
-                RangeBoundaryValue::Value(Timestamp::with_year(2020).with_month(1).with_day(1).build().unwrap(), RangeBoundaryType::Inclusive),
-                RangeBoundaryValue::Value(Timestamp::with_year(2021).with_month(1).with_day(1).build().unwrap(), RangeBoundaryType::Inclusive)
-            )
+            ).unwrap(),
+            TimestampRange::new(
+                Timestamp::with_year(2020).with_month(1).with_day(1).build().unwrap().into(),
+                Timestamp::with_year(2021).with_month(1).with_day(1).build().unwrap().into()
+            ).unwrap().into()
         ),
         case::range_with_timestamp_precision(
             load_timestamp_precision_range(
                 r#"
                     range::[year, month]
                 "#
-            ),
-            Range::timestamp_precision_range(
-                RangeBoundaryValue::Value(TimestampPrecision::Year, RangeBoundaryType::Inclusive),
-                RangeBoundaryValue::Value(TimestampPrecision::Month, RangeBoundaryType::Inclusive)
-            )
+            ).unwrap(),
+            TimestampPrecisionRange::new(
+                TimestampPrecision::Year.into(),
+                TimestampPrecision::Month.into()
+            ).unwrap().into()
         ),
         case::range_with_number(
             load_number_range(
                 r#"
                     range::[1, 5.5]
                 "#
-            ),
-            Range::number_range(
-                RangeBoundaryValue::Value((&IntegerValue::I64(1)).into(), RangeBoundaryType::Inclusive),
-                RangeBoundaryValue::Value((&Decimal::new(55, -1)).try_into().unwrap(), RangeBoundaryType::Inclusive)
-            )
+            ).unwrap(),
+            NumberRange::new(
+                Number::from(&IntegerValue::I64(1)).into(),
+                Number::try_from(&Decimal::new(55, -1)).unwrap().into()
+            ).unwrap().into()
         )
     )]
-    fn owned_struct_to_range(range1: IonSchemaResult<Range>, range2: IonSchemaResult<Range>) {
+    fn owned_struct_to_range(range1: Range, range2: Range) {
         // determine that both the ranges are created with no errors
-        assert!(range1.is_ok());
-        assert!(range2.is_ok());
+        // assert!(range1.is_ok());
+        // assert!(range2.is_ok());
 
         // assert if both the ranges are same
-        assert_eq!(range1.unwrap(), range2.unwrap());
+        assert_eq!(range1, range2);
     }
 
     #[rstest(
