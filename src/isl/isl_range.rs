@@ -22,7 +22,7 @@ impl IntegerRange {
         start: RangeBoundaryValue<Integer>,
         end: RangeBoundaryValue<Integer>,
     ) -> IonSchemaResult<IntegerRange> {
-        Ok(RangeImpl::range(start, end)?.into())
+        RangeImpl::range(start, end)
     }
 }
 
@@ -37,7 +37,7 @@ impl FloatRange {
         start: RangeBoundaryValue<f64>,
         end: RangeBoundaryValue<f64>,
     ) -> IonSchemaResult<FloatRange> {
-        Ok(RangeImpl::range(start, end)?.into())
+        RangeImpl::range(start, end)
     }
 }
 
@@ -49,7 +49,7 @@ impl DecimalRange {
         start: RangeBoundaryValue<Decimal>,
         end: RangeBoundaryValue<Decimal>,
     ) -> IonSchemaResult<DecimalRange> {
-        Ok(RangeImpl::range(start, end)?.into())
+        RangeImpl::range(start, end)
     }
 }
 
@@ -61,7 +61,7 @@ impl TimestampRange {
         start: RangeBoundaryValue<Timestamp>,
         end: RangeBoundaryValue<Timestamp>,
     ) -> IonSchemaResult<TimestampRange> {
-        Ok(RangeImpl::range(start, end)?.into())
+        RangeImpl::range(start, end)
     }
 }
 
@@ -73,7 +73,7 @@ impl TimestampPrecisionRange {
         start: RangeBoundaryValue<TimestampPrecision>,
         end: RangeBoundaryValue<TimestampPrecision>,
     ) -> IonSchemaResult<TimestampPrecisionRange> {
-        Ok(RangeImpl::range(start, end)?.into())
+        RangeImpl::range(start, end)
     }
 }
 
@@ -85,7 +85,7 @@ impl NumberRange {
         start: RangeBoundaryValue<Number>,
         end: RangeBoundaryValue<Number>,
     ) -> IonSchemaResult<NumberRange> {
-        Ok(RangeImpl::range(start, end)?.into())
+        RangeImpl::range(start, end)
     }
 }
 
