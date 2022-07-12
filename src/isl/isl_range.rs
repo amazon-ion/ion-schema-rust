@@ -14,80 +14,26 @@ use std::cmp::Ordering;
 use std::prelude::rust_2021::TryInto;
 use std::str::FromStr;
 
-/// Provides IntegerRange type to be used to create integer ranges.
+/// Provides a type to be used to create integer ranges.
 pub type IntegerRange = RangeImpl<Integer>;
 
-impl IntegerRange {
-    pub fn new(
-        start: RangeBoundaryValue<Integer>,
-        end: RangeBoundaryValue<Integer>,
-    ) -> IonSchemaResult<IntegerRange> {
-        RangeImpl::range(start, end)
-    }
-}
+/// Provides a type to be used to create integer non negative ranges.
+pub type NonNegativeIntegerRange = RangeImpl<usize>;
 
-/// Provides IntegerNonNegativeRange type to be used to create integer non negative ranges.
-pub type IntegerNonNegativeRange = RangeImpl<usize>;
-
-/// Provides FloatRange type alias to be used to create float ranges.
+/// Provides a type to be used to create float ranges.
 pub type FloatRange = RangeImpl<f64>;
 
-impl FloatRange {
-    pub fn new(
-        start: RangeBoundaryValue<f64>,
-        end: RangeBoundaryValue<f64>,
-    ) -> IonSchemaResult<FloatRange> {
-        RangeImpl::range(start, end)
-    }
-}
-
-/// Provides DecimalRange type alias to be used to create decimal ranges.
+/// Provides a type to be used to create decimal ranges.
 pub type DecimalRange = RangeImpl<Decimal>;
 
-impl DecimalRange {
-    pub fn new(
-        start: RangeBoundaryValue<Decimal>,
-        end: RangeBoundaryValue<Decimal>,
-    ) -> IonSchemaResult<DecimalRange> {
-        RangeImpl::range(start, end)
-    }
-}
-
-/// Provides TimestampRange type alias to be used to create timestamp ranges.
+/// Provides a type to be used to create timestamp ranges.
 pub type TimestampRange = RangeImpl<Timestamp>;
 
-impl TimestampRange {
-    pub fn new(
-        start: RangeBoundaryValue<Timestamp>,
-        end: RangeBoundaryValue<Timestamp>,
-    ) -> IonSchemaResult<TimestampRange> {
-        RangeImpl::range(start, end)
-    }
-}
-
-/// Provides TimestampPrecisionRange type alias to be used to create timestamp precision ranges.
+/// Provides a type to be used to create timestamp precision ranges.
 pub type TimestampPrecisionRange = RangeImpl<TimestampPrecision>;
 
-impl TimestampPrecisionRange {
-    pub fn new(
-        start: RangeBoundaryValue<TimestampPrecision>,
-        end: RangeBoundaryValue<TimestampPrecision>,
-    ) -> IonSchemaResult<TimestampPrecisionRange> {
-        RangeImpl::range(start, end)
-    }
-}
-
-/// Provides NumberRange type alias to be used to create number ranges.
+/// Provides a type to be used to create number ranges.
 pub type NumberRange = RangeImpl<Number>;
-
-impl NumberRange {
-    pub fn new(
-        start: RangeBoundaryValue<Number>,
-        end: RangeBoundaryValue<Number>,
-    ) -> IonSchemaResult<NumberRange> {
-        RangeImpl::range(start, end)
-    }
-}
 
 /// Represents ISL [Range]s where some constraints can be defined using a range
 /// <RANGE<RANGE_TYPE>> ::= range::[ <EXCLUSIVITY><RANGE_TYPE>, <EXCLUSIVITY><RANGE_TYPE> ]
@@ -104,7 +50,7 @@ impl NumberRange {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Range {
     Integer(RangeImpl<Integer>),
-    IntegerNonNegative(RangeImpl<usize>),
+    NonNegativeInteger(RangeImpl<usize>),
     TimestampPrecision(RangeImpl<TimestampPrecision>),
     Timestamp(RangeImpl<Timestamp>),
     Decimal(RangeImpl<Decimal>),
@@ -119,7 +65,7 @@ impl Range {
             Range::Integer(int_range) if value.ion_type() == IonType::Integer => {
                 int_range.contains(value.as_integer().unwrap().to_owned())
             }
-            Range::IntegerNonNegative(int_non_neg_range)
+            Range::NonNegativeInteger(int_non_neg_range)
                 if value.ion_type() == IonType::Integer =>
             {
                 int_non_neg_range.contains(value.as_integer().unwrap().as_i64().unwrap() as usize)
@@ -172,7 +118,7 @@ impl Range {
 
     /// Provides optional non negative integer range
     pub fn optional() -> Self {
-        Range::IntegerNonNegative(
+        Range::NonNegativeInteger(
             RangeImpl::range(
                 RangeBoundaryValue::Value(0usize, RangeBoundaryType::Inclusive),
                 RangeBoundaryValue::Value(1usize, RangeBoundaryType::Inclusive),
@@ -183,7 +129,7 @@ impl Range {
 
     /// Provides required non negative integer range
     pub fn required() -> Self {
-        Range::IntegerNonNegative(
+        Range::NonNegativeInteger(
             RangeImpl::range(
                 RangeBoundaryValue::Value(1usize, RangeBoundaryType::Inclusive),
                 RangeBoundaryValue::Value(1usize, RangeBoundaryType::Inclusive),
@@ -199,13 +145,13 @@ impl Range {
         // eg. if `1` is passed as value then return a range [1,1]
         return if let Some(integer_value) = value.as_integer() {
             match range_type {
-                RangeType::Precision | RangeType::IntegerNonNegative => {
+                RangeType::Precision | RangeType::NonNegativeInteger => {
                     let non_negative_integer_value =
                         Range::validate_non_negative_integer_range_boundary_value(
                             value.as_integer().unwrap(),
                             &range_type,
                         )?;
-                    Ok(Range::IntegerNonNegative(non_negative_integer_value.into()))
+                    Ok(Range::NonNegativeInteger(non_negative_integer_value.into()))
                 }
                 RangeType::TimestampPrecision => invalid_schema_error(format!(
                     "Timestamp precision ranges can not be constructed from value of type {}",
@@ -348,9 +294,9 @@ impl Range {
             (_, TypedRangeBoundaryValue::Integer(_)) | (TypedRangeBoundaryValue::Integer(_), _) => {
                 Ok(Range::Integer(RangeImpl::<Integer>::int_range_from_typed_boundary_value(start, end)?))
             }
-            (_, TypedRangeBoundaryValue::IntegerNonNegative(_)) |
-            (TypedRangeBoundaryValue::IntegerNonNegative(_), _) => {
-                Ok(Range::IntegerNonNegative(RangeImpl::<usize>::int_non_negative_range_from_typed_boundary_value(start, end)?))
+            (_, TypedRangeBoundaryValue::NonNegativeInteger(_)) |
+            (TypedRangeBoundaryValue::NonNegativeInteger(_), _) => {
+                Ok(Range::NonNegativeInteger(RangeImpl::<usize>::int_non_negative_range_from_typed_boundary_value(start, end)?))
             }
             (_, TypedRangeBoundaryValue::TimestampPrecision(_)) |
             (TypedRangeBoundaryValue::TimestampPrecision(_), _) => {
@@ -382,9 +328,9 @@ impl From<IntegerRange> for Range {
     }
 }
 
-impl From<IntegerNonNegativeRange> for Range {
-    fn from(value: IntegerNonNegativeRange) -> Self {
-        Range::IntegerNonNegative(value)
+impl From<NonNegativeIntegerRange> for Range {
+    fn from(value: NonNegativeIntegerRange) -> Self {
+        Range::NonNegativeInteger(value)
     }
 }
 
@@ -494,26 +440,26 @@ impl<T: std::cmp::PartialOrd> RangeImpl<T> {
     }
 
     /// Provides `RangeImpl<usize>` for given `TypedRangeBoundaryValue`
-    // this method requires a prior check for TypedRangeBoundaryValue::IntegerNonNegative
+    // this method requires a prior check for TypedRangeBoundaryValue::NonNegativeInteger
     pub(crate) fn int_non_negative_range_from_typed_boundary_value(
         start: TypedRangeBoundaryValue,
         end: TypedRangeBoundaryValue,
     ) -> IonSchemaResult<RangeImpl<usize>> {
         match (start, end) {
-            (TypedRangeBoundaryValue::IntegerNonNegative(v1), TypedRangeBoundaryValue::IntegerNonNegative(v2)) => {
+            (TypedRangeBoundaryValue::NonNegativeInteger(v1), TypedRangeBoundaryValue::NonNegativeInteger(v2)) => {
                 RangeImpl::range(v1, v2)
             }
-            (TypedRangeBoundaryValue::Min, TypedRangeBoundaryValue::IntegerNonNegative(v2)) => {
+            (TypedRangeBoundaryValue::Min, TypedRangeBoundaryValue::NonNegativeInteger(v2)) => {
                 RangeImpl::range(RangeBoundaryValue::Min, v2)
             }
-            (TypedRangeBoundaryValue::IntegerNonNegative(v1), TypedRangeBoundaryValue::Max) => {
+            (TypedRangeBoundaryValue::NonNegativeInteger(v1), TypedRangeBoundaryValue::Max) => {
                 RangeImpl::range(v1, RangeBoundaryValue::Max)
             }
-            (TypedRangeBoundaryValue::IntegerNonNegative(Value(v1, _)), _) => {
+            (TypedRangeBoundaryValue::NonNegativeInteger(Value(v1, _)), _) => {
                 invalid_schema_error("Range boundaries should have same types")
             }
             _ => unreachable!(
-                "IntegerNonNegative ranges can not be constructed with non integer non negative range boundary types"
+                "NonNegativeInteger ranges can not be constructed with non integer non negative range boundary types"
             ),
         }
     }
@@ -679,6 +625,18 @@ impl TryFrom<&str> for RangeImpl<TimestampPrecision> {
     }
 }
 
+impl<T: PartialOrd> RangeImpl<T> {
+    pub fn new<S, E>(start: S, end: E) -> IonSchemaResult<Self>
+    where
+        S: Into<RangeBoundaryValue<T>>,
+        E: Into<RangeBoundaryValue<T>>,
+    {
+        let start = start.into();
+        let end = end.into();
+        RangeImpl::range(start, end)
+    }
+}
+
 // This lets us turn any `T` into a RangeBoundaryValue<T>::Value(_, Inclusive)
 impl<T> From<T> for RangeBoundaryValue<T> {
     fn from(value: T) -> RangeBoundaryValue<T> {
@@ -693,7 +651,7 @@ pub(crate) enum TypedRangeBoundaryValue {
     Min,
     Max,
     Integer(RangeBoundaryValue<Integer>),
-    IntegerNonNegative(RangeBoundaryValue<usize>),
+    NonNegativeInteger(RangeBoundaryValue<usize>),
     TimestampPrecision(RangeBoundaryValue<TimestampPrecision>),
     Float(RangeBoundaryValue<f64>),
     Decimal(RangeBoundaryValue<Decimal>),
@@ -728,8 +686,8 @@ impl TypedRangeBoundaryValue {
             }
             IonType::Integer => {
                 return match range_type {
-                     RangeType::Precision | RangeType::IntegerNonNegative => {
-                         Ok(TypedRangeBoundaryValue::IntegerNonNegative(
+                     RangeType::Precision | RangeType::NonNegativeInteger => {
+                         Ok(TypedRangeBoundaryValue::NonNegativeInteger(
                              RangeBoundaryValue::Value(
                                  Range::validate_non_negative_integer_range_boundary_value(
                                      boundary.as_integer().unwrap(),
@@ -757,7 +715,7 @@ impl TypedRangeBoundaryValue {
             IonType::Decimal => match range_type {
                 RangeType::NumberOrTimestamp => {
                     Ok(TypedRangeBoundaryValue::Number(RangeBoundaryValue::Value(
-                        boundary.as_decimal().unwrap().try_into()?,
+                        boundary.as_decimal().unwrap().into(),
                         range_boundary_type,
                     )))
                 }
@@ -849,7 +807,7 @@ pub enum RangeBoundaryType {
 #[derive(Debug, Clone, PartialEq)]
 pub enum RangeType {
     Precision, // used by precision constraint to specify non negative integer precision with minimum value as `1`
-    IntegerNonNegative, // used by byte_length, container_length and codepoint_length to specify non negative integer range
+    NonNegativeInteger, // used by byte_length, container_length and codepoint_length to specify non negative integer range
     TimestampPrecision, // used by timestamp_precision to specify timestamp precision range
     NumberOrTimestamp,  // used by valid_values constraint
     Any,                // used for any range types (e.g. Integer, Float, Timestamp, Decimal)
@@ -891,13 +849,18 @@ impl TryFrom<f64> for Number {
     }
 }
 
-impl TryFrom<&Decimal> for Number {
-    type Error = IonSchemaError;
-
-    fn try_from(value: &Decimal) -> Result<Self, Self::Error> {
-        Ok(Number {
-            big_decimal_value: value.to_owned().try_into()?,
-        })
+impl From<&Decimal> for Number {
+    fn from(value: &Decimal) -> Self {
+        let mut value = value.to_owned();
+        // When Decimal is converted to BigDecimal, it returns an Error if the Decimal being
+        // converted is a negative zero, which BigDecimal cannot represent. Otherwise returns Ok.
+        // hence if we detect negative zero we convert it to zero and make this infallible
+        if value.is_zero() {
+            value = Decimal::from(0);
+        }
+        Number {
+            big_decimal_value: value.try_into().unwrap(),
+        }
     }
 }
 

@@ -521,16 +521,16 @@ mod type_definition_tests {
         IslType::anonymous(
             [IslConstraint::valid_values_with_range(
                 NumberRange::new(
-                    Number::from(&Integer::I64(1)).into(),
-                    Number::try_from(&Decimal::new(55, -1)).unwrap().into()
+                    Number::from(&Integer::I64(1)),
+                    Number::from(&Decimal::new(55, -1))
                 ).unwrap().into())
             ]
         ),
         TypeDefinition::anonymous([
             Constraint::valid_values_with_range(
             NumberRange::new(
-                Number::from(&Integer::I64(1)).into(),
-                Number::try_from(&Decimal::new(55, -1)).unwrap().into()
+                Number::from(&Integer::I64(1)),
+                Number::from(&Decimal::new(55, -1))
             ).unwrap().into()),
             Constraint::type_constraint(25)
         ])

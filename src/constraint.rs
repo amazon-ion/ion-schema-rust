@@ -85,19 +85,19 @@ impl Constraint {
 
     /// Creates a [Constraint::ContainerLength] from a [Range] specifying a length range.
     pub fn container_length(length: RangeImpl<usize>) -> Constraint {
-        Constraint::ContainerLength(ContainerLengthConstraint::new(Range::IntegerNonNegative(
+        Constraint::ContainerLength(ContainerLengthConstraint::new(Range::NonNegativeInteger(
             length,
         )))
     }
 
     /// Creates a [Constraint::ByteLength] from a [Range] specifying a length range.
     pub fn byte_length(length: RangeImpl<usize>) -> Constraint {
-        Constraint::ByteLength(ByteLengthConstraint::new(Range::IntegerNonNegative(length)))
+        Constraint::ByteLength(ByteLengthConstraint::new(Range::NonNegativeInteger(length)))
     }
 
     /// Creates a [Constraint::CodePointLength] from a [Range] specifying a length range.
     pub fn codepoint_length(length: RangeImpl<usize>) -> Constraint {
-        Constraint::CodepointLength(CodepointLengthConstraint::new(Range::IntegerNonNegative(
+        Constraint::CodepointLength(CodepointLengthConstraint::new(Range::NonNegativeInteger(
             length,
         )))
     }
@@ -138,7 +138,7 @@ impl Constraint {
 
     /// Creates a [Constraint::Precision] from a [Range] specifying a precision range.
     pub fn precision(precision: RangeImpl<usize>) -> Constraint {
-        Constraint::Precision(PrecisionConstraint::new(Range::IntegerNonNegative(
+        Constraint::Precision(PrecisionConstraint::new(Range::NonNegativeInteger(
             precision,
         )))
     }

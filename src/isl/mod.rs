@@ -318,8 +318,8 @@ mod isl_tests {
         IslType::anonymous(
             [IslConstraint::valid_values_with_range(
                 NumberRange::new(
-                    Number::from(&IntegerValue::I64(1)).into(),
-                    Number::try_from(&Decimal::new(55, -1)).unwrap().into()
+                    Number::from(&IntegerValue::I64(1)),
+                    Number::from(&Decimal::new(55, -1))
                 ).unwrap().into())
             ]
         )
@@ -376,8 +376,8 @@ mod isl_tests {
             ).unwrap(),
             IntegerRange::new(
                 RangeBoundaryValue::Min,
-                IntegerValue::I64(5).into()
-            ).unwrap().into()
+                IntegerValue::I64(5)
+            ).unwrap()
         ),
         case::range_with_float(
             load_range(
@@ -386,9 +386,9 @@ mod isl_tests {
                 "#
             ).unwrap(),
             FloatRange::new(
-                2e1.into(),
-                5e1.into()
-            ).unwrap().into()
+                2e1,
+                5e1
+            ).unwrap()
         ),
         case::range_with_decimal(
             load_range(
@@ -397,9 +397,9 @@ mod isl_tests {
                 "#
             ).unwrap(),
             DecimalRange::new(
-                Decimal::new(204, -1).into(),
-                Decimal::new(505, -1).into()
-            ).unwrap().into()
+                Decimal::new(204, -1),
+                Decimal::new(505, -1)
+            ).unwrap()
         ),
         case::range_with_timestamp(
             load_range(
@@ -408,9 +408,9 @@ mod isl_tests {
                 "#
             ).unwrap(),
             TimestampRange::new(
-                Timestamp::with_year(2020).with_month(1).with_day(1).build().unwrap().into(),
-                Timestamp::with_year(2021).with_month(1).with_day(1).build().unwrap().into()
-            ).unwrap().into()
+                Timestamp::with_year(2020).with_month(1).with_day(1).build().unwrap(),
+                Timestamp::with_year(2021).with_month(1).with_day(1).build().unwrap()
+            ).unwrap()
         ),
         case::range_with_timestamp_precision(
             load_timestamp_precision_range(
@@ -419,9 +419,9 @@ mod isl_tests {
                 "#
             ).unwrap(),
             TimestampPrecisionRange::new(
-                TimestampPrecision::Year.into(),
-                TimestampPrecision::Month.into()
-            ).unwrap().into()
+                TimestampPrecision::Year,
+                TimestampPrecision::Month
+            ).unwrap()
         ),
         case::range_with_number(
             load_number_range(
@@ -430,18 +430,14 @@ mod isl_tests {
                 "#
             ).unwrap(),
             NumberRange::new(
-                Number::from(&IntegerValue::I64(1)).into(),
-                Number::try_from(&Decimal::new(55, -1)).unwrap().into()
-            ).unwrap().into()
+                Number::from(&IntegerValue::I64(1)),
+                Number::try_from(&Decimal::new(55, -1)).unwrap()
+            ).unwrap()
         )
     )]
-    fn owned_struct_to_range(range1: Range, range2: Range) {
-        // determine that both the ranges are created with no errors
-        // assert!(range1.is_ok());
-        // assert!(range2.is_ok());
-
+    fn owned_struct_to_range(range1: Range, range2: impl Into<Range>) {
         // assert if both the ranges are same
-        assert_eq!(range1, range2);
+        assert_eq!(range1, range2.into());
     }
 
     #[rstest(
