@@ -77,6 +77,7 @@ use crate::isl::isl_type::IslTypeImpl;
 
 pub mod isl_constraint;
 pub mod isl_import;
+pub mod isl_range;
 pub mod isl_type;
 pub mod isl_type_reference;
 pub mod util;
@@ -123,10 +124,17 @@ impl IslSchema {
 #[cfg(test)]
 mod isl_tests {
     use crate::isl::isl_constraint::IslConstraint;
+    use crate::isl::isl_range::DecimalRange;
+    use crate::isl::isl_range::FloatRange;
+    use crate::isl::isl_range::IntegerRange;
+    use crate::isl::isl_range::Number;
+    use crate::isl::isl_range::NumberRange;
+    use crate::isl::isl_range::TimestampPrecisionRange;
+    use crate::isl::isl_range::TimestampRange;
+    use crate::isl::isl_range::{Range, RangeBoundaryValue, RangeType};
     use crate::isl::isl_type::{IslType, IslTypeImpl};
     use crate::isl::isl_type_reference::IslTypeRef;
     use crate::isl::util::TimestampPrecision;
-    use crate::isl::util::{Range, RangeBoundaryType, RangeBoundaryValue, RangeType};
     use crate::result::IonSchemaResult;
     use ion_rs::types::decimal::*;
     use ion_rs::types::integer::Integer as IntegerValue;
@@ -289,7 +297,7 @@ mod isl_tests {
         load_anonymous_type(r#" // For a schema with scale constraint as below:
                         { scale: 2 }
                     "#),
-        IslType::anonymous([IslConstraint::scale((&IntegerValue::I64(2)).into())])
+        IslType::anonymous([IslConstraint::scale(IntegerValue::I64(2).into())])
     ),
     case::timestamp_precision_constraint(
         load_anonymous_type(r#" // For a schema with timestamp_precision constraint as below:
@@ -309,12 +317,13 @@ mod isl_tests {
                     "#),
         IslType::anonymous(
             [IslConstraint::valid_values_with_range(
-                Range::range(
-                    RangeBoundaryValue::number_value((&IntegerValue::I64(1)).into(), RangeBoundaryType::Inclusive),
-                    RangeBoundaryValue::number_value((&Decimal::new(55, -1)).try_into().unwrap(), RangeBoundaryType::Inclusive)
-                ).unwrap())
-            ])
-        ),
+                NumberRange::new(
+                    Number::from(&IntegerValue::I64(1)),
+                    Number::from(&Decimal::new(55, -1))
+                ).unwrap().into())
+            ]
+        )
+    ),
     )]
     fn owned_struct_to_isl_type(isl_type1: IslType, isl_type2: IslType) {
         // assert if both the IslType are same in terms of constraints and name
@@ -364,75 +373,71 @@ mod isl_tests {
                 r#"
                     range::[min, 5]
                 "#
-            ),
-            Range::range(
+            ).unwrap(),
+            IntegerRange::new(
                 RangeBoundaryValue::Min,
-                RangeBoundaryValue::int_value(IntegerValue::I64(5), RangeBoundaryType::Inclusive)
-            )
+                IntegerValue::I64(5)
+            ).unwrap()
         ),
         case::range_with_float(
             load_range(
                 r#"
                     range::[2e1, 5e1]
                 "#
-            ),
-            Range::range(
-                RangeBoundaryValue::float_value(2e1, RangeBoundaryType::Inclusive),
-                RangeBoundaryValue::float_value(5e1, RangeBoundaryType::Inclusive)
-            )
+            ).unwrap(),
+            FloatRange::new(
+                2e1,
+                5e1
+            ).unwrap()
         ),
         case::range_with_decimal(
             load_range(
                 r#"
                     range::[20.4, 50.5]
                 "#
-            ),
-            Range::range(
-                RangeBoundaryValue::decimal_value(Decimal::new(204, -1), RangeBoundaryType::Inclusive),
-                RangeBoundaryValue::decimal_value(Decimal::new(505, -1), RangeBoundaryType::Inclusive)
-            )
+            ).unwrap(),
+            DecimalRange::new(
+                Decimal::new(204, -1),
+                Decimal::new(505, -1)
+            ).unwrap()
         ),
         case::range_with_timestamp(
             load_range(
                 r#"
                     range::[2020-01-01T, 2021-01-01T]
                 "#
-            ),
-            Range::range(
-                RangeBoundaryValue::timestamp_value(Timestamp::with_year(2020).with_month(1).with_day(1).build().unwrap(), RangeBoundaryType::Inclusive),
-                RangeBoundaryValue::timestamp_value(Timestamp::with_year(2021).with_month(1).with_day(1).build().unwrap(), RangeBoundaryType::Inclusive)
-            )
+            ).unwrap(),
+            TimestampRange::new(
+                Timestamp::with_year(2020).with_month(1).with_day(1).build().unwrap(),
+                Timestamp::with_year(2021).with_month(1).with_day(1).build().unwrap()
+            ).unwrap()
         ),
         case::range_with_timestamp_precision(
             load_timestamp_precision_range(
                 r#"
                     range::[year, month]
                 "#
-            ),
-            Range::range(
-                RangeBoundaryValue::timestamp_precision_value(TimestampPrecision::Year, RangeBoundaryType::Inclusive),
-                RangeBoundaryValue::timestamp_precision_value(TimestampPrecision::Month, RangeBoundaryType::Inclusive)
-            )
+            ).unwrap(),
+            TimestampPrecisionRange::new(
+                TimestampPrecision::Year,
+                TimestampPrecision::Month
+            ).unwrap()
         ),
         case::range_with_number(
             load_number_range(
                 r#"
                     range::[1, 5.5]
                 "#
-            ),
-            Range::range(
-                RangeBoundaryValue::number_value((&IntegerValue::I64(1)).into(), RangeBoundaryType::Inclusive),
-                RangeBoundaryValue::number_value((&Decimal::new(55, -1)).try_into().unwrap(), RangeBoundaryType::Inclusive)
-            )
+            ).unwrap(),
+            NumberRange::new(
+                Number::from(&IntegerValue::I64(1)),
+                Number::try_from(&Decimal::new(55, -1)).unwrap()
+            ).unwrap()
         )
     )]
-    fn owned_struct_to_range(range1: IonSchemaResult<Range>, range2: IonSchemaResult<Range>) {
-        // determine that both the ranges are created with no errors
-        assert!(range1.is_ok());
-        assert!(range2.is_ok());
-
+    fn owned_struct_to_range(range1: Range, range2: impl Into<Range>) {
         // assert if both the ranges are same
-        assert_eq!(range1.unwrap(), range2.unwrap());
+        assert_eq!(range1, range2.into());
     }
 
     #[rstest(
@@ -457,12 +462,11 @@ mod isl_tests {
                 range::[5, 7.834]
             "#
         )),
-        // TODO: uncomment below test case once we have a comparator for timestamp in ion-rust 
-        // case::range_with_lower_bound_greater_than_upper_bound(load_range(
-        //     r#"
-        //         range::[10, 5]
-        //     "#
-        // ))
+        case::range_with_lower_bound_greater_than_upper_bound(load_range(
+            r#"
+                range::[10, 5]
+            "#
+        ))
     )]
     fn invalid_ranges(range: IonSchemaResult<Range>) {
         // determine that the range is created with an error for an invalid range
@@ -609,13 +613,13 @@ mod isl_tests {
     ) {
         // verify if the range contains given valid values
         for valid_value in valid_values {
-            let range_contains_result = range.as_ref().unwrap().contains(&valid_value).unwrap();
+            let range_contains_result = range.as_ref().unwrap().contains(&valid_value);
             assert!(range_contains_result)
         }
 
         // verify that range doesn't contain the invalid values
         for invalid_value in invalid_values {
-            let range_contains_result = range.as_ref().unwrap().contains(&invalid_value).unwrap();
+            let range_contains_result = range.as_ref().unwrap().contains(&invalid_value);
             assert!(!range_contains_result)
         }
     }

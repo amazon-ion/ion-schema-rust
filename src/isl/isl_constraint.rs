@@ -1,6 +1,7 @@
 use crate::isl::isl_import::IslImportType;
+use crate::isl::isl_range::{IntegerRange, NonNegativeIntegerRange, Range, RangeImpl, RangeType};
 use crate::isl::isl_type_reference::IslTypeRef;
-use crate::isl::util::{Annotation, Range, RangeType, ValidValue};
+use crate::isl::util::{Annotation, TimestampPrecision, ValidValue};
 use crate::result::{
     invalid_schema_error, invalid_schema_error_raw, IonSchemaError, IonSchemaResult,
 };
@@ -63,19 +64,13 @@ impl IslConstraint {
     }
 
     /// Creates an [IslConstraint::Precision] using the range specified in it
-    pub fn precision(precision: Range) -> IslConstraint {
-        if !matches!(precision, Range::IntegerNonNegative(_, _)) {
-            panic!("precision constraint must have a range of type IntegerNonNegative")
-        }
-        IslConstraint::Precision(precision)
+    pub fn precision(precision: NonNegativeIntegerRange) -> IslConstraint {
+        IslConstraint::Precision(Range::NonNegativeInteger(precision))
     }
 
     /// Creates an [IslConstraint::Scale] using the range specified in it
-    pub fn scale(scale: Range) -> IslConstraint {
-        if !matches!(scale, Range::Integer(_, _)) {
-            panic!("scale constraint must have a range of type Integer")
-        }
-        IslConstraint::Scale(scale)
+    pub fn scale(scale: IntegerRange) -> IslConstraint {
+        IslConstraint::Scale(Range::Integer(scale))
     }
 
     /// Creates an [IslConstraint::Fields] using the field names and [IslTypeRef]s referenced inside it
@@ -97,32 +92,23 @@ impl IslConstraint {
     }
 
     /// Creates an [IslConstraint::ContainerLength] using the range specified in it
-    pub fn container_length(length: Range) -> IslConstraint {
-        if !matches!(length, Range::IntegerNonNegative(_, _)) {
-            panic!("container_length constraint must have a range of type IntegerNonNegative")
-        }
-        IslConstraint::ContainerLength(length)
+    pub fn container_length(length: NonNegativeIntegerRange) -> IslConstraint {
+        IslConstraint::ContainerLength(Range::NonNegativeInteger(length))
     }
 
     /// Creates an [IslConstraint::ByteLength] using the range specified in it
-    pub fn byte_length(length: Range) -> IslConstraint {
-        if !matches!(length, Range::IntegerNonNegative(_, _)) {
-            panic!("byte_length constraint must have a range of type IntegerNonNegative")
-        }
-        IslConstraint::ByteLength(length)
+    pub fn byte_length(length: RangeImpl<usize>) -> IslConstraint {
+        IslConstraint::ByteLength(Range::NonNegativeInteger(length))
     }
 
     /// Creates an [IslConstraint::CodePointLength] using the range specified in it
-    pub fn codepoint_length(length: Range) -> IslConstraint {
-        if !matches!(length, Range::IntegerNonNegative(_, _)) {
-            panic!("codepoint_length constraint must have a range of type IntegerNonNegative")
-        }
-        IslConstraint::CodepointLength(length)
+    pub fn codepoint_length(length: RangeImpl<usize>) -> IslConstraint {
+        IslConstraint::CodepointLength(Range::NonNegativeInteger(length))
     }
 
     /// Creates an [IslConstraint::TimestampPrecision] using the range specified in it
-    pub fn timestamp_precision(precision: Range) -> IslConstraint {
-        IslConstraint::TimestampPrecision(precision)
+    pub fn timestamp_precision(precision: RangeImpl<TimestampPrecision>) -> IslConstraint {
+        IslConstraint::TimestampPrecision(Range::TimestampPrecision(precision))
     }
 
     /// Creates an [IslConstraint::Element] using the [IslTypeRef] referenced inside it

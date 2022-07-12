@@ -1,7 +1,7 @@
 use crate::constraint::Constraint;
 use crate::isl::isl_constraint::IslConstraint;
+use crate::isl::isl_range::Range;
 use crate::isl::isl_type::IslTypeImpl;
-use crate::isl::util::Range;
 use crate::result::{IonSchemaResult, ValidationResult};
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::violation::{Violation, ViolationCode};
@@ -348,9 +348,10 @@ mod type_definition_tests {
     use super::*;
     use crate::constraint::Constraint;
     use crate::isl::isl_constraint::IslConstraint;
+    use crate::isl::isl_range::Number;
+    use crate::isl::isl_range::NumberRange;
     use crate::isl::isl_type::IslType;
     use crate::isl::isl_type_reference::IslTypeRef;
-    use crate::isl::util::{RangeBoundaryType, RangeBoundaryValue};
     use crate::system::PendingTypes;
     use ion_rs::Decimal;
     use ion_rs::Integer;
@@ -496,8 +497,8 @@ mod type_definition_tests {
         /* For a schema with scale constraint as below:
             { scale: 2 }
         */
-        IslType::anonymous([IslConstraint::scale((&Integer::I64(2)).into())]),
-        TypeDefinition::anonymous([Constraint::scale((&Integer::I64(2)).into()), Constraint::type_constraint(25)])
+        IslType::anonymous([IslConstraint::scale(Integer::I64(2).into())]),
+        TypeDefinition::anonymous([Constraint::scale(Integer::I64(2).into()), Constraint::type_constraint(25)])
     ),
     case::timestamp_precision_constraint(
         /* For a schema with timestamp_precision constraint as below:
@@ -513,24 +514,24 @@ mod type_definition_tests {
         IslType::anonymous([IslConstraint::valid_values_with_values(vec![2.into(), Decimal::new(35, -1).into(), 5e7.into(), "hello".to_owned().into(), text_token("hi").into()]).unwrap()]),
         TypeDefinition::anonymous([Constraint::valid_values_with_values(vec![2.into(), Decimal::new(35, -1).into(), 5e7.into(), "hello".to_owned().into(), text_token("hi").into()]).unwrap(), Constraint::type_constraint(25)])
     ),
-    case::valid_values_wiht_range_constraint(
+    case::valid_values_with_range_constraint(
         /* For a schema with valid_values constraint as below:
             { valid_values: range::[1, 5.5] }        
         */
         IslType::anonymous(
             [IslConstraint::valid_values_with_range(
-                Range::range(
-                    RangeBoundaryValue::number_value((&Integer::I64(1)).into(), RangeBoundaryType::Inclusive),
-                    RangeBoundaryValue::number_value((&Decimal::new(55, -1)).try_into().unwrap(), RangeBoundaryType::Inclusive)
-                ).unwrap())
+                NumberRange::new(
+                    Number::from(&Integer::I64(1)),
+                    Number::from(&Decimal::new(55, -1))
+                ).unwrap().into())
             ]
         ),
         TypeDefinition::anonymous([
             Constraint::valid_values_with_range(
-                Range::range(
-                    RangeBoundaryValue::number_value((&Integer::I64(1)).into(), RangeBoundaryType::Inclusive),
-                    RangeBoundaryValue::number_value((&Decimal::new(55, -1)).try_into().unwrap(), RangeBoundaryType::Inclusive)
-            ).unwrap()),
+            NumberRange::new(
+                Number::from(&Integer::I64(1)),
+                Number::from(&Decimal::new(55, -1))
+            ).unwrap().into()),
             Constraint::type_constraint(25)
         ])
     )
