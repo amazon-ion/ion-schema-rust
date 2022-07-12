@@ -17,7 +17,7 @@ use std::str::FromStr;
 /// Provides a type to be used to create integer ranges.
 pub type IntegerRange = RangeImpl<Integer>;
 
-/// Provides a type to be used to create integer non negative ranges.
+/// Provides a type to be used to create non negative integer ranges.
 pub type NonNegativeIntegerRange = RangeImpl<usize>;
 
 /// Provides a type to be used to create float ranges.
