@@ -262,6 +262,12 @@ mod schema_tests {
                     type:: { name: valid_values_type, valid_values: range::[1, 3] }
                  "#).into_iter(),
         1 // this includes named type valid_values_type
+    ),
+    case::regex_constraint(
+        load(r#" // For a schema with regex constraint as below:
+                    type:: { name: regex_type, regex: "[abc]" }
+                 "#).into_iter(),
+        1 // this includes named type regex_type
     )
     )]
     fn owned_elements_to_schema<I: Iterator<Item = OwnedElement>>(
@@ -783,7 +789,24 @@ mod schema_tests {
                             type::{ name: valid_values_type, valid_values: range::[1, 5.5] }
                     "#),
             "valid_values_type"
-    ),
+        ),
+        case::regex_constraint(
+            load(r#"
+                      "ab"
+                      "cd"
+                      "ef"
+                    "#),
+            load(r#"
+                      "a"
+                      "ac"
+                      "ace"
+                      "bdf"
+                    "#),
+            load_schema_from_text(r#" // For a schema with regex constraint as below:
+                            type::{ name: regex_type, regex: "ab|cd|ef" }
+                    "#),
+            "regex_type"
+        ),
     )]
     fn type_validation(
         valid_values: Vec<OwnedElement>,

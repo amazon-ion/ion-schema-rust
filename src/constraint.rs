@@ -1,17 +1,22 @@
-use crate::isl::isl_constraint::IslConstraint;
+use crate::isl::isl_constraint::{IslConstraint, IslRegexConstraint};
 use crate::isl::isl_range::{Range, RangeImpl};
 use crate::isl::isl_type_reference::IslTypeRef;
 use crate::isl::util::{Annotation, TimestampPrecision, ValidValue};
-use crate::result::{IonSchemaResult, ValidationResult};
+use crate::result::{
+    invalid_schema_error, invalid_schema_error_raw, IonSchemaError, IonSchemaResult,
+    ValidationResult,
+};
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::types::{TypeDefinition, TypeValidator};
 use crate::violation::{Violation, ViolationCode};
 use ion_rs::value::owned::OwnedElement;
 use ion_rs::value::{Element, Sequence, Struct, SymbolToken};
 use ion_rs::{Integer, IonType};
+use regex::{Regex, RegexBuilder};
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::iter::Peekable;
+use std::str::Chars;
 
 /// Provides validation for schema Constraint
 pub trait ConstraintValidator {
@@ -41,6 +46,7 @@ pub enum Constraint {
     OrderedElements(OrderedElementsConstraint),
     Occurs(OccursConstraint),
     Precision(PrecisionConstraint),
+    Regex(RegexConstraint),
     Scale(ScaleConstraint),
     TimestampPrecision(TimestampPrecisionConstraint),
     Type(TypeConstraint),
@@ -181,6 +187,16 @@ impl Constraint {
         })
     }
 
+    /// Creates a [Constraint::Regex] from the expression and flags (case_insensitive, multi_line)
+    pub fn regex(
+        case_insensitive: bool,
+        multi_line: bool,
+        expression: String,
+    ) -> IonSchemaResult<Constraint> {
+        let regex = IslRegexConstraint::new(case_insensitive, multi_line, expression);
+        Ok(Constraint::Regex(regex.try_into()?))
+    }
+
     /// Parse an [IslConstraint] to a [Constraint]
     pub fn resolve_from_isl_constraint(
         isl_constraint: &IslConstraint,
@@ -286,6 +302,7 @@ impl Constraint {
             IslConstraint::Precision(precision_range) => Ok(Constraint::Precision(
                 PrecisionConstraint::new(precision_range.to_owned()),
             )),
+            IslConstraint::Regex(regex) => Ok(Constraint::Regex(regex.to_owned().try_into()?)),
             IslConstraint::Scale(scale_range) => Ok(Constraint::Scale(ScaleConstraint::new(
                 scale_range.to_owned(),
             ))),
@@ -332,6 +349,7 @@ impl Constraint {
                 ordered_elements.validate(value, type_store)
             }
             Constraint::Precision(precision) => precision.validate(value, type_store),
+            Constraint::Regex(regex) => regex.validate(value, type_store),
             Constraint::Scale(scale) => scale.validate(value, type_store),
             Constraint::TimestampPrecision(timestamp_precision) => {
                 timestamp_precision.validate(value, type_store)
@@ -1561,5 +1579,211 @@ impl ConstraintValidator for ValidValuesConstraint {
                 &self, value
             ),
         ))
+    }
+}
+
+/// Implements Ion Schema's `regex` constraint
+/// [regex]: https://amzn.github.io/ion-schema/docs/spec.html#regex
+#[derive(Debug, Clone)]
+pub struct RegexConstraint {
+    expression: Regex,
+}
+
+impl RegexConstraint {
+    fn new(expression: Regex) -> Self {
+        Self { expression }
+    }
+
+    /// Converts given string to a pattern based on regex features supported by Ion Schema Specification
+    /// For more information: `<https://amzn.github.io/ion-schema/docs/spec.html#regex>`
+    fn convert_to_pattern(expression: String) -> IonSchemaResult<String> {
+        let mut sb = String::new();
+        let mut si = expression.as_str().chars().peekable();
+
+        while let Some(ch) = si.next() {
+            match ch {
+                '[' => {
+                    // push the starting bracket `[` to the result string
+                    // and then parse the next characters using parse_char_class
+                    sb.push(ch);
+                    RegexConstraint::parse_char_class(&mut sb, &mut si)?;
+                }
+                '(' => {
+                    sb.push(ch);
+                    if let Some(ch) = si.next() {
+                        if ch == '?' {
+                            return invalid_schema_error(format!("invalid character {}", ch));
+                        }
+                        sb.push(ch)
+                    }
+                }
+                '\\' => {
+                    if let Some(ch) = si.next() {
+                        match ch {
+                            // Note: Ion text a backslash must itself be escaped, so correct escaping
+                            // of below characters requires two backslashes, e.g.: \\.
+                            '.' | '^' | '$' | '|' | '?' | '*' | '+' | '\\' | '[' | ']' | '('
+                            | ')' | '{' | '}' | 'w' | 'W' | 'd' | 'D' => {
+                                sb.push('\\');
+                                sb.push(ch)
+                            }
+                            's' => sb.push_str("[ \\f\\n\\r\\t]"),
+                            'S' => sb.push_str("[^ \\f\\n\\r\\t]"),
+                            _ => {
+                                return invalid_schema_error(format!(
+                                    "invalid escape character {}",
+                                    ch,
+                                ))
+                            }
+                        }
+                    }
+                }
+                // TODO: remove below match statement once we have fixed issue: https://github.com/amzn/ion-rust/issues/399
+                '\r' => sb.push('\n'), // Replace '\r' with '\n'
+                _ => sb.push(ch),
+            }
+            RegexConstraint::parse_quantifier(&mut sb, &mut si)?;
+        }
+
+        Ok(sb)
+    }
+
+    fn parse_char_class(sb: &mut String, si: &mut Peekable<Chars<'_>>) -> IonSchemaResult<()> {
+        while let Some(ch) = si.next() {
+            sb.push(ch);
+            match ch {
+                '&' => {
+                    if si.peek() == Some(&'&') {
+                        return invalid_schema_error("'&&' is not supported in a character class");
+                    }
+                }
+                '[' => return invalid_schema_error("'[' must be escaped within a character class"),
+                '\\' => {
+                    if let Some(ch2) = si.next() {
+                        match ch2 {
+                            // escaped `[` or ']' are allowed within character class
+                            '[' | ']' | '\\' => sb.push(ch2),
+                            // not supporting pre-defined char classes (i.e., \d, \s, \w)
+                            // as user is specifying a new char class
+                            _ => {
+                                return invalid_schema_error(format!(
+                                    "invalid sequence '\\{}' in character class",
+                                    ch2
+                                ))
+                            }
+                        }
+                    }
+                }
+                ']' => return Ok(()),
+                _ => {}
+            }
+        }
+
+        invalid_schema_error("character class missing ']'")
+    }
+
+    fn parse_quantifier(sb: &mut String, si: &mut Peekable<Chars<'_>>) -> IonSchemaResult<()> {
+        let initial_length = sb.len();
+        if let Some(ch) = si.peek().cloned() {
+            match ch {
+                '?' | '*' | '+' => {
+                    if let Some(ch) = si.next() {
+                        sb.push(ch);
+                    }
+                }
+                '{' => {
+                    // we know next is `{` so unwrap it and add it to the result string
+                    let ch = si.next().unwrap();
+                    sb.push(ch);
+                    // process occurrences specified within `{` and `}`
+                    let mut complete = false;
+                    while let Some(ch) = si.next() {
+                        match ch {
+                            '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | ',' => {
+                                sb.push(ch)
+                            }
+                            '}' => {
+                                sb.push(ch);
+                                // at this point occurrences are completely specified
+                                complete = true;
+                                break;
+                            }
+                            _ => return invalid_schema_error(format!("invalid character {}", ch)),
+                        }
+                    }
+
+                    if !complete {
+                        return invalid_schema_error("range quantifier missing '}'");
+                    }
+                }
+                _ => {}
+            }
+            if sb.len() > initial_length {
+                if let Some(ch) = si.peek().cloned() {
+                    match ch {
+                        '?' => return invalid_schema_error(format!("invalid character {}", ch)),
+
+                        '+' => return invalid_schema_error(format!("invalid character {}", ch)),
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl ConstraintValidator for RegexConstraint {
+    fn validate(&self, value: &OwnedElement, type_store: &TypeStore) -> ValidationResult {
+        let value = match value.as_str() {
+            Some(string_value) => {
+                let re = Regex::new(r"\r").unwrap();
+                let result = re.replace_all(string_value, "\n");
+                result.to_string()
+            }
+            _ => {
+                // return Violation if value is not a string
+                return Err(Violation::new(
+                    "regex",
+                    ViolationCode::TypeMismatched,
+                    &format!("expected a string but found {}", value.ion_type()),
+                ));
+            }
+        };
+
+        if !self.expression.is_match(value.as_str()) {
+            return Err(Violation::new(
+                "regex",
+                ViolationCode::RegexMismatched,
+                &format!("{} doesn't match regex {}", value, self.expression),
+            ));
+        }
+
+        Ok(())
+    }
+}
+
+impl TryFrom<IslRegexConstraint> for RegexConstraint {
+    type Error = IonSchemaError;
+
+    fn try_from(isl_regex: IslRegexConstraint) -> Result<Self, Self::Error> {
+        let pattern = RegexConstraint::convert_to_pattern(isl_regex.expression().to_owned())?;
+
+        let regex = RegexBuilder::new(pattern.as_str())
+            .case_insensitive(isl_regex.case_insensitive())
+            .multi_line(isl_regex.multi_line())
+            .build()
+            .map_err(|e| {
+                invalid_schema_error_raw(format!("Invalid regex {}", isl_regex.expression()))
+            })?;
+
+        Ok(RegexConstraint::new(regex))
+    }
+}
+
+impl PartialEq for RegexConstraint {
+    fn eq(&self, other: &Self) -> bool {
+        self.expression.as_str().eq(other.expression.as_str())
     }
 }

@@ -61,6 +61,7 @@ pub enum ViolationCode {
     MissingValue,  // if the ion value is missing for a particular constraint
     MoreThanOneTypeMatched,
     NoTypesMatched,
+    RegexMismatched, // this is used for regex constraint
     TypeConstraintsUnsatisfied,
     TypeMatched,
     TypeMismatched,
@@ -85,6 +86,7 @@ impl fmt::Display for ViolationCode {
                 ViolationCode::MissingValue => "missing_value",
                 ViolationCode::MoreThanOneTypeMatched => "more_than_one_type_matched",
                 ViolationCode::NoTypesMatched => "no_types_matched",
+                ViolationCode::RegexMismatched => "regex_mismatched",
                 ViolationCode::TypeConstraintsUnsatisfied => "type_constraints_unsatisfied",
                 ViolationCode::TypeMatched => "type_matched",
                 ViolationCode::TypeMismatched => "type_mismatched",

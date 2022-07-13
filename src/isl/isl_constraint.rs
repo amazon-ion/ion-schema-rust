@@ -30,6 +30,7 @@ pub enum IslConstraint {
     OneOf(Vec<IslTypeRef>),
     OrderedElements(Vec<IslTypeRef>),
     Precision(Range),
+    Regex(IslRegexConstraint),
     Scale(Range),
     TimestampPrecision(Range),
     Type(IslTypeRef),
@@ -159,6 +160,15 @@ impl IslConstraint {
         IslConstraint::ValidValues(IslValidValuesConstraint {
             valid_values: vec![ValidValue::Range(values)],
         })
+    }
+
+    /// Creates an [IslConstraint::Regex] using the expression and flags (case_insensitive, multi_line)
+    pub fn regex(case_insensitive: bool, multi_line: bool, expression: String) -> IslConstraint {
+        IslConstraint::Regex(IslRegexConstraint::new(
+            case_insensitive,
+            multi_line,
+            expression,
+        ))
     }
 
     /// Parse constraints inside an [OwnedElement] to an [IslConstraint]
@@ -341,6 +351,23 @@ impl IslConstraint {
                 value,
                 RangeType::Precision,
             )?)),
+            "regex" => {
+                let case_insensitive = value.annotations().any(|a| a == &text_token("i"));
+                let multi_line = value.annotations().any(|a| a == &text_token("m"));
+
+                let expression = value.as_str().ok_or_else(|| {
+                    invalid_schema_error_raw(format!(
+                        "expected regex to contain a string expression but found: {}",
+                        value.ion_type()
+                    ))
+                })?;
+
+                Ok(IslConstraint::Regex(IslRegexConstraint::new(
+                    case_insensitive,
+                    multi_line,
+                    expression.to_string(),
+                )))
+            }
             "scale" => Ok(IslConstraint::Scale(Range::from_ion_element(
                 value,
                 RangeType::Any,
@@ -524,5 +551,36 @@ impl TryFrom<&OwnedElement> for IslValidValuesConstraint {
             "Expected valid_values to be a range or a list of valid values, found {}",
             value.ion_type()
         ))
+    }
+}
+
+/// Represents the `regex` constraint
+/// [regex]: https://amzn.github.io/ion-schema/docs/spec.html#regex
+#[derive(Debug, Clone, PartialEq)]
+pub struct IslRegexConstraint {
+    case_insensitive: bool,
+    multi_line: bool,
+    expression: String,
+}
+
+impl IslRegexConstraint {
+    pub(crate) fn new(case_insensitive: bool, multi_line: bool, expression: String) -> Self {
+        Self {
+            case_insensitive,
+            multi_line,
+            expression,
+        }
+    }
+
+    pub fn expression(&self) -> &String {
+        &self.expression
+    }
+
+    pub fn case_insensitive(&self) -> bool {
+        self.case_insensitive
+    }
+
+    pub fn multi_line(&self) -> bool {
+        self.multi_line
     }
 }
