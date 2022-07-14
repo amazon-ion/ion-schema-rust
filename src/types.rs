@@ -534,6 +534,26 @@ mod type_definition_tests {
             ).unwrap().into()),
             Constraint::type_constraint(25)
         ])
+    ),
+    case::regex_constraint(
+        /* For a schema with regex constraint as below:
+            { regex: "[abc]" }        
+        */
+        IslType::anonymous(
+            [IslConstraint::regex(
+                false, // case insensitive
+                false, // multiline
+                "[abc]".to_string()
+            )]
+        ),
+        TypeDefinition::anonymous([
+            Constraint::regex(
+                false, // case insensitive
+                false, // multiline
+                "[abc]".to_string()
+            ).unwrap(),
+            Constraint::type_constraint(25)
+        ])
     )
     )]
     fn isl_type_to_type_definition(isl_type: IslType, type_def: TypeDefinition) {

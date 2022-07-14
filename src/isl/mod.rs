@@ -324,6 +324,19 @@ mod isl_tests {
             ]
         )
     ),
+    case::regex_constraint(
+        load_anonymous_type(r#" // For a schema with regex constraint as below:
+                            { regex: "[abc]" }
+                        "#),
+        IslType::anonymous(
+            [IslConstraint::regex(
+                false, // case insensitive
+                false, // multiline
+                "[abc]".to_string()
+            )
+            ]
+        )
+    ),
     )]
     fn owned_struct_to_isl_type(isl_type1: IslType, isl_type2: IslType) {
         // assert if both the IslType are same in terms of constraints and name

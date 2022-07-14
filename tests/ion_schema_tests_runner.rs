@@ -84,6 +84,7 @@ const SKIP_LIST: &[&str] = &[
 #[test_resources("ion-schema-tests/constraints/scale/*.isl")]
 #[test_resources("ion-schema-tests/constraints/timestamp_precision/*.isl")]
 #[test_resources("ion-schema-tests/constraints/valid_values/*.isl")]
+#[test_resources("ion-schema-tests/constraints/regex/*.isl")]
 // `test_resources` breaks for test-case names containing `$` and it doesn't allow
 // to rename test-case names hence using `rstest` for `$*.isl` test files
 // For more information: https://github.com/frehberg/test-generator/issues/11
@@ -127,10 +128,10 @@ fn validation_tests(path: &str) {
         fs::read(path).unwrap_or_else(|_| panic!("Could not read from given file {}", path));
     let iterator = element_reader()
         .iterate_over(&ion_content)
-        .unwrap_or_else(|_| panic!("Could not get owned elements from scehma file: {}", path));
+        .unwrap_or_else(|_| panic!("Could not get owned elements from schema file: {}", path));
     let schema_content = iterator
         .collect::<Result<Vec<OwnedElement>, IonError>>()
-        .unwrap_or_else(|_| panic!("Could not get owned elements from scehma file: {}", path));
+        .unwrap_or_else(|_| panic!("Could not get owned elements from schema file: {}", path));
 
     let type_store = &mut TypeStore::default();
     let mut invalid_values: Vec<OwnedElement> = vec![];
