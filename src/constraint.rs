@@ -1587,11 +1587,17 @@ impl ConstraintValidator for ValidValuesConstraint {
 #[derive(Debug, Clone)]
 pub struct RegexConstraint {
     expression: Regex,
+    case_insensitive: bool,
+    multiline: bool,
 }
 
 impl RegexConstraint {
-    fn new(expression: Regex) -> Self {
-        Self { expression }
+    fn new(expression: Regex, case_insensitive: bool, multiline: bool) -> Self {
+        Self {
+            expression,
+            case_insensitive,
+            multiline,
+        }
     }
 
     /// Converts given string to a pattern based on regex features supported by Ion Schema Specification
@@ -1697,7 +1703,7 @@ impl RegexConstraint {
                     sb.push(ch);
                     // process occurrences specified within `{` and `}`
                     let mut complete = false;
-                    while let Some(ch) = si.next() {
+                    for ch in si.by_ref() {
                         match ch {
                             '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | ',' => {
                                 sb.push(ch)
@@ -1778,12 +1784,18 @@ impl TryFrom<IslRegexConstraint> for RegexConstraint {
                 invalid_schema_error_raw(format!("Invalid regex {}", isl_regex.expression()))
             })?;
 
-        Ok(RegexConstraint::new(regex))
+        Ok(RegexConstraint::new(
+            regex,
+            isl_regex.case_insensitive(),
+            isl_regex.multi_line(),
+        ))
     }
 }
 
 impl PartialEq for RegexConstraint {
     fn eq(&self, other: &Self) -> bool {
         self.expression.as_str().eq(other.expression.as_str())
+            && self.case_insensitive == other.case_insensitive
+            && self.multiline == other.multiline
     }
 }
