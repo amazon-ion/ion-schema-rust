@@ -179,6 +179,12 @@ mod isl_tests {
             "#),
         IslType::anonymous([IslConstraint::type_constraint(IslTypeRef::named("any"))])
     ),
+    case::type_constraint_with_nullable_annotation(
+        load_anonymous_type(r#" // For a schema with `nullable` annotation`
+                {type: nullable::int}
+            "#),
+        IslType::anonymous([IslConstraint::type_constraint(IslTypeRef::anonymous([IslConstraint::any_of([IslTypeRef::named("$null"), IslTypeRef::named("$int")]), IslConstraint::type_constraint(IslTypeRef::named("$any"))]))])
+    ),
     case::type_constraint_with_named_type(
         load_named_type(r#" // For a schema with named type
                 type:: { name: my_int, type: int }

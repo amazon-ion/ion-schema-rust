@@ -309,6 +309,25 @@ mod schema_tests {
             "#),
             "my_int"
         ),
+        case::nullable_annotation_type_constraint(
+            load(r#"
+                    null
+                    null.null
+                    null.int
+                    0
+                    -5
+                "#),
+            load(r#"
+                    null.decimal
+                    a
+                    "hello"
+                    false
+                "#),
+            load_schema_from_text(r#" // For a schema with named type and `nullable` annotation as below: 
+                    type:: { name: my_int, type: nullable::int }
+                "#),
+            "my_int"
+        ),
         case::nullable_atomic_type_constraint(
             load(r#"
                 5

@@ -34,7 +34,6 @@ const SKIP_LIST: &[&str] = &[
     "ion-schema-tests/constraints/type/inlined_types.isl",
     "ion-schema-tests/constraints/type/inlined_type_import.isl",
     "ion-schema-tests/constraints/type/validation.isl",
-    "ion-schema-tests/constraints/type/nullable.isl",
     "ion-schema-tests/core_types/nothing.isl",
     "ion-schema-tests/core_types/document.isl",
     "ion-schema-tests/constraints/content/validation_closed.isl",
