@@ -6,7 +6,7 @@ use crate::result::{
 };
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::types::TypeDefinitionImpl;
-use ion_rs::value::owned::{text_token, OwnedElement};
+use ion_rs::value::owned::OwnedElement;
 use ion_rs::value::reader::{element_reader, ElementReader};
 use ion_rs::value::{Element, Struct, SymbolToken};
 use ion_rs::IonType;
@@ -51,6 +51,11 @@ impl IslTypeRef {
             "struct" => "{ type: $any, any_of: [$null, $struct] }",
             "sexp" => "{ type: $any, any_of: [$null, $sexp] }",
             "list" => "{ type: $any, any_of: [$null, $list] }",
+            "lob" => "{ type: $any, any_of: [$null, $lob] }",
+            "number" => "{ type: $any, any_of: [$null, $number] }",
+            "text" => "{ type: $any, any_of: [$null, $text] }",
+            "nothing" => "{ type: $null }",
+            "any" => "{ type: $any }",
             // TODO: currently it only allows for built in types to be defined with `nullable` annotation for all other type references it return an error
             _ => {
                 return invalid_schema_error(
@@ -82,11 +87,10 @@ impl IslTypeRef {
                     })?;
 
                 // check for nullable type reference
-                if value.annotations().any(|a| a == &text_token("nullable")) {
+                if value.annotations().any(|a| a.text() == Some("nullable")) {
                     let built_in_type_def = IslTypeRef::get_nullable_type_reference_definition(type_name)?;
                     let value = &element_reader()
-                        .read_one(built_in_type_def.as_bytes())
-                        .map_err(|_| invalid_schema_error_raw(format!("Can not parse nullable type reference for given built in type: {}", type_name)))?;
+                        .read_one(built_in_type_def.as_bytes()).unwrap();
                     return IslTypeRef::from_ion_element(value, inline_imported_types);
                 }
 

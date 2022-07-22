@@ -309,7 +309,7 @@ mod schema_tests {
             "#),
             "my_int"
         ),
-        case::nullable_annotation_type_constraint(
+        case::nullable_annotation_int_type_constraint(
             load(r#"
                     null
                     null.null
@@ -327,6 +327,201 @@ mod schema_tests {
                     type:: { name: my_int, type: nullable::int }
                 "#),
             "my_int"
+        ),
+        case::nullable_annotation_float_type_constraint(
+            load(r#"
+                    null
+                    null.null
+                    null.float
+                    5e2
+                "#),
+            load(r#"
+                    null.decimal
+                    a
+                    "hello"
+                    false
+                    10
+                "#),
+            load_schema_from_text(r#" // For a schema with named type and `nullable` annotation as below: 
+                    type:: { name: my_float, type: nullable::float }
+                "#),
+            "my_float"
+        ),
+        case::nullable_annotation_string_type_constraint(
+            load(r#"
+                    null
+                    null.null
+                    null.string
+                    "hi"
+                "#),
+            load(r#"
+                    null.decimal
+                    null.symbol
+                    hello
+                    false
+                    10
+                "#),
+            load_schema_from_text(r#" // For a schema with named type and `nullable` annotation as below: 
+                    type:: { name: my_string, type: nullable::string }
+                "#),
+            "my_string"
+        ),
+        case::nullable_annotation_symbol_type_constraint(
+            load(r#"
+                        null
+                        null.null
+                        null.symbol
+                        a
+                    "#),
+            load(r#"
+                        null.string
+                        10.5
+                        "hello"
+                        false
+                        10
+                    "#),
+            load_schema_from_text(r#" // For a schema with named type and `nullable` annotation as below: 
+                        type:: { name: my_symbol, type: nullable::symbol }
+                    "#),
+            "my_symbol"
+        ),
+        case::nullable_annotation_decimal_type_constraint(
+            load(r#"
+                    null
+                    null.null
+                    null.decimal
+                    10.5
+                "#),
+            load(r#"
+                    null.int
+                    a
+                    "hello"
+                    false
+                    10
+                "#),
+            load_schema_from_text(r#" // For a schema with named type and `nullable` annotation as below: 
+                    type:: { name: my_decimal, type: nullable::decimal }
+                "#),
+            "my_decimal"
+        ),
+        case::nullable_annotation_timestamp_type_constraint(
+            load(r#"
+                    null
+                    null.null
+                    null.timestamp
+                    2000-01T
+                "#),
+            load(r#"
+                    null.decimal
+                    a
+                    "hello"
+                    false
+                    10
+                "#),
+            load_schema_from_text(r#" // For a schema with named type and `nullable` annotation as below: 
+                    type:: { name: my_timestamp, type: nullable::timestamp }
+                "#),
+            "my_timestamp"
+        ),
+        case::nullable_annotation_blob_type_constraint(
+            load(r#"
+                    null
+                    null.null
+                    null.blob
+                    {{ aGVsbG8= }}
+                "#),
+            load(r#"
+                    null.clob
+                    a
+                    "hello"
+                    false
+                    10
+                "#),
+            load_schema_from_text(r#" // For a schema with named type and `nullable` annotation as below: 
+                    type:: { name: my_blob, type: nullable::blob }
+                "#),
+            "my_blob"
+        ),
+        case::nullable_annotation_clob_type_constraint(
+            load(r#"
+                    null
+                    null.null
+                    null.clob
+                    {{"12345"}}
+                "#),
+            load(r#"
+                    null.blob
+                    a
+                    "hello"
+                    false
+                    10
+                "#),
+            load_schema_from_text(r#" // For a schema with named type and `nullable` annotation as below: 
+                    type:: { name: my_clob, type: nullable::clob }
+                "#),
+            "my_clob"
+        ),
+        case::nullable_annotation_text_type_constraint(
+            load(r#"
+                    null
+                    null.null
+                    null.symbol
+                    null.string
+                    "hello"
+                    hello
+                "#),
+            load(r#"
+                    null.decimal
+                    10.5
+                    false
+                    10
+                "#),
+            load_schema_from_text(r#" // For a schema with named type and `nullable` annotation as below: 
+                    type:: { name: my_text, type: nullable::text }
+                "#),
+            "my_text"
+        ),
+        case::nullable_annotation_lob_type_constraint(
+            load(r#"
+                    null
+                    null.null
+                    null.blob
+                    null.clob
+                    {{ aGVsbG8= }}
+                    {{"12345"}}
+                "#),
+            load(r#"
+                    null.decimal
+                    10.5
+                    false
+                    10
+                "#),
+            load_schema_from_text(r#" // For a schema with named type and `nullable` annotation as below: 
+                    type:: { name: my_lob, type: nullable::lob }
+                "#),
+            "my_lob"
+        ),
+        case::nullable_annotation_number_type_constraint(
+            load(r#"
+                    null
+                    null.null
+                    null.int
+                    null.float
+                    null.decimal
+                    10.5
+                    10e2
+                    5
+                "#),
+            load(r#"
+                    null.string
+                    "hello"
+                    false
+                    a
+                "#),
+            load_schema_from_text(r#" // For a schema with named type and `nullable` annotation as below: 
+                    type:: { name: my_number, type: nullable::number }
+                "#),
+            "my_number"
         ),
         case::nullable_atomic_type_constraint(
             load(r#"
