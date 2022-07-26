@@ -376,7 +376,7 @@ impl PendingTypes {
 
 /// Represents an array of BuiltIn derived ISL types
 /// for more information: https://amzn.github.io/ion-schema/docs/spec.html#type-system
-static DERIVED_ISL_TYPES: [&str; 8] = [
+static DERIVED_ISL_TYPES: [&str; 9] = [
     "type::{ name: any, one_of: [ blob, bool, clob, decimal,
                                     float, int, string, symbol, timestamp,
                                     list, sexp, struct ] }",
@@ -389,6 +389,7 @@ static DERIVED_ISL_TYPES: [&str; 8] = [
     "type::{ name: $lob, one_of: [ $blob, $clob ] }",
     "type::{ name: $number, one_of: [ $decimal, $float, $int ] }",
     "type::{ name: $text, one_of: [ $string, $symbol ] }",
+    "type::{ name: nothing, not: $any }",
 ];
 
 pub type TypeId = usize;
@@ -458,7 +459,7 @@ impl TypeStore {
         // add $null to the built-in types [type_id: 24]
         self.add_builtin_type(&BuiltInTypeDefinition::Atomic(Null, Nullability::Nullable));
 
-        // get the derived built in types map and related text value for given type_name [type_ids: 25 - 32]
+        // get the derived built in types map and related text value for given type_name [type_ids: 25 - 33]
         let pending_types = &mut PendingTypes::default();
         for text in DERIVED_ISL_TYPES {
             let isl_type = IslTypeImpl::from_owned_element(

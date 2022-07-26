@@ -7,6 +7,7 @@ use crate::result::{
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::types::TypeDefinitionImpl;
 use ion_rs::value::owned::OwnedElement;
+use ion_rs::value::reader::{element_reader, ElementReader};
 use ion_rs::value::{Element, Struct, SymbolToken};
 use ion_rs::IonType;
 
@@ -23,7 +24,6 @@ pub enum IslTypeRef {
     Anonymous(IslTypeImpl),
 }
 
-// TODO: add a check for nullable type reference
 impl IslTypeRef {
     /// Creates a [IslTypeRef::Named] using the [IonType] referenced inside it
     pub fn named<A: Into<String>>(name: A) -> IslTypeRef {
@@ -33,6 +33,36 @@ impl IslTypeRef {
     /// Creates a [IslTypeRef::Anonymous] using the [IonType] referenced inside it
     pub fn anonymous<A: Into<Vec<IslConstraint>>>(constraints: A) -> IslTypeRef {
         IslTypeRef::Anonymous(IslTypeImpl::new(None, constraints.into()))
+    }
+
+    /// Provides a string representing a definition of a nullable built in type reference
+    // these are the built types that rae annotated with `nullable`
+    fn get_nullable_type_reference_definition(type_ref_name: &str) -> IonSchemaResult<&str> {
+        Ok(match type_ref_name {
+            "int" => "{ type: $any, any_of: [$null, $int] }",
+            "float" => "{ type: $any, any_of: [$null, $float] }",
+            "bool" => "{ type: $any, any_of: [$null, $bool] }",
+            "decimal" => "{ type: $any, any_of: [$null, $decimal] }",
+            "string" => "{ type: $any, any_of: [$null, $string] }",
+            "symbol" => "{ type: $any, any_of: [$null, $symbol] }",
+            "blob" => "{ type: $any, any_of: [$null, $blob] }",
+            "clob" => "{ type: $any, any_of: [$null, $clob] }",
+            "timestamp" => "{ type: $any, any_of: [$null, $timestamp] }",
+            "struct" => "{ type: $any, any_of: [$null, $struct] }",
+            "sexp" => "{ type: $any, any_of: [$null, $sexp] }",
+            "list" => "{ type: $any, any_of: [$null, $list] }",
+            "lob" => "{ type: $any, any_of: [$null, $lob] }",
+            "number" => "{ type: $any, any_of: [$null, $number] }",
+            "text" => "{ type: $any, any_of: [$null, $text] }",
+            "nothing" => "{ type: $null }",
+            "any" => "{ type: $any }",
+            // TODO: currently it only allows for built in types to be defined with `nullable` annotation for all other type references it return an error
+            _ => {
+                return invalid_schema_error(
+                    "nullable type reference is only allowed for built in types",
+                )
+            }
+        })
     }
 
     /// Tries to create an [IslTypeRef] from the given OwnedElement
@@ -47,13 +77,24 @@ impl IslTypeRef {
                         "a base or alias type reference can not be null.symbol",
                     )
                 }
-                value.as_sym().unwrap()
+
+                let type_name = value.as_sym().unwrap()
                     .text()
                     .ok_or_else(|| {
                         invalid_schema_error_raw(
                             "a base or alias type reference symbol doesn't have text",
                         )
-                    }).map(|type_name| IslTypeRef::Named(type_name.to_owned()))
+                    })?;
+
+                // check for nullable type reference
+                if value.annotations().any(|a| a.text() == Some("nullable")) {
+                    let built_in_type_def = IslTypeRef::get_nullable_type_reference_definition(type_name)?;
+                    let value = &element_reader()
+                        .read_one(built_in_type_def.as_bytes()).unwrap();
+                    return IslTypeRef::from_ion_element(value, inline_imported_types);
+                }
+
+                Ok(IslTypeRef::Named(type_name.to_owned()))
             }
             IonType::Struct => {
                 if value.is_null() {
