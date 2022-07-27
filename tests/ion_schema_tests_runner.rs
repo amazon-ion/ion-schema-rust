@@ -3,12 +3,13 @@ use ion_rs::value::owned::{text_token, OwnedElement, OwnedSymbolToken};
 use ion_rs::value::reader::{element_reader, ElementReader};
 use ion_rs::value::{Element, Sequence};
 use ion_schema::authority::FileSystemDocumentAuthority;
-use ion_schema::system::{SchemaSystem, TypeStore};
-use ion_schema::types::{TypeDefinitionImpl, TypeValidator};
+use ion_schema::system::{SchemaSystem, TypeId, TypeStore};
+use ion_schema::types::TypeRef;
 use rstest::*;
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::str::FromStr;
 use test_generator::test_resources;
 
@@ -17,33 +18,18 @@ const TEST_ROOT_DIR: &str = "ion-schema-tests/";
 // following test files will be ignored while testing
 // `test-resources` don't support to provide a skip-list of test files
 const SKIP_LIST: &[&str] = &[
-    "ion-schema-tests/constraints/all_of/inlined_types.isl",
-    "ion-schema-tests/constraints/all_of/inlined_type_import.isl",
     "ion-schema-tests/constraints/all_of/validation.isl",
-    "ion-schema-tests/constraints/fields/inlined_type_import.isl",
     "ion-schema-tests/constraints/fields/validation_base.isl",
     "ion-schema-tests/constraints/fields/validation_complex.isl",
     "ion-schema-tests/constraints/fields/validation_inlined_type.isl",
     "ion-schema-tests/constraints/fields/validation_nested.isl",
-    "ion-schema-tests/constraints/any_of/inlined_types.isl",
-    "ion-schema-tests/constraints/any_of/inlined_type_import.isl",
     "ion-schema-tests/constraints/any_of/validation.isl",
-    "ion-schema-tests/constraints/one_of/inlined_types.isl",
-    "ion-schema-tests/constraints/one_of/inlined_type_import.isl",
     "ion-schema-tests/constraints/one_of/validation.isl",
-    "ion-schema-tests/constraints/type/inlined_types.isl",
-    "ion-schema-tests/constraints/type/inlined_type_import.isl",
     "ion-schema-tests/constraints/type/validation.isl",
-    "ion-schema-tests/core_types/document.isl",
     "ion-schema-tests/constraints/content/validation_closed.isl",
     "ion-schema-tests/constraints/content/validation_mixed.isl",
-    "ion-schema-tests/constraints/contains/nulls.isl",
     "ion-schema-tests/constraints/contains/validation.isl",
     "ion-schema-tests/constraints/contains/various_values.isl",
-    "ion-schema-tests/constraints/element/empty_type.isl",
-    "ion-schema-tests/constraints/element/inlined_type_import.isl",
-    "ion-schema-tests/constraints/element/int.isl",
-    "ion-schema-tests/constraints/element/nullable_int.isl",
     "ion-schema-tests/constraints/element/validation_inline_import.isl",
     "ion-schema-tests/constraints/element/validation_int.isl",
     "ion-schema-tests/constraints/element/validation_named_type.isl",
@@ -134,7 +120,7 @@ fn validation_tests(path: &str) {
     let type_store = &mut TypeStore::default();
     let mut invalid_values: Vec<OwnedElement> = vec![];
     let mut valid_values: Vec<OwnedElement> = vec![];
-    let mut type_def: Option<TypeDefinitionImpl> = None;
+    let mut type_id: Option<TypeId> = None;
 
     // store all the errors encountered while testing
     let mut failed_tests = vec![];
@@ -165,7 +151,7 @@ fn validation_tests(path: &str) {
                 .collect();
         } else if annotations.contains(&&text_token("type")) {
             // get type definition for type validation
-            type_def = Some(
+            type_id = Some(
                 schema_system
                     .schema_type_from_element(&element, type_store)
                     .unwrap_or_else(|_| {
@@ -177,15 +163,17 @@ fn validation_tests(path: &str) {
         }
     }
 
-    if let Some(schema_type) = type_def {
+    let type_ref = type_id.and_then(|id| Some(TypeRef::new(id, Rc::from(type_store.to_owned()))));
+
+    if let Some(schema_type) = type_ref {
         for valid_value in valid_values {
-            if let Err(error) = schema_type.validate(&valid_value, type_store) {
+            if let Err(error) = schema_type.validate(&valid_value) {
                 failed_tests.push(format!("{} for {:?}", error, valid_value));
             }
         }
 
         for invalid_value in invalid_values {
-            if schema_type.validate(&invalid_value, type_store).is_ok() {
+            if schema_type.validate(&invalid_value).is_ok() {
                 failed_tests.push(format!(
                     "Expected error for invalid value: {:?}",
                     &invalid_value
