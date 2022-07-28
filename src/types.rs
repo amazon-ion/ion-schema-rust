@@ -100,9 +100,9 @@ impl TypeRef {
         // convert given IonSchemaElement to an OwnedElement
         // converts document type to SExpression
         let value = match value.into() {
-            IonSchemaElement::Element(element) => element.to_owned(),
+            IonSchemaElement::Element(element) => element,
             IonSchemaElement::Document(document) => {
-                OwnedElement::new_sexp(document.to_vec().into_iter())
+                OwnedElement::new_sexp(document.iter().cloned())
                     .with_annotations(vec![text_token("document")])
             }
         };
@@ -356,7 +356,7 @@ impl TypeDefinitionImpl {
             actual_type_id = pending_types.update_named_type(
                 type_id,
                 type_name.as_ref().unwrap(),
-                type_def.to_owned(),
+                type_def,
                 type_store,
             );
 
@@ -364,8 +364,7 @@ impl TypeDefinitionImpl {
             pending_types.clear_parent();
         } else {
             // update with this resolved type_def to context for type_id
-            actual_type_id =
-                pending_types.update_anonymous_type(type_id, type_def.to_owned(), type_store);
+            actual_type_id = pending_types.update_anonymous_type(type_id, type_def, type_store);
         }
 
         // let type_ref = TypeRef::new(final_type_id, Rc::from(type_store.to_owned()));

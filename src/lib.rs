@@ -60,7 +60,7 @@ impl From<&OwnedElement> for IonSchemaElement {
     fn from(value: &OwnedElement) -> Self {
         if value.annotations().any(|a| a.text() == Some("document")) {
             let sequence = match value.ion_type() {
-                IonType::String => load(&value.as_str().unwrap()),
+                IonType::String => load(value.as_str().unwrap()),
                 IonType::List | IonType::SExpression => {
                     let elements: Vec<OwnedElement> = value
                         .as_sequence()
