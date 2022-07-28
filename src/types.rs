@@ -50,30 +50,33 @@ impl TypeRef {
     ///
     /// fn main() -> IonSchemaResult<()> {
     ///     // create an IonSchemaElement from an OwnedElement
+    ///     use ion_schema::authority::MapDocumentAuthority;
     ///     let owned_element: OwnedElement = 4.into();
     ///
+    ///     let map_authority = [
+    ///         (
+    ///            "sample.isl",
+    ///             r#"
+    ///                 type::{
+    ///                     name: "my_int",
+    ///                     type: int,
+    ///                 }
+    ///             "#
+    ///         )   
+    ///     ];
+    ///
     ///     // create a vector of authorities and construct schema system
-    ///     // this example sets ion-schema-tests submodule as the authority
+    ///     // this example uses above mentioned map as the authority
     ///     let authorities: Vec<Box<dyn DocumentAuthority>> = vec![Box::new(
-    ///            FileSystemDocumentAuthority::new(Path::new("../ion-schema-tests/")),
+    ///             MapDocumentAuthority::new(map_authority),
     ///         )];
     ///     let mut schema_system = SchemaSystem::new(authorities);
     ///
     ///     // use this schema_system to load a schema as following
-    ///     // this example uses byte_length schema file from ion-schema-tests submodule
-    ///     let schema = schema_system.load_schema("schema/byte_length.isl")?;
+    ///     let schema = schema_system.load_schema("sample.isl")?;
     ///
-    ///     // definition for int_non_negative type:
-    ///     //
-    ///     // type::{
-    ///     //   name: int_non_negative,
-    ///     //   type: int,
-    ///     //   annotations: [exclusive],
-    ///     //   valid_values: range::[0, max],
-    ///     // }
-    ///
-    ///     // unwrap() here because we know that the `int_non_negative` type exists in byte_length.isl
-    ///     let type_ref = schema.get_type("int_non_negative").unwrap();
+    ///     // unwrap() here because we know that the `my_int` type exists in sample.isl
+    ///     let type_ref = schema.get_type("my_int").unwrap();
     ///
     ///     assert!(type_ref.validate(&owned_element).is_ok());
     ///     Ok(())
