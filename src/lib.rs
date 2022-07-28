@@ -35,6 +35,22 @@ pub mod external {
 }
 
 /// Provide an Ion schema element which includes all OwnedElements and a document type
+///
+/// ## Example:
+/// In general `TypeRef` `validate()` takes in IonSchemaElement as the value to be validated.
+/// In order to create an `IonSchemaElement`:
+///
+/// ```
+/// use ion_rs::value::owned::OwnedElement;
+/// use ion_schema::IonSchemaElement;
+///
+/// // create an IonSchemaElement from an OwnedElement
+/// let owned_element: OwnedElement = 4.into();
+/// let ion_schema_element: IonSchemaElement = (&owned_element).into();
+///
+/// // create an IonSchemaElement for document type based on vector of owned elements
+/// let document: IonSchemaElement = IonSchemaElement::Document(vec![owned_element]);
+/// ```
 pub enum IonSchemaElement {
     Element(OwnedElement),
     Document(Vec<OwnedElement>),

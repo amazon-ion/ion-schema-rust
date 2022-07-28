@@ -39,6 +39,46 @@ impl TypeRef {
         self.id
     }
 
+    /// Provides the validation for the given value based on this schema type
+    /// ```
+    /// use ion_rs::value::owned::OwnedElement;
+    /// use ion_schema::IonSchemaElement;
+    /// use ion_schema::authority::{FileSystemDocumentAuthority, DocumentAuthority};
+    /// use ion_schema::system::SchemaSystem;
+    /// use ion_schema::result::IonSchemaResult;
+    /// use std::path::Path;
+    ///
+    /// fn main() -> IonSchemaResult<()> {
+    ///     // create an IonSchemaElement from an OwnedElement
+    ///     let owned_element: OwnedElement = 4.into();
+    ///
+    ///     // create a vector of authorities and construct schema system
+    ///     // this example sets ion-schema-tests submodule as the authority
+    ///     let authorities: Vec<Box<dyn DocumentAuthority>> = vec![Box::new(
+    ///            FileSystemDocumentAuthority::new(Path::new("../ion-schema-tests/")),
+    ///         )];
+    ///     let mut schema_system = SchemaSystem::new(authorities);
+    ///
+    ///     // use this schema_system to load a schema as following
+    ///     // this example uses byte_length schema file from ion-schema-tests submodule
+    ///     let schema = schema_system.load_schema("schema/byte_length.isl")?;
+    ///
+    ///     // definition for int_non_negative type:
+    ///     //
+    ///     // type::{
+    ///     //   name: int_non_negative,
+    ///     //   type: int,
+    ///     //   annotations: [exclusive],
+    ///     //   valid_values: range::[0, max],
+    ///     // }
+    ///
+    ///     // unwrap() here because we know that the `int_non_negative` type exists in byte_length.isl
+    ///     let type_ref = schema.get_type("int_non_negative").unwrap();
+    ///
+    ///     assert!(type_ref.validate(&owned_element).is_ok());
+    ///     Ok(())
+    /// }
+    /// ```
     pub fn validate<I: Into<IonSchemaElement>>(&self, value: I) -> ValidationResult {
         let mut violations: Vec<Violation> = vec![];
         let type_def = self.type_store.get_type_by_id(self.id).unwrap();
