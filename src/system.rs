@@ -390,7 +390,7 @@ static DERIVED_ISL_TYPES: [&str; 10] = [
     "type::{ name: $number, one_of: [ $decimal, $float, $int ] }",
     "type::{ name: $text, one_of: [ $string, $symbol ] }",
     "type::{ name: nothing, not: $any }",
-    "type::{ name: document, annotations: required::closed::[\"document\"], type: any }",
+    "type::{ name: document, annotations: required::closed::[\"$ion_schema_document\"], type: any }",
 ];
 
 pub type TypeId = usize;

@@ -103,7 +103,7 @@ impl TypeRef {
             IonSchemaElement::Element(element) => element,
             IonSchemaElement::Document(document) => {
                 OwnedElement::new_sexp(document.iter().cloned())
-                    .with_annotations(vec![text_token("document")])
+                    .with_annotations(vec![text_token("$ion_schema_document")])
             }
         };
 
@@ -450,7 +450,7 @@ mod type_definition_tests {
             { name: my_int, type: { type: my_int } }
          */
         IslType::named("my_int", [IslConstraint::type_constraint(IslTypeRef::anonymous([IslConstraint::type_constraint(IslTypeRef::named("my_int"))]))]),
-        TypeDefinition::named("my_int", [Constraint::type_constraint(36)]) // 0-32 are built-in types which are preloaded to the type_store
+        TypeDefinition::named("my_int", [Constraint::type_constraint(36)]) // 0-35 are built-in types which are preloaded to the type_store
     ),
     case::type_constraint_with_nested_type(
         /* For a schema with nested types as below:

@@ -74,7 +74,6 @@ impl From<&OwnedElement> for IonSchemaElement {
                     panic!("invalid document")
                 }
             };
-            // println!("{:?}", sequence);
             return IonSchemaElement::Document(sequence);
         }
         IonSchemaElement::Element(value.to_owned())
