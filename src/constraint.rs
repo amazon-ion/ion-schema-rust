@@ -957,7 +957,7 @@ impl ConstraintValidator for ContainsConstraint {
         value: I,
         type_store: &TypeStore,
     ) -> ValidationResult {
-        let schema_element: IonSchemaElement = value.to_owned().into();
+        let schema_element: IonSchemaElement = value.into();
 
         // Create a peekable iterator for given sequence
         let values: Vec<OwnedElement> = match &schema_element {
@@ -1275,7 +1275,7 @@ impl ConstraintValidator for ElementConstraint {
         let type_def = type_store.get_type_by_id(self.type_id).unwrap();
 
         // get the size of given string/symbol Unicode codepoints
-        let size = match schema_element {
+        match schema_element {
             IonSchemaElement::SingleElement(element) => {
                 // Check for null container
                 if element.is_null() {
@@ -1322,7 +1322,7 @@ impl ConstraintValidator for ElementConstraint {
                     }
                 }
             }
-        };
+        }
 
         if !violations.is_empty() {
             return Err(Violation::with_violations(
@@ -1507,11 +1507,11 @@ impl ConstraintValidator for AnnotationsConstraint {
             }
             IonSchemaElement::Document(document) => {
                 // document type can not have annotations
-                return Err(Violation::new(
+                Err(Violation::new(
                     "annotations",
                     ViolationCode::AnnotationMismatched,
                     "annotations don't match expectations",
-                ));
+                ))
             }
         }
     }
@@ -1803,13 +1803,11 @@ impl ConstraintValidator for ValidValuesConstraint {
                     ),
                 ))
             }
-            IonSchemaElement::Document(document) => {
-                return Err(Violation::new(
-                    "valid_values",
-                    ViolationCode::InvalidValue,
-                    "valid_values constraint is not allowed to be used for document",
-                ));
-            }
+            IonSchemaElement::Document(document) => Err(Violation::new(
+                "valid_values",
+                ViolationCode::InvalidValue,
+                "valid_values constraint is not allowed to be used for document",
+            )),
         }
     }
 }

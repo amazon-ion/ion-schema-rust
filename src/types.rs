@@ -299,7 +299,7 @@ impl TypeValidator for TypeDefinition {
                         return Ok(());
                     }
                     // if it is not a document type do validation using the type definition
-                    other_type.validate(value.to_owned(), type_store)
+                    other_type.validate(value, type_store)
                 }
             },
         }
