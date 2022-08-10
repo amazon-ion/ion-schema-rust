@@ -5,6 +5,7 @@ use crate::external::ion_rs::IonType;
 use ion_rs::value::owned::OwnedElement;
 use ion_rs::value::reader::{element_reader, ElementReader};
 use ion_rs::value::{Element, Sequence, SymbolToken};
+use std::fmt::{Display, Formatter};
 /// A [`try`]-like macro to workaround the [`Option`]/[`Result`] nested APIs.
 /// These API require checking the type and then calling the appropriate getter function
 /// (which returns a None if you got it wrong). This macro turns the `None` into
@@ -51,9 +52,45 @@ pub mod external {
 /// // create an IonSchemaElement for document type based on vector of owned elements
 /// let document: IonSchemaElement = IonSchemaElement::Document(vec![owned_element]);
 /// ```
+#[derive(Debug, Clone)]
 pub enum IonSchemaElement {
     Element(OwnedElement),
     Document(Vec<OwnedElement>),
+}
+
+impl IonSchemaElement {
+    pub fn as_element(&self) -> Option<&OwnedElement> {
+        match self {
+            IonSchemaElement::Element(element) => {
+                Some(element)
+            }
+            IonSchemaElement::Document(_) => {
+                None
+            }
+        }
+    }
+}
+
+impl Display for IonSchemaElement {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            IonSchemaElement::Element(element) => {
+                write!(f, "{}", element)
+            }
+            IonSchemaElement::Document(document) => {
+                write!(f, "document::( ")?;
+                let mut peekable_itr = document.iter().peekable();
+                while peekable_itr.peek() != None {
+                    let value = peekable_itr.next().unwrap();
+                    write!(f, "{}", value)?;
+                    if peekable_itr.peek() != None {
+                        write!(f, " ")?;
+                    }
+                }
+                write!(f, " )")
+            }
+        }
+    }
 }
 
 impl From<&OwnedElement> for IonSchemaElement {

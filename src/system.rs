@@ -377,20 +377,22 @@ impl PendingTypes {
 /// Represents an array of BuiltIn derived ISL types
 /// for more information: https://amzn.github.io/ion-schema/docs/spec.html#type-system
 static DERIVED_ISL_TYPES: [&str; 10] = [
-    "type::{ name: any, one_of: [ blob, bool, clob, decimal,
-                                    float, int, string, symbol, timestamp,
-                                    list, sexp, struct ] }",
     "type::{ name: lob, one_of: [ blob, clob ] }",
     "type::{ name: number, one_of: [ decimal, float, int ] }",
     "type::{ name: text, one_of: [ string, symbol ] }",
-    "type::{ name: $any, one_of: [ $blob, $bool, $clob, $decimal,
-                                    $float, $int, $string, $symbol, $timestamp,
-                                    $list, $sexp, $struct, $null ] }",
     "type::{ name: $lob, one_of: [ $blob, $clob ] }",
     "type::{ name: $number, one_of: [ $decimal, $float, $int ] }",
     "type::{ name: $text, one_of: [ $string, $symbol ] }",
+    "type::{ name: $any, one_of: [ $blob, $bool, $clob, $decimal,
+                                    $float, $int, $string, $symbol, $timestamp,
+                                    $list, $sexp, $struct, $null ] }",
+    // this is just a place holder for document type,
+    // IonSchemaElement::Document(_) type is used to verify the correctness on the validation side
+    "type::{ name: document }",
     "type::{ name: nothing, not: $any }",
-    "type::{ name: document, annotations: required::closed::[\"$ion_schema_document\"], type: any }",
+    "type::{ name: any, one_of: [ blob, bool, clob, decimal,
+                                    float, int, string, symbol, timestamp,
+                                    list, sexp, struct, document ] }",
 ];
 
 pub type TypeId = usize;
