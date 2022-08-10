@@ -61,12 +61,8 @@ pub enum IonSchemaElement {
 impl IonSchemaElement {
     pub fn as_element(&self) -> Option<&OwnedElement> {
         match self {
-            IonSchemaElement::SingleElement(element) => {
-                Some(element)
-            }
-            IonSchemaElement::Document(_) => {
-                None
-            }
+            IonSchemaElement::SingleElement(element) => Some(element),
+            IonSchemaElement::Document(_) => None,
         }
     }
 }

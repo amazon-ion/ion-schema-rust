@@ -9,6 +9,7 @@ use crate::result::{
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::types::{TypeDefinition, TypeValidator};
 use crate::violation::{Violation, ViolationCode};
+use crate::IonSchemaElement;
 use ion_rs::value::owned::OwnedElement;
 use ion_rs::value::{Element, Sequence, Struct, SymbolToken};
 use ion_rs::{Integer, IonType};
@@ -17,7 +18,6 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::iter::Peekable;
 use std::str::Chars;
-use crate::IonSchemaElement;
 
 /// Provides validation for schema Constraint
 pub trait ConstraintValidator {
@@ -25,7 +25,11 @@ pub trait ConstraintValidator {
     /// adding [Violation]s and/or [ViolationChild]ren to `Err(violation)`
     /// if the constraint is violated.
     /// Otherwise, if the value passes the validation against the constraint then returns `Ok(())`.
-    fn validate<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(&self, value: I, type_store: &TypeStore) -> ValidationResult;
+    fn validate<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(
+        &self,
+        value: I,
+        type_store: &TypeStore,
+    ) -> ValidationResult;
 }
 
 /// Defines schema Constraints
@@ -320,7 +324,11 @@ impl Constraint {
         }
     }
 
-    pub fn validate<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(&self, value: I, type_store: &TypeStore) -> ValidationResult {
+    pub fn validate<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(
+        &self,
+        value: I,
+        type_store: &TypeStore,
+    ) -> ValidationResult {
         match self {
             Constraint::AllOf(all_of) => all_of.validate(value, type_store),
             Constraint::Annotations(annotations) => annotations.validate(value, type_store),
@@ -387,7 +395,11 @@ impl AllOfConstraint {
 }
 
 impl ConstraintValidator for AllOfConstraint {
-    fn validate<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(&self, value: I, type_store: &TypeStore) -> ValidationResult {
+    fn validate<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(
+        &self,
+        value: I,
+        type_store: &TypeStore,
+    ) -> ValidationResult {
         let mut violations: Vec<Violation> = vec![];
         let mut valid_types = vec![];
         for type_id in &self.type_ids {
@@ -440,7 +452,11 @@ impl AnyOfConstraint {
 }
 
 impl ConstraintValidator for AnyOfConstraint {
-    fn validate<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(&self, value: I, type_store: &TypeStore) -> ValidationResult {
+    fn validate<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(
+        &self,
+        value: I,
+        type_store: &TypeStore,
+    ) -> ValidationResult {
         let mut violations: Vec<Violation> = vec![];
         let mut valid_types = vec![];
         for type_id in &self.type_ids {
@@ -490,7 +506,11 @@ impl OneOfConstraint {
 }
 
 impl ConstraintValidator for OneOfConstraint {
-    fn validate<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(&self, value: I, type_store: &TypeStore) -> ValidationResult {
+    fn validate<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(
+        &self,
+        value: I,
+        type_store: &TypeStore,
+    ) -> ValidationResult {
         let mut violations: Vec<Violation> = vec![];
         let mut valid_types = vec![];
         for type_id in &self.type_ids {
@@ -544,7 +564,11 @@ impl NotConstraint {
 }
 
 impl ConstraintValidator for NotConstraint {
-    fn validate<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(&self, value: I, type_store: &TypeStore) -> ValidationResult {
+    fn validate<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(
+        &self,
+        value: I,
+        type_store: &TypeStore,
+    ) -> ValidationResult {
         let type_def = type_store.get_type_by_id(self.type_id).unwrap();
         let violation = type_def.validate(value, type_store);
         match violation {
@@ -586,7 +610,11 @@ impl TypeConstraint {
 }
 
 impl ConstraintValidator for TypeConstraint {
-    fn validate<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(&self, value: I, type_store: &TypeStore) -> ValidationResult {
+    fn validate<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(
+        &self,
+        value: I,
+        type_store: &TypeStore,
+    ) -> ValidationResult {
         let type_def = type_store.get_type_by_id(self.type_id).unwrap();
         type_def.validate(value, type_store)
     }
@@ -610,7 +638,11 @@ impl OccursConstraint {
 }
 
 impl ConstraintValidator for OccursConstraint {
-    fn validate<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(&self, value: I, type_store: &TypeStore) -> ValidationResult {
+    fn validate<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(
+        &self,
+        value: I,
+        type_store: &TypeStore,
+    ) -> ValidationResult {
         // No op
         // `occurs` does not work as a constraint by its own, it needs to be used with other constraints
         // e.g. `ordered_elements`, `fields`, etc.
@@ -708,34 +740,36 @@ impl OrderedElementsConstraint {
 }
 
 impl ConstraintValidator for OrderedElementsConstraint {
-    fn validate<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(&self, value: I, type_store: &TypeStore) -> ValidationResult {
+    fn validate<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(
+        &self,
+        value: I,
+        type_store: &TypeStore,
+    ) -> ValidationResult {
         let violations: Vec<Violation> = vec![];
         let schema_element: IonSchemaElement = value.into();
 
         // Create a peekable iterator for given sequence
         let mut values_iter = match &schema_element {
-            IonSchemaElement::SingleElement(element) => {
-                match element.as_sequence() {
-                    None => {
-                        return Err(Violation::with_violations(
-                            "ordered_elements",
-                            ViolationCode::TypeMismatched,
-                            &format!(
-                                "expected list/sexp ion found {}",
-                                if element.is_null() {
-                                    format!("{:?}", element)
-                                } else {
-                                    format!("{}", element.ion_type())
-                                }
-                            ),
-                            violations,
-                        ));
-                    }
-                    Some(sequence) => sequence.iter().peekable(),
+            IonSchemaElement::SingleElement(element) => match element.as_sequence() {
+                None => {
+                    return Err(Violation::with_violations(
+                        "ordered_elements",
+                        ViolationCode::TypeMismatched,
+                        &format!(
+                            "expected list/sexp ion found {}",
+                            if element.is_null() {
+                                format!("{:?}", element)
+                            } else {
+                                format!("{}", element.ion_type())
+                            }
+                        ),
+                        violations,
+                    ));
                 }
-            }
+                Some(sequence) => sequence.iter().peekable(),
+            },
             IonSchemaElement::Document(document) => {
-                let itr:Box<dyn Iterator<Item = &OwnedElement>> = Box::new(document.iter());
+                let itr: Box<dyn Iterator<Item = &OwnedElement>> = Box::new(document.iter());
                 itr.peekable()
             }
         };
@@ -805,37 +839,39 @@ impl FieldsConstraint {
 }
 
 impl ConstraintValidator for FieldsConstraint {
-    fn validate<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(&self, value: I, type_store: &TypeStore) -> ValidationResult {
+    fn validate<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(
+        &self,
+        value: I,
+        type_store: &TypeStore,
+    ) -> ValidationResult {
         let mut violations: Vec<Violation> = vec![];
         let schema_element: IonSchemaElement = value.into();
 
         // Create a peekable iterator for given struct
         let ion_struct = match &schema_element {
-            IonSchemaElement::SingleElement(element) => {
-                match element.as_struct() {
-                    None => {
-                        return Err(Violation::with_violations(
-                            "fields",
-                            ViolationCode::TypeMismatched,
-                            &format!(
-                                "expected struct ion found {}",
-                                if element.is_null() {
-                                    format!("{:?}", element)
-                                } else {
-                                    format!("{}", element.ion_type())
-                                }
-                            ),
-                            violations,
-                        ));
-                    }
-                    Some(ion_struct) => ion_struct,
+            IonSchemaElement::SingleElement(element) => match element.as_struct() {
+                None => {
+                    return Err(Violation::with_violations(
+                        "fields",
+                        ViolationCode::TypeMismatched,
+                        &format!(
+                            "expected struct ion found {}",
+                            if element.is_null() {
+                                format!("{:?}", element)
+                            } else {
+                                format!("{}", element.ion_type())
+                            }
+                        ),
+                        violations,
+                    ));
                 }
-            }
+                Some(ion_struct) => ion_struct,
+            },
             IonSchemaElement::Document(document) => {
                 return Err(Violation::with_violations(
                     "fields",
                     ViolationCode::TypeMismatched,
-                        "expected struct ion found document type",
+                    "expected struct ion found document type",
                     violations,
                 ));
             }
@@ -916,7 +952,11 @@ impl ContainsConstraint {
 }
 
 impl ConstraintValidator for ContainsConstraint {
-    fn validate<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(&self, value: I, type_store: &TypeStore) -> ValidationResult {
+    fn validate<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(
+        &self,
+        value: I,
+        type_store: &TypeStore,
+    ) -> ValidationResult {
         let schema_element: IonSchemaElement = value.to_owned().into();
 
         // Create a peekable iterator for given sequence
@@ -938,14 +978,10 @@ impl ConstraintValidator for ContainsConstraint {
                             ),
                         ));
                     }
-                    Some(ion_sequence) => {
-                        ion_sequence.iter().map(|a| a.to_owned()).collect()
-                    }
+                    Some(ion_sequence) => ion_sequence.iter().map(|a| a.to_owned()).collect(),
                 }
             }
-            IonSchemaElement::Document(document) => {
-                document.to_owned()
-            }
+            IonSchemaElement::Document(document) => document.to_owned(),
         };
 
         // add all the missing values found during validation
@@ -964,7 +1000,10 @@ impl ConstraintValidator for ContainsConstraint {
             return Err(Violation::new(
                 "contains",
                 ViolationCode::MissingValue,
-                &format!("{:?} has missing value(s): {:?}", schema_element, missing_values),
+                &format!(
+                    "{:?} has missing value(s): {:?}",
+                    schema_element, missing_values
+                ),
             ));
         }
 
@@ -990,7 +1029,11 @@ impl ContainerLengthConstraint {
 }
 
 impl ConstraintValidator for ContainerLengthConstraint {
-    fn validate<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(&self, value: I, type_store: &TypeStore) -> ValidationResult {
+    fn validate<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(
+        &self,
+        value: I,
+        type_store: &TypeStore,
+    ) -> ValidationResult {
         let schema_element: IonSchemaElement = value.into();
 
         // get the size of given value container
@@ -1006,7 +1049,9 @@ impl ConstraintValidator for ContainerLengthConstraint {
                 }
 
                 match element.ion_type() {
-                    IonType::List | IonType::SExpression => element.as_sequence().unwrap().iter().count(),
+                    IonType::List | IonType::SExpression => {
+                        element.as_sequence().unwrap().iter().count()
+                    }
                     IonType::Struct => element.as_struct().unwrap().iter().count(),
                     _ => {
                         // return Violation if value is not an Ion container
@@ -1021,9 +1066,7 @@ impl ConstraintValidator for ContainerLengthConstraint {
                     }
                 }
             }
-            IonSchemaElement::Document(document) => {
-               document.len()
-            }
+            IonSchemaElement::Document(document) => document.len(),
         };
 
         // get isl length as a range
@@ -1063,7 +1106,11 @@ impl ByteLengthConstraint {
 }
 
 impl ConstraintValidator for ByteLengthConstraint {
-    fn validate<I: Into<IonSchemaElement> + std::fmt::Display>(&self, value: I, type_store: &TypeStore) -> ValidationResult {
+    fn validate<I: Into<IonSchemaElement> + std::fmt::Display>(
+        &self,
+        value: I,
+        type_store: &TypeStore,
+    ) -> ValidationResult {
         let schema_element: IonSchemaElement = value.into();
 
         // get the size of given bytes
@@ -1093,7 +1140,7 @@ impl ConstraintValidator for ByteLengthConstraint {
                 return Err(Violation::new(
                     "byte_length",
                     ViolationCode::TypeMismatched,
-                        "expected a clob/blob but found document",
+                    "expected a clob/blob but found document",
                 ));
             }
         };
@@ -1132,7 +1179,11 @@ impl CodepointLengthConstraint {
 }
 
 impl ConstraintValidator for CodepointLengthConstraint {
-    fn validate<I: Into<IonSchemaElement> + std::fmt::Display>(&self, value: I, type_store: &TypeStore) -> ValidationResult {
+    fn validate<I: Into<IonSchemaElement> + std::fmt::Display>(
+        &self,
+        value: I,
+        type_store: &TypeStore,
+    ) -> ValidationResult {
         let schema_element: IonSchemaElement = value.into();
 
         // get the size of given string/symbol Unicode codepoints
@@ -1211,7 +1262,11 @@ impl ElementConstraint {
 }
 
 impl ConstraintValidator for ElementConstraint {
-    fn validate<I: Into<IonSchemaElement> + std::fmt::Display>(&self, value: I, type_store: &TypeStore) -> ValidationResult {
+    fn validate<I: Into<IonSchemaElement> + std::fmt::Display>(
+        &self,
+        value: I,
+        type_store: &TypeStore,
+    ) -> ValidationResult {
         let mut violations: Vec<Violation> = vec![];
 
         let schema_element: IonSchemaElement = value.into();
@@ -1431,7 +1486,11 @@ impl AnnotationsConstraint {
 }
 
 impl ConstraintValidator for AnnotationsConstraint {
-    fn validate<I: Into<IonSchemaElement> + std::fmt::Display>(&self, value: I, type_store: &TypeStore) -> ValidationResult {
+    fn validate<I: Into<IonSchemaElement> + std::fmt::Display>(
+        &self,
+        value: I,
+        type_store: &TypeStore,
+    ) -> ValidationResult {
         let violations: Vec<Violation> = vec![];
 
         let schema_element: IonSchemaElement = value.into();
@@ -1476,7 +1535,11 @@ impl PrecisionConstraint {
 }
 
 impl ConstraintValidator for PrecisionConstraint {
-    fn validate<I: Into<IonSchemaElement> + std::fmt::Display>(&self, value: I, type_store: &TypeStore) -> ValidationResult {
+    fn validate<I: Into<IonSchemaElement> + std::fmt::Display>(
+        &self,
+        value: I,
+        type_store: &TypeStore,
+    ) -> ValidationResult {
         let schema_element: IonSchemaElement = value.into();
 
         match schema_element {
@@ -1545,7 +1608,11 @@ impl ScaleConstraint {
 }
 
 impl ConstraintValidator for ScaleConstraint {
-    fn validate<I: Into<IonSchemaElement> + std::fmt::Display>(&self, value: I, type_store: &TypeStore) -> ValidationResult {
+    fn validate<I: Into<IonSchemaElement> + std::fmt::Display>(
+        &self,
+        value: I,
+        type_store: &TypeStore,
+    ) -> ValidationResult {
         let schema_element: IonSchemaElement = value.into();
 
         match schema_element {
@@ -1613,7 +1680,11 @@ impl TimestampPrecisionConstraint {
 }
 
 impl ConstraintValidator for TimestampPrecisionConstraint {
-    fn validate<I: Into<IonSchemaElement> + std::fmt::Display>(&self, value: I, type_store: &TypeStore) -> ValidationResult {
+    fn validate<I: Into<IonSchemaElement> + std::fmt::Display>(
+        &self,
+        value: I,
+        type_store: &TypeStore,
+    ) -> ValidationResult {
         let schema_element: IonSchemaElement = value.into();
 
         match schema_element {
@@ -1661,7 +1732,6 @@ impl ConstraintValidator for TimestampPrecisionConstraint {
             }
         }
 
-
         Ok(())
     }
 }
@@ -1692,7 +1762,11 @@ impl ValidValuesConstraint {
 }
 
 impl ConstraintValidator for ValidValuesConstraint {
-    fn validate<I: Into<IonSchemaElement> + std::fmt::Display>(&self, value: I, type_store: &TypeStore) -> ValidationResult {
+    fn validate<I: Into<IonSchemaElement> + std::fmt::Display>(
+        &self,
+        value: I,
+        type_store: &TypeStore,
+    ) -> ValidationResult {
         let schema_element: IonSchemaElement = value.into();
 
         match schema_element {
@@ -1700,7 +1774,10 @@ impl ConstraintValidator for ValidValuesConstraint {
                 for valid_value in &self.valid_values {
                     match valid_value {
                         ValidValue::Range(range) => match value.ion_type() {
-                            IonType::Integer | IonType::Float | IonType::Decimal | IonType::Timestamp => {
+                            IonType::Integer
+                            | IonType::Float
+                            | IonType::Decimal
+                            | IonType::Timestamp => {
                                 if range.contains(&value) {
                                     return Ok(());
                                 }
@@ -1730,9 +1807,8 @@ impl ConstraintValidator for ValidValuesConstraint {
                 return Err(Violation::new(
                     "valid_values",
                     ViolationCode::InvalidValue,
-                    "valid_values constraint is not allowed to be used for document"
-                    ),
-                );
+                    "valid_values constraint is not allowed to be used for document",
+                ));
             }
         }
     }
@@ -1897,7 +1973,11 @@ impl RegexConstraint {
 }
 
 impl ConstraintValidator for RegexConstraint {
-    fn validate<I: Into<IonSchemaElement> + std::fmt::Display>(&self, value: I, type_store: &TypeStore) -> ValidationResult {
+    fn validate<I: Into<IonSchemaElement> + std::fmt::Display>(
+        &self,
+        value: I,
+        type_store: &TypeStore,
+    ) -> ValidationResult {
         let schema_element: IonSchemaElement = value.into();
 
         match schema_element {
@@ -1935,7 +2015,6 @@ impl ConstraintValidator for RegexConstraint {
                 ));
             }
         }
-
 
         Ok(())
     }

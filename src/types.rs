@@ -15,11 +15,19 @@ use std::rc::Rc;
 pub trait TypeValidator {
     /// If the specified value violates one or more of this type's constraints,
     /// returns `false`, otherwise `true`
-    fn is_valid<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(&self, value: I, type_store: &TypeStore) -> bool;
+    fn is_valid<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(
+        &self,
+        value: I,
+        type_store: &TypeStore,
+    ) -> bool;
 
     /// Returns `Err(violation)` with details as to which constraints were violated,
     /// otherwise returns `Ok(())` indicating no violations were found during the validation
-    fn validate<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(&self, value: I, type_store: &TypeStore) -> ValidationResult;
+    fn validate<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(
+        &self,
+        value: I,
+        type_store: &TypeStore,
+    ) -> ValidationResult;
 }
 
 // Provides a public facing schema type which has a reference to TypeStore
@@ -101,7 +109,8 @@ impl TypeRef {
         let schema_element: IonSchemaElement = value.into();
 
         for constraint in type_def.constraints() {
-            if let Err(violation) = constraint.validate(schema_element.to_owned(), &self.type_store) {
+            if let Err(violation) = constraint.validate(schema_element.to_owned(), &self.type_store)
+            {
                 violations.push(violation);
             }
         }
@@ -219,12 +228,20 @@ impl TypeDefinition {
 }
 
 impl TypeValidator for TypeDefinition {
-    fn is_valid<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(&self, value: I, type_store: &TypeStore) -> bool {
+    fn is_valid<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(
+        &self,
+        value: I,
+        type_store: &TypeStore,
+    ) -> bool {
         let violation = self.validate(value, type_store);
         violation.is_ok()
     }
 
-    fn validate<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(&self, value: I, type_store: &TypeStore) -> ValidationResult {
+    fn validate<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(
+        &self,
+        value: I,
+        type_store: &TypeStore,
+    ) -> ValidationResult {
         let schema_element: IonSchemaElement = value.to_owned().into();
 
         match self {
@@ -246,7 +263,11 @@ impl TypeValidator for TypeDefinition {
                                 return Err(Violation::new(
                                     "type_constraint",
                                     ViolationCode::TypeMismatched,
-                                    &format!("expected type {:?}, found {:?}", ion_type, element.ion_type()),
+                                    &format!(
+                                        "expected type {:?}, found {:?}",
+                                        ion_type,
+                                        element.ion_type()
+                                    ),
                                 ));
                             }
 
@@ -269,10 +290,13 @@ impl TypeValidator for TypeDefinition {
                             return Err(Violation::new(
                                 "type_constraint",
                                 ViolationCode::TypeMismatched,
-                                &format!("expected type document found {:?}", schema_element.as_element().unwrap().ion_type()),
+                                &format!(
+                                    "expected type document found {:?}",
+                                    schema_element.as_element().unwrap().ion_type()
+                                ),
                             ));
                         }
-                        return Ok(())
+                        return Ok(());
                     }
                     // if it is not a document type do validation using the type definition
                     other_type.validate(value.to_owned(), type_store)
@@ -400,12 +424,20 @@ impl PartialEq for TypeDefinitionImpl {
 }
 
 impl TypeValidator for TypeDefinitionImpl {
-    fn is_valid<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(&self, value: I, type_store: &TypeStore) -> bool {
+    fn is_valid<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(
+        &self,
+        value: I,
+        type_store: &TypeStore,
+    ) -> bool {
         let violation = self.validate(value, type_store);
         violation.is_ok()
     }
 
-    fn validate<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(&self, value: I, type_store: &TypeStore) -> ValidationResult {
+    fn validate<I: Into<IonSchemaElement> + std::fmt::Display + Clone>(
+        &self,
+        value: I,
+        type_store: &TypeStore,
+    ) -> ValidationResult {
         let mut violations: Vec<Violation> = vec![];
         let type_name = match self.name() {
             None => "",
