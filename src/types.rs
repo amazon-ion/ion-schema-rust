@@ -234,7 +234,7 @@ impl TypeValidator for TypeDefinition {
                 BuiltInTypeDefinition::Atomic(ion_type, is_nullable) => {
                     // atomic types doesn't include document type
                     match schema_element {
-                        IonSchemaElement::Element(element) => {
+                        IonSchemaElement::SingleElement(element) => {
                             if *is_nullable == Nullability::NotNullable && element.is_null() {
                                 return Err(Violation::new(
                                     "type_constraint",

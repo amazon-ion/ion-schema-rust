@@ -54,14 +54,14 @@ pub mod external {
 /// ```
 #[derive(Debug, Clone)]
 pub enum IonSchemaElement {
-    Element(OwnedElement),
+    SingleElement(OwnedElement),
     Document(Vec<OwnedElement>),
 }
 
 impl IonSchemaElement {
     pub fn as_element(&self) -> Option<&OwnedElement> {
         match self {
-            IonSchemaElement::Element(element) => {
+            IonSchemaElement::SingleElement(element) => {
                 Some(element)
             }
             IonSchemaElement::Document(_) => {
@@ -74,7 +74,7 @@ impl IonSchemaElement {
 impl Display for IonSchemaElement {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
-            IonSchemaElement::Element(element) => {
+            IonSchemaElement::SingleElement(element) => {
                 write!(f, "{}", element)
             }
             IonSchemaElement::Document(document) => {
@@ -113,7 +113,7 @@ impl From<&OwnedElement> for IonSchemaElement {
             };
             return IonSchemaElement::Document(sequence);
         }
-        IonSchemaElement::Element(value.to_owned())
+        IonSchemaElement::SingleElement(value.to_owned())
     }
 }
 

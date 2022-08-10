@@ -714,7 +714,7 @@ impl ConstraintValidator for OrderedElementsConstraint {
 
         // Create a peekable iterator for given sequence
         let mut values_iter = match &schema_element {
-            IonSchemaElement::Element(element) => {
+            IonSchemaElement::SingleElement(element) => {
                 match element.as_sequence() {
                     None => {
                         return Err(Violation::with_violations(
@@ -811,7 +811,7 @@ impl ConstraintValidator for FieldsConstraint {
 
         // Create a peekable iterator for given struct
         let ion_struct = match &schema_element {
-            IonSchemaElement::Element(element) => {
+            IonSchemaElement::SingleElement(element) => {
                 match element.as_struct() {
                     None => {
                         return Err(Violation::with_violations(
@@ -921,7 +921,7 @@ impl ConstraintValidator for ContainsConstraint {
 
         // Create a peekable iterator for given sequence
         let values: Vec<OwnedElement> = match &schema_element {
-            IonSchemaElement::Element(element) => {
+            IonSchemaElement::SingleElement(element) => {
                 match element.as_sequence() {
                     None => {
                         // return Violation if value is not an Ion sequence
@@ -995,7 +995,7 @@ impl ConstraintValidator for ContainerLengthConstraint {
 
         // get the size of given value container
         let size = match schema_element {
-            IonSchemaElement::Element(element) => {
+            IonSchemaElement::SingleElement(element) => {
                 // Check for null container
                 if element.is_null() {
                     return Err(Violation::new(
@@ -1068,7 +1068,7 @@ impl ConstraintValidator for ByteLengthConstraint {
 
         // get the size of given bytes
         let size = match schema_element {
-            IonSchemaElement::Element(element) => {
+            IonSchemaElement::SingleElement(element) => {
                 match element.as_bytes() {
                     Some(bytes) => bytes.len(),
                     _ => {
@@ -1137,7 +1137,7 @@ impl ConstraintValidator for CodepointLengthConstraint {
 
         // get the size of given string/symbol Unicode codepoints
         let size = match schema_element {
-            IonSchemaElement::Element(element) => {
+            IonSchemaElement::SingleElement(element) => {
                 match element.as_str() {
                     Some(text) => text.chars().count(),
                     _ => {
@@ -1221,7 +1221,7 @@ impl ConstraintValidator for ElementConstraint {
 
         // get the size of given string/symbol Unicode codepoints
         let size = match schema_element {
-            IonSchemaElement::Element(element) => {
+            IonSchemaElement::SingleElement(element) => {
                 // Check for null container
                 if element.is_null() {
                     return Err(Violation::new(
@@ -1437,7 +1437,7 @@ impl ConstraintValidator for AnnotationsConstraint {
         let schema_element: IonSchemaElement = value.into();
 
         match schema_element {
-            IonSchemaElement::Element(element) => {
+            IonSchemaElement::SingleElement(element) => {
                 // validate annotations that have list-level `ordered` annotation
                 if self.is_ordered {
                     return self.validate_ordered_annotations(&element, type_store, violations);
@@ -1480,7 +1480,7 @@ impl ConstraintValidator for PrecisionConstraint {
         let schema_element: IonSchemaElement = value.into();
 
         match schema_element {
-            IonSchemaElement::Element(element) => {
+            IonSchemaElement::SingleElement(element) => {
                 // get the precision of given decimal
                 let value_precision = match element.as_decimal() {
                     Some(decimal_value) => decimal_value.precision(),
@@ -1549,7 +1549,7 @@ impl ConstraintValidator for ScaleConstraint {
         let schema_element: IonSchemaElement = value.into();
 
         match schema_element {
-            IonSchemaElement::Element(element) => {
+            IonSchemaElement::SingleElement(element) => {
                 // get the scale of given decimal
                 let value_scale = match element.as_decimal() {
                     Some(decimal_value) => decimal_value.scale(),
@@ -1617,7 +1617,7 @@ impl ConstraintValidator for TimestampPrecisionConstraint {
         let schema_element: IonSchemaElement = value.into();
 
         match schema_element {
-            IonSchemaElement::Element(element) => {
+            IonSchemaElement::SingleElement(element) => {
                 // get the precision of given timestamp
                 let timestamp_value = match element.as_timestamp() {
                     Some(timestamp_value) => timestamp_value,
@@ -1696,7 +1696,7 @@ impl ConstraintValidator for ValidValuesConstraint {
         let schema_element: IonSchemaElement = value.into();
 
         match schema_element {
-            IonSchemaElement::Element(value) => {
+            IonSchemaElement::SingleElement(value) => {
                 for valid_value in &self.valid_values {
                     match valid_value {
                         ValidValue::Range(range) => match value.ion_type() {
@@ -1901,7 +1901,7 @@ impl ConstraintValidator for RegexConstraint {
         let schema_element: IonSchemaElement = value.into();
 
         match schema_element {
-            IonSchemaElement::Element(element) => {
+            IonSchemaElement::SingleElement(element) => {
                 let value = match element.as_str() {
                     Some(string_value) => {
                         let re = Regex::new(r"\r").unwrap();
