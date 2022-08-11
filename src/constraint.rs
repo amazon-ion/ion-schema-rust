@@ -679,7 +679,7 @@ impl OrderedElementsConstraint {
         while values_iter.peek() != None && occurs_range.contains(&(count + 1).into()) {
             // don't consume it until we know it's valid for the type
             if let Some(value) = values_iter.peek() {
-                let schema_element: IonSchemaElement = value.to_owned().into();
+                let schema_element: IonSchemaElement = (*value).into();
                 if type_def.is_valid(&schema_element, type_store) {
                     let _ = values_iter.next(); // consume it as it is valid
                     count += 1;
@@ -807,35 +807,11 @@ impl ConstraintValidator for FieldsConstraint {
     fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
         let mut violations: Vec<Violation> = vec![];
 
-        // Create a peekable iterator for given struct
-        let ion_struct = match &value {
-            IonSchemaElement::SingleElement(element) => match element.as_struct() {
-                None => {
-                    return Err(Violation::with_violations(
-                        "fields",
-                        ViolationCode::TypeMismatched,
-                        &format!(
-                            "expected struct ion found {}",
-                            if element.is_null() {
-                                format!("{:?}", element)
-                            } else {
-                                format!("{}", element.ion_type())
-                            }
-                        ),
-                        violations,
-                    ));
-                }
-                Some(ion_struct) => ion_struct,
-            },
-            IonSchemaElement::Document(document) => {
-                return Err(Violation::with_violations(
-                    "fields",
-                    ViolationCode::TypeMismatched,
-                    "expected struct ion found document type",
-                    violations,
-                ));
-            }
-        };
+        // get struct value
+        let ion_struct = value
+            .expect_element_of_type("fields", &[IonType::Struct])?
+            .as_struct()
+            .unwrap();
 
         // Verify if open content exists in the struct fields
         if !self.open_content() {
@@ -1054,36 +1030,11 @@ impl ByteLengthConstraint {
 impl ConstraintValidator for ByteLengthConstraint {
     fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
         // get the size of given bytes
-        let size = match value {
-            IonSchemaElement::SingleElement(element) => {
-                match element.as_bytes() {
-                    Some(bytes) => bytes.len(),
-                    _ => {
-                        // return Violation if value is not an clob/blob
-                        return Err(Violation::new(
-                            "byte_length",
-                            ViolationCode::TypeMismatched,
-                            &format!(
-                                "expected a clob/blob but found {}",
-                                if element.is_null() {
-                                    format!("{:?}", element)
-                                } else {
-                                    format!("{}", element.ion_type())
-                                }
-                            ),
-                        ));
-                    }
-                }
-            }
-            IonSchemaElement::Document(document) => {
-                // return Violation if value is not an clob/blob
-                return Err(Violation::new(
-                    "byte_length",
-                    ViolationCode::TypeMismatched,
-                    "expected a clob/blob but found document",
-                ));
-            }
-        };
+        let size = value
+            .expect_element_of_type("byte_length", &[IonType::Blob, IonType::Clob])?
+            .as_bytes()
+            .unwrap()
+            .len();
 
         // get isl length as a range
         let length_range: &Range = self.length();
@@ -1121,36 +1072,12 @@ impl CodepointLengthConstraint {
 impl ConstraintValidator for CodepointLengthConstraint {
     fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
         // get the size of given string/symbol Unicode codepoints
-        let size = match value {
-            IonSchemaElement::SingleElement(element) => {
-                match element.as_str() {
-                    Some(text) => text.chars().count(),
-                    _ => {
-                        // return Violation if value is not string/symbol
-                        return Err(Violation::new(
-                            "codepoint_length",
-                            ViolationCode::TypeMismatched,
-                            &format!(
-                                "expected a string/symbol but found {}",
-                                if element.is_null() {
-                                    format!("{:?}", element)
-                                } else {
-                                    format!("{}", element.ion_type())
-                                }
-                            ),
-                        ));
-                    }
-                }
-            }
-            IonSchemaElement::Document(document) => {
-                // return Violation if value is not string/symbol
-                return Err(Violation::new(
-                    "byte_length",
-                    ViolationCode::TypeMismatched,
-                    "expected a clob/blob but found document",
-                ));
-            }
-        };
+        let size = value
+            .expect_element_of_type("codepoint_length", &[IonType::String, IonType::Symbol])?
+            .as_str()
+            .unwrap()
+            .chars()
+            .count();
 
         // get isl length as a range
         let length_range: &Range = self.length();
@@ -1462,48 +1389,26 @@ impl PrecisionConstraint {
 
 impl ConstraintValidator for PrecisionConstraint {
     fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
-        match value {
-            IonSchemaElement::SingleElement(element) => {
-                // get the precision of given decimal
-                let value_precision = match element.as_decimal() {
-                    Some(decimal_value) => decimal_value.precision(),
-                    _ => {
-                        // return Violation if value is not decimal
-                        let error_message = if element.is_null() {
-                            format!("expected a decimal but found {:?}", element)
-                        } else {
-                            format!("expected a decimal but found {}", element.ion_type())
-                        };
-                        return Err(Violation::new(
-                            "precision",
-                            ViolationCode::TypeMismatched,
-                            &error_message,
-                        ));
-                    }
-                };
+        // get precision of decimal value
+        let value_precision = value
+            .expect_element_of_type("precision", &[IonType::Decimal])?
+            .as_decimal()
+            .unwrap()
+            .precision();
 
-                // get isl decimal precision as a range
-                let precision_range: &Range = self.precision();
+        // get isl decimal precision as a range
+        let precision_range: &Range = self.precision();
 
-                // return a Violation if the value didn't follow precision constraint
-                if !precision_range.contains(&(value_precision as i64).into()) {
-                    return Err(Violation::new(
-                        "precision",
-                        ViolationCode::InvalidLength,
-                        &format!(
-                            "expected precision {:?} found {}",
-                            precision_range, value_precision
-                        ),
-                    ));
-                }
-            }
-            IonSchemaElement::Document(document) => {
-                return Err(Violation::new(
-                    "precision",
-                    ViolationCode::TypeMismatched,
-                    "expected a decimal but found document",
-                ));
-            }
+        // return a Violation if the value didn't follow precision constraint
+        if !precision_range.contains(&(value_precision as i64).into()) {
+            return Err(Violation::new(
+                "precision",
+                ViolationCode::InvalidLength,
+                &format!(
+                    "expected precision {:?} found {}",
+                    precision_range, value_precision
+                ),
+            ));
         }
 
         Ok(())
@@ -1529,45 +1434,23 @@ impl ScaleConstraint {
 
 impl ConstraintValidator for ScaleConstraint {
     fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
-        match value {
-            IonSchemaElement::SingleElement(element) => {
-                // get the scale of given decimal
-                let value_scale = match element.as_decimal() {
-                    Some(decimal_value) => decimal_value.scale(),
-                    _ => {
-                        // return Violation if value is not decimal
-                        let error_message = if element.is_null() {
-                            format!("expected a decimal but found {:?}", element)
-                        } else {
-                            format!("expected a decimal but found {}", element.ion_type())
-                        };
-                        return Err(Violation::new(
-                            "scale",
-                            ViolationCode::TypeMismatched,
-                            &error_message,
-                        ));
-                    }
-                };
+        // get scale of decimal value
+        let value_scale = value
+            .expect_element_of_type("precision", &[IonType::Decimal])?
+            .as_decimal()
+            .unwrap()
+            .scale();
 
-                // get isl decimal scale as a range
-                let scale_range: &Range = self.scale();
+        // get isl decimal scale as a range
+        let scale_range: &Range = self.scale();
 
-                // return a Violation if the value didn't follow scale constraint
-                if !scale_range.contains(&(value_scale).into()) {
-                    return Err(Violation::new(
-                        "scale",
-                        ViolationCode::InvalidLength,
-                        &format!("expected scale {:?} found {}", scale_range, value_scale),
-                    ));
-                }
-            }
-            IonSchemaElement::Document(document) => {
-                return Err(Violation::new(
-                    "scale",
-                    ViolationCode::TypeMismatched,
-                    "expected a decimal but found document",
-                ));
-            }
+        // return a Violation if the value didn't follow scale constraint
+        if !scale_range.contains(&(value_scale).into()) {
+            return Err(Violation::new(
+                "scale",
+                ViolationCode::InvalidLength,
+                &format!("expected scale {:?} found {}", scale_range, value_scale),
+            ));
         }
 
         Ok(())
@@ -1595,49 +1478,26 @@ impl TimestampPrecisionConstraint {
 
 impl ConstraintValidator for TimestampPrecisionConstraint {
     fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
-        match value {
-            IonSchemaElement::SingleElement(element) => {
-                // get the precision of given timestamp
-                let timestamp_value = match element.as_timestamp() {
-                    Some(timestamp_value) => timestamp_value,
-                    _ => {
-                        // return Violation if value is not timestamp
-                        let error_message = if element.is_null() {
-                            format!("expected a timestamp but found {:?}", element)
-                        } else {
-                            format!("expected a timestamp but found {}", element.ion_type())
-                        };
-                        return Err(Violation::new(
-                            "timestamp_precision",
-                            ViolationCode::TypeMismatched,
-                            &error_message,
-                        ));
-                    }
-                };
+        // get timestamp value
+        let timestamp_value = value
+            .expect_element_of_type("timestamp_precision", &[IonType::Timestamp])?
+            .as_timestamp()
+            .unwrap();
 
-                // get isl timestamp precision as a range
-                let precision_range: &Range = self.timestamp_precision();
+        // get isl timestamp precision as a range
+        let precision_range: &Range = self.timestamp_precision();
 
-                // return a Violation if the value didn't follow timestamp precision constraint
-                if !precision_range.contains(&(timestamp_value.to_owned()).into()) {
-                    return Err(Violation::new(
-                        "precision",
-                        ViolationCode::InvalidLength,
-                        &format!(
-                            "expected precision {:?} found {:?}",
-                            precision_range,
-                            timestamp_value.precision()
-                        ),
-                    ));
-                }
-            }
-            IonSchemaElement::Document(document) => {
-                return Err(Violation::new(
-                    "precision",
-                    ViolationCode::TypeMismatched,
-                    "expected a timestamp but found document",
-                ));
-            }
+        // return a Violation if the value didn't follow timestamp precision constraint
+        if !precision_range.contains(&(timestamp_value.to_owned()).into()) {
+            return Err(Violation::new(
+                "precision",
+                ViolationCode::InvalidLength,
+                &format!(
+                    "expected precision {:?} found {:?}",
+                    precision_range,
+                    timestamp_value.precision()
+                ),
+            ));
         }
 
         Ok(())
@@ -1874,40 +1734,24 @@ impl RegexConstraint {
 
 impl ConstraintValidator for RegexConstraint {
     fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
-        match value {
-            IonSchemaElement::SingleElement(element) => {
-                let value = match element.as_str() {
-                    Some(string_value) => {
-                        let re = Regex::new(r"\r").unwrap();
-                        let result = re.replace_all(string_value, "\n");
-                        result.to_string()
-                    }
-                    _ => {
-                        // return Violation if value is not a string
-                        return Err(Violation::new(
-                            "regex",
-                            ViolationCode::TypeMismatched,
-                            &format!("expected a string but found {}", element.ion_type()),
-                        ));
-                    }
-                };
+        // get string value and return violation if its not a string or symbol type
+        let string_value = value
+            .expect_element_of_type("regex", &[IonType::String, IonType::Symbol])?
+            .as_str()
+            .unwrap();
 
-                if !self.expression.is_match(value.as_str()) {
-                    return Err(Violation::new(
-                        "regex",
-                        ViolationCode::RegexMismatched,
-                        &format!("{} doesn't match regex {}", value, self.expression),
-                    ));
-                }
-            }
-            IonSchemaElement::Document(document) => {
-                // return Violation if value is not a string
-                return Err(Violation::new(
-                    "regex",
-                    ViolationCode::TypeMismatched,
-                    "expected a string but found document",
-                ));
-            }
+        // create regular expression
+        let re = Regex::new(r"\r").unwrap();
+        let result = re.replace_all(string_value, "\n");
+        let value = result.to_string();
+
+        // verify if given value matches regular expression
+        if !self.expression.is_match(value.as_str()) {
+            return Err(Violation::new(
+                "regex",
+                ViolationCode::RegexMismatched,
+                &format!("{} doesn't match regex {}", value, self.expression),
+            ));
         }
 
         Ok(())

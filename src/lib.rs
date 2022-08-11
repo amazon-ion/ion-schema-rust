@@ -2,6 +2,7 @@
 #![allow(dead_code, unused_variables)]
 
 use crate::external::ion_rs::IonType;
+use crate::violation::{Violation, ViolationCode};
 use ion_rs::value::owned::OwnedElement;
 use ion_rs::value::reader::{element_reader, ElementReader};
 use ion_rs::value::{Element, Sequence, SymbolToken};
@@ -63,6 +64,36 @@ impl IonSchemaElement {
         match self {
             IonSchemaElement::SingleElement(element) => Some(element),
             IonSchemaElement::Document(_) => None,
+        }
+    }
+
+    fn expect_element_of_type(
+        &self,
+        constraint_name: &str,
+        types: &[IonType],
+    ) -> Result<&OwnedElement, Violation> {
+        match self {
+            IonSchemaElement::SingleElement(element) => {
+                if !types.contains(&element.ion_type()) || element.is_null() {
+                    // If it's an OwnedElement but the type isn't one of `types`,
+                    // return a Violation with the constraint name.
+                    return Err(Violation::new(
+                        constraint_name,
+                        ViolationCode::TypeMismatched,
+                        &format!("expected {:?} but found {}", types, element.ion_type()),
+                    ));
+                }
+                // If it's an OwnedElement of an expected type, return a ref to it.
+                Ok(element)
+            }
+            IonSchemaElement::Document(_) => {
+                // If it's a Document, return a Violation with the constraint name
+                Err(Violation::new(
+                    constraint_name,
+                    ViolationCode::TypeMismatched,
+                    &format!("expected {:?} but found document", types),
+                ))
+            }
         }
     }
 }
