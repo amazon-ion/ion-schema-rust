@@ -527,7 +527,7 @@ impl TypeStore {
 
     /// Provides the [Type] associated with given [TypeId] if it exists in the [TypeStore]  
     /// Otherwise returns None
-    pub fn get_type_by_id(&self, id: TypeId) -> Option<&TypeDefinition> {
+    pub(crate) fn get_type_by_id(&self, id: TypeId) -> Option<&TypeDefinition> {
         self.types_by_id.get(id)
     }
 

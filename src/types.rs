@@ -267,7 +267,7 @@ impl TypeValidator for TypeDefinition {
                     if other_type.name() == &Some("document".to_owned()) {
                         // Verify whether the given derived type is document
                         // And check if it is using enum variant IonSchemaElement::Document
-                        if !matches!(value, IonSchemaElement::Document(_)) {
+                        if value.as_document() == None {
                             return Err(Violation::new(
                                 "type_constraint",
                                 ViolationCode::TypeMismatched,
@@ -393,7 +393,6 @@ impl TypeDefinitionImpl {
             actual_type_id = pending_types.update_anonymous_type(type_id, type_def, type_store);
         }
 
-        // let type_ref = TypeRef::new(final_type_id, Rc::from(type_store.to_owned()));
         Ok(actual_type_id)
     }
 }

@@ -67,6 +67,13 @@ impl IonSchemaElement {
         }
     }
 
+    pub fn as_document(&self) -> Option<&Vec<OwnedElement>> {
+        match self {
+            IonSchemaElement::SingleElement(_) => None,
+            IonSchemaElement::Document(document) => Some(document),
+        }
+    }
+
     fn expect_element_of_type(
         &self,
         constraint_name: &str,
@@ -105,7 +112,7 @@ impl Display for IonSchemaElement {
                 write!(f, "{}", element)
             }
             IonSchemaElement::Document(document) => {
-                write!(f, "document::( ")?;
+                write!(f, "/* Ion document */ ")?;
                 let mut peekable_itr = document.iter().peekable();
                 while peekable_itr.peek() != None {
                     let value = peekable_itr.next().unwrap();
@@ -114,7 +121,7 @@ impl Display for IonSchemaElement {
                         write!(f, " ")?;
                     }
                 }
-                write!(f, " )")
+                write!(f, " /* end */")
             }
         }
     }
