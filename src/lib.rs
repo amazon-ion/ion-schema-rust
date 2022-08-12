@@ -76,8 +76,8 @@ impl IonSchemaElement {
 
     fn expect_element_of_type(
         &self,
-        constraint_name: &str,
         types: &[IonType],
+        constraint_name: &str,
     ) -> Result<&OwnedElement, Violation> {
         match self {
             IonSchemaElement::SingleElement(element) => {
@@ -113,15 +113,10 @@ impl Display for IonSchemaElement {
             }
             IonSchemaElement::Document(document) => {
                 write!(f, "/* Ion document */ ")?;
-                let mut peekable_itr = document.iter().peekable();
-                while peekable_itr.peek() != None {
-                    let value = peekable_itr.next().unwrap();
-                    write!(f, "{}", value)?;
-                    if peekable_itr.peek() != None {
-                        write!(f, " ")?;
-                    }
+                for value in document {
+                    write!(f, "{} ", value)?;
                 }
-                write!(f, " /* end */")
+                write!(f, "/* end */")
             }
         }
     }
@@ -148,6 +143,12 @@ impl From<&OwnedElement> for IonSchemaElement {
             return IonSchemaElement::Document(sequence);
         }
         IonSchemaElement::SingleElement(value.to_owned())
+    }
+}
+
+impl From<&Vec<OwnedElement>> for IonSchemaElement {
+    fn from(value: &Vec<OwnedElement>) -> Self {
+        IonSchemaElement::Document(value.to_owned())
     }
 }
 

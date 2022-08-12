@@ -809,7 +809,7 @@ impl ConstraintValidator for FieldsConstraint {
 
         // get struct value
         let ion_struct = value
-            .expect_element_of_type("fields", &[IonType::Struct])?
+            .expect_element_of_type(&[IonType::Struct], "fields")?
             .as_struct()
             .unwrap();
 
@@ -1031,7 +1031,7 @@ impl ConstraintValidator for ByteLengthConstraint {
     fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
         // get the size of given bytes
         let size = value
-            .expect_element_of_type("byte_length", &[IonType::Blob, IonType::Clob])?
+            .expect_element_of_type(&[IonType::Blob, IonType::Clob], "byte_length")?
             .as_bytes()
             .unwrap()
             .len();
@@ -1073,7 +1073,7 @@ impl ConstraintValidator for CodepointLengthConstraint {
     fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
         // get the size of given string/symbol Unicode codepoints
         let size = value
-            .expect_element_of_type("codepoint_length", &[IonType::String, IonType::Symbol])?
+            .expect_element_of_type(&[IonType::String, IonType::Symbol], "codepoint_length")?
             .as_str()
             .unwrap()
             .chars()
@@ -1129,7 +1129,7 @@ impl ConstraintValidator for ElementConstraint {
         // this type_id was validated while creating `ElementConstraint` hence the unwrap here is safe
         let type_def = type_store.get_type_by_id(self.type_id).unwrap();
 
-        // get the size of given string/symbol Unicode codepoints
+        // validate element constraint for container types
         match value {
             IonSchemaElement::SingleElement(element) => {
                 // Check for null container
@@ -1363,7 +1363,7 @@ impl ConstraintValidator for AnnotationsConstraint {
                 Err(Violation::new(
                     "annotations",
                     ViolationCode::AnnotationMismatched,
-                    "annotations don't match expectations",
+                    "annotations constraint is not applicable for document type",
                 ))
             }
         }
@@ -1391,7 +1391,7 @@ impl ConstraintValidator for PrecisionConstraint {
     fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
         // get precision of decimal value
         let value_precision = value
-            .expect_element_of_type("precision", &[IonType::Decimal])?
+            .expect_element_of_type(&[IonType::Decimal], "precision")?
             .as_decimal()
             .unwrap()
             .precision();
@@ -1436,7 +1436,7 @@ impl ConstraintValidator for ScaleConstraint {
     fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
         // get scale of decimal value
         let value_scale = value
-            .expect_element_of_type("precision", &[IonType::Decimal])?
+            .expect_element_of_type(&[IonType::Decimal], "precision")?
             .as_decimal()
             .unwrap()
             .scale();
@@ -1480,7 +1480,7 @@ impl ConstraintValidator for TimestampPrecisionConstraint {
     fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
         // get timestamp value
         let timestamp_value = value
-            .expect_element_of_type("timestamp_precision", &[IonType::Timestamp])?
+            .expect_element_of_type(&[IonType::Timestamp], "timestamp_precision")?
             .as_timestamp()
             .unwrap();
 
@@ -1568,7 +1568,10 @@ impl ConstraintValidator for ValidValuesConstraint {
             IonSchemaElement::Document(document) => Err(Violation::new(
                 "valid_values",
                 ViolationCode::InvalidValue,
-                "valid_values constraint is not allowed to be used for document",
+                &format!(
+                    "expected valid_values to be from {:?}, found {:?}",
+                    &self, value
+                ),
             )),
         }
     }
@@ -1736,7 +1739,7 @@ impl ConstraintValidator for RegexConstraint {
     fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
         // get string value and return violation if its not a string or symbol type
         let string_value = value
-            .expect_element_of_type("regex", &[IonType::String, IonType::Symbol])?
+            .expect_element_of_type(&[IonType::String, IonType::Symbol], "regex")?
             .as_str()
             .unwrap();
 
