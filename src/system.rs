@@ -344,7 +344,7 @@ impl PendingTypes {
     ) -> TypeId {
         self.types_by_id[type_id - type_store.types_by_id.len()] =
             Some(TypeDefinition::Anonymous(type_def));
-        type_id + type_store.types_by_id.len()
+        type_id
     }
 
     /// Adds parent information storing the name and possible TypeId of the parent
@@ -376,20 +376,23 @@ impl PendingTypes {
 
 /// Represents an array of BuiltIn derived ISL types
 /// for more information: https://amzn.github.io/ion-schema/docs/spec.html#type-system
-static DERIVED_ISL_TYPES: [&str; 9] = [
-    "type::{ name: any, one_of: [ blob, bool, clob, decimal,
-                                    float, int, string, symbol, timestamp,
-                                    list, sexp, struct ] }",
+static DERIVED_ISL_TYPES: [&str; 10] = [
     "type::{ name: lob, one_of: [ blob, clob ] }",
     "type::{ name: number, one_of: [ decimal, float, int ] }",
     "type::{ name: text, one_of: [ string, symbol ] }",
-    "type::{ name: $any, one_of: [ $blob, $bool, $clob, $decimal,
-                                    $float, $int, $string, $symbol, $timestamp,
-                                    $list, $sexp, $struct, $null ] }",
     "type::{ name: $lob, one_of: [ $blob, $clob ] }",
     "type::{ name: $number, one_of: [ $decimal, $float, $int ] }",
     "type::{ name: $text, one_of: [ $string, $symbol ] }",
+    "type::{ name: $any, one_of: [ $blob, $bool, $clob, $decimal,
+                                    $float, $int, $string, $symbol, $timestamp,
+                                    $list, $sexp, $struct, $null ] }",
+    // this is just a place holder for document type,
+    // IonSchemaElement::Document(_) type is used to verify the correctness on the validation side
+    "type::{ name: document }",
     "type::{ name: nothing, not: $any }",
+    "type::{ name: any, one_of: [ blob, bool, clob, decimal,
+                                    float, int, string, symbol, timestamp,
+                                    list, sexp, struct, document ] }",
 ];
 
 pub type TypeId = usize;
@@ -621,22 +624,22 @@ impl Resolver {
         for isl_type in isl_types.into() {
             // convert [IslType] into [TypeDefinition]
             match isl_type {
-                IslType::Named(named_isl_type) => TypeDefinition::Named(
+                IslType::Named(named_isl_type) => {
                     TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
                         &named_isl_type,
                         type_store,
                         pending_types,
                     )
-                    .unwrap(),
-                ),
-                IslType::Anonymous(anonymous_isl_type) => TypeDefinition::Anonymous(
+                    .unwrap()
+                }
+                IslType::Anonymous(anonymous_isl_type) => {
                     TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
                         &anonymous_isl_type,
                         type_store,
                         pending_types,
                     )
-                    .unwrap(),
-                ),
+                    .unwrap()
+                }
             };
         }
         // add all types from pending_types to type_store
@@ -730,12 +733,11 @@ impl Resolver {
             let pending_types = &mut PendingTypes::default();
 
             // convert IslType to TypeDefinition
-            let type_def: TypeDefinitionImpl =
-                TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
-                    isl_type,
-                    type_store,
-                    pending_types,
-                )?;
+            let type_id: TypeId = TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
+                isl_type,
+                type_store,
+                pending_types,
+            )?;
 
             // add all types from context to type_store
             added_imported_type_to_type_store =
@@ -848,7 +850,7 @@ impl SchemaSystem {
         &mut self,
         type_content: &OwnedElement,
         type_store: &mut TypeStore,
-    ) -> IonSchemaResult<TypeDefinitionImpl> {
+    ) -> IonSchemaResult<TypeId> {
         // convert to isl_type
         let mut isl_inline_imported_types = vec![];
         let isl_type =
@@ -869,17 +871,16 @@ impl SchemaSystem {
         let pending_types = &mut PendingTypes::default();
 
         // convert IslType to TypeDefinition
-        let type_def: TypeDefinitionImpl =
-            TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
-                &isl_type,
-                type_store,
-                pending_types,
-            )?;
+        let type_id: TypeId = TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
+            &isl_type,
+            type_store,
+            pending_types,
+        )?;
 
         // add all types from context to type_store
         pending_types.update_type_store(type_store, None)?;
 
-        Ok(type_def)
+        Ok(type_id)
     }
 }
 

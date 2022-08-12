@@ -102,6 +102,11 @@ impl IslTypeRef {
                         "a base or alias type reference can not be null.struct",
                     )
                 }
+                if value.annotations().any(|a| a.text() == Some("nullable")) {
+                    return invalid_schema_error(
+                        "nullable type reference is only allowed for built in types",
+                    )
+                }
                 let value_struct = try_to!(value.as_struct());
                 // if the struct doesn't have an id field then it must be an anonymous type
                 if value_struct.get("id").is_none() {
