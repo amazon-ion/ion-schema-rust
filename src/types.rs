@@ -52,6 +52,7 @@ impl TypeRef {
     ///     // create an IonSchemaElement from an OwnedElement
     ///     use ion_schema::authority::MapDocumentAuthority;
     ///     let owned_element: OwnedElement = 4.into();
+    ///     let document: Vec<OwnedElement> = vec![4.into(), "hello".to_string().into(), true.into()];
     ///
     ///     let map_authority = [
     ///         (
@@ -78,7 +79,8 @@ impl TypeRef {
     ///     // unwrap() here because we know that the `my_int` type exists in sample.isl
     ///     let type_ref = schema.get_type("my_int").unwrap();
     ///
-    ///     assert!(type_ref.validate(&owned_element).is_ok());
+    ///     assert!(type_ref.validate(&owned_element).is_ok()); // 4 is valid for `my_int`
+    ///     assert!(type_ref.validate(&document).is_err()); // document type is invalid for `my_int` type
     ///     Ok(())
     /// }
     /// ```
