@@ -1,8 +1,8 @@
-//! Provides functions for instantiating instances of [`Schema`] using [`SchemaSystem`].
+//! Provides functions for getting instances of [`Schema`] using [`SchemaSystem`].
 //!
 //! ## Example:
-//! In general, users will create authority/authorities and then use it to build the [`SchemaSystem`].
-//! Then this [`SchemaSystem`] is used instantiating instances of [`Schema`].
+//! In general, users will create one or more authorities and use them to build the [`SchemaSystem`].
+//! Then this [`SchemaSystem`] is used to create instances of [`Schema`].
 //!
 //! ```
 //! use ion_schema::authority::{MapDocumentAuthority, FileSystemDocumentAuthority, DocumentAuthority};
