@@ -763,7 +763,7 @@ impl TypedRangeBoundaryValue {
         }
     }
 }
-/// Represents a range boundary value (i.e. min, max or a value in terms of [RangeBoundaryValueType])
+/// Represents a range boundary value (i.e. min, max or a value in terms of [RangeBoundaryType])
 #[derive(Debug, Clone, PartialEq)]
 pub enum RangeBoundaryValue<T> {
     Max,

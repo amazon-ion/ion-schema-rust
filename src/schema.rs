@@ -1,13 +1,23 @@
+//! Represents a [`Schema`] which is collection of zero or more [`TypeRef`]s.
+//! Provides functions to get the underlying [`TypeRef`]s from the [`Schema`] that can be used to validate an Ion value.
+//!
+//! * `get_types`: This function returns an [`SchemaTypeIterator`] which can be used to iterate over the [`TypeRef`]s.
+//! * `get_type`: This function requires to pass the name of a type definition that you want to use for validation.
+//! It returns the [`TypeRef`] if it is defined in the [`Schema`] otherwise returns [`None`].
+//!
+
 use crate::import::Import;
 use crate::system::{TypeId, TypeStore};
 use crate::types::{TypeDefinitionImpl, TypeRef};
 use std::rc::Rc;
 
-/// A Schema is a collection of zero or more [Type]s.
+/// A Schema is a collection of zero or more [`TypeRef`]s.
 ///
 /// Each type may refer to other types within the same schema,
 /// or types imported into this schema from other schemas.
-/// To instantiate a Schema, see [SchemaSystem].
+/// To instantiate a [`Schema`], see [`SchemaSystem`].
+///
+/// [`SchemaSystem`]: crate::system::SchemaSystem
 #[derive(Debug, Clone)]
 pub struct Schema {
     id: String,
@@ -33,12 +43,12 @@ impl Schema {
         todo!()
     }
 
-    /// Returns an iterator over the imports of this [Schema].
+    /// Returns an iterator over the imports of this [`Schema`].
     fn imports(&self) -> SchemaTypeIterator {
         todo!()
     }
 
-    /// Returns an iterator over the imported types of this [Schema].
+    /// Returns an iterator over the imported types of this [`Schema`].
     fn imported_types(&self) -> SchemaTypeIterator {
         SchemaTypeIterator::new(Rc::clone(&self.types), self.types.get_imports())
     }
@@ -51,12 +61,12 @@ impl Schema {
     }
 
     /// Returns an iterator over the types in this schema.
-    /// This includes the builtin types and named types defined within this schema.
+    // This only includes named types defined within this schema.
     pub fn get_types(&self) -> SchemaTypeIterator {
         SchemaTypeIterator::new(Rc::clone(&self.types), self.types.get_types())
     }
 
-    /// Returns a new [Schema] instance containing all the types of this
+    /// Returns a new [`Schema`] instance containing all the types of this
     /// instance plus the provided type.  Note that the added type
     /// in the returned instance will hide a type of the same name
     /// from this instance.
@@ -65,7 +75,7 @@ impl Schema {
     }
 }
 
-/// Provides an Iterator which returns [Type]s inside a [Schema]
+/// Provides an Iterator which returns [`TypeRef`]s inside a [`Schema`]
 pub struct SchemaTypeIterator {
     type_store: Rc<TypeStore>,
     index: usize,

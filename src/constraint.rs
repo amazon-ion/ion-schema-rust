@@ -573,7 +573,7 @@ impl TypeConstraint {
         Self { type_id }
     }
 
-    /// Tries to create a [Type] constraint from the given OwnedElement
+    /// Tries to create a `type` constraint from the given [OwnedElement]
     pub fn resolve_from_isl_constraint(
         type_reference: &IslTypeRef,
         type_store: &mut TypeStore,

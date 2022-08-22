@@ -6,11 +6,11 @@ use ion_rs::value::{Element, SymbolToken};
 use ion_rs::Timestamp;
 use std::cmp::Ordering;
 
-/// Represents an annotation for [annotations] constraint.
+/// Represents an annotation for `annotations` constraint.
 /// Grammar: <ANNOTATION> ::= <SYMBOL>
 ///                | required::<SYMBOL>
 ///                | optional::<SYMBOL>
-/// [annotations]: https://amzn.github.io/ion-schema/docs/spec.html#annotations
+/// `annotations`: `<https://amzn.github.io/ion-schema/docs/spec.html#annotations>`
 #[derive(Debug, Clone, PartialEq)]
 pub struct Annotation {
     value: String,
@@ -139,7 +139,7 @@ impl PartialOrd for TimestampPrecision {
 /// Grammar: <VALID_VALUE> ::= <VALUE>
 ///                | <RANGE<TIMESTAMP>>
 ///                | <RANGE<NUMBER>>
-/// [valid_values]: https://amzn.github.io/ion-schema/docs/spec.html#valid_values
+/// `valid_values`: `<https://amzn.github.io/ion-schema/docs/spec.html#valid_values>`
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValidValue {
     Range(Range),

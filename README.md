@@ -58,16 +58,21 @@ fn main() -> IonSchemaResult<()> {
     // Retrieve a particular type from this schema
     let type_ref: TypeRef = schema.get_type("my_int_type").unwrap();
 
+    let valid_element: OwnedElement = 5.into();
+    let invalid_element: OwnedElement = 5e3.into();
+    let invalid_document_element: Vec<OwnedElement> = vec![5.into(), true.into(), 6e3.into()];
+
     // Validate data based on the type: 'my_int_type'
-    check_value(5.into(), &type_ref); // this validation passes as the value satisfies integer type constraint
-    check_value(5e3.into(), &type_ref); // this returns violation as 'my_int_type' expects an integer value
+    check_value(&valid_element, &type_ref); // this validation passes as the value satisfies integer type constraint
+    check_value(&invalid_element, &type_ref); // this returns violation as 'my_int_type' expects an integer value
+    check_value(&invalid_document_element, &type_ref); // this returns violation as 'my_int_type' expects an integer value
 
     Ok(())
 }
 
 // Verify if the given value is valid and print violation for invalid value
-fn check_value(value: OwnedElement, type_ref: &TypeRef) {
-    let validation_result: ValidationResult = type_ref.validate(&value);
+fn check_value<I: Into<IonSchemaElement> + Debug + Clone>(value: I, type_ref: &TypeRef) {
+    let validation_result: ValidationResult = type_ref.validate(value.to_owned());
     if let Err(violation) = validation_result {
         println!("{:?}", value);
         println!("{:#?}", violation);
