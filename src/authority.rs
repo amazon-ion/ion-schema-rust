@@ -1,15 +1,15 @@
-//! Provides a way to construct [DocumentAuthority].
+//! Provides a way to construct [`DocumentAuthority`].
 //!
-//! A [DocumentAuthority] is responsible for resolving a particular class of
+//! A [`DocumentAuthority`] is responsible for resolving a particular class of
 //! schema identifiers as per *[Ion Schema spec]*.
 //!
-//! There are two types of a [DocuemntAuthority] as defined below.
-//! * [FileSystemDocumentAuthority] : Attempts to resolve schema ids to files relative to a basePath.
-//! * [MapDocumentAuthority] : Attempts to resolve schema ids to ion elements using the map of (id, ion content).
+//! There are two types of a [`DocumentAuthority`] as defined below.
+//! * [`FileSystemDocumentAuthority`] : Attempts to resolve schema ids to files relative to a basePath.
+//! * [`MapDocumentAuthority`] : Attempts to resolve schema ids to ion elements using the map of (id, ion content).
 //!
 //! [Ion Schema spec]: https://amzn.github.io/ion-schema/docs/spec.html#schema-authorities
 //!
-//! ## Example usage of `authority` module to create a [`DocuemntAuthority`]:
+//! ## Example usage of `authority` module to create a [`DocumentAuthority`]:
 //! ```
 //! use ion_schema::authority::{MapDocumentAuthority, FileSystemDocumentAuthority};
 //! use std::path::Path;
@@ -69,7 +69,7 @@ use std::fmt::Debug;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// An [DocumentAuthority] is responsible for resolving a particular class of
+/// An [`DocumentAuthority`] is responsible for resolving a particular class of
 /// schema identifiers.
 ///
 /// The structure of a schema identifier string is defined by the
@@ -78,7 +78,7 @@ pub trait DocumentAuthority: Debug {
     fn elements(&self, id: &str) -> IonSchemaResult<Vec<OwnedElement>>;
 }
 
-/// An [DocumentAuthority] implementation that attempts to resolve schema ids to files
+/// An [`DocumentAuthority`] implementation that attempts to resolve schema ids to files
 /// relative to a basePath.
 #[derive(Debug, Clone)]
 pub struct FileSystemDocumentAuthority {
@@ -92,14 +92,14 @@ impl FileSystemDocumentAuthority {
         }
     }
 
-    /// Returns the base path for this [FileSystemAuthority]
+    /// Returns the base path for this [`FileSystemDocumentAuthority`]
     pub fn base_path(&self) -> &Path {
         self.base_path.as_path()
     }
 }
 
 impl DocumentAuthority for FileSystemDocumentAuthority {
-    /// Returns a vector of [OwnedElement]s based on given schema id
+    /// Returns a vector of [`OwnedElement`]s based on given schema id
     fn elements(&self, id: &str) -> IonSchemaResult<Vec<OwnedElement>> {
         let absolute_path = self.base_path().join(id);
         // if absolute_path exists for the given id then load schema with file contents
@@ -110,7 +110,7 @@ impl DocumentAuthority for FileSystemDocumentAuthority {
     }
 }
 
-/// An [DocumentAuthority] implementation that attempts to resolve schema ids to ion elements using the map.
+/// An [`DocumentAuthority`] implementation that attempts to resolve schema ids to ion elements using the map.
 #[derive(Debug, Clone)]
 pub struct MapDocumentAuthority {
     ion_content_by_id: HashMap<String, String>, // This map represents (id, ion content) which can used to resolve schema ids to Vec<OwnedElement>
@@ -128,7 +128,7 @@ impl MapDocumentAuthority {
 }
 
 impl DocumentAuthority for MapDocumentAuthority {
-    /// Returns a vector of [OwnedElement]s based on given schema id using ion_content_by_id map
+    /// Returns a vector of [`OwnedElement`]s based on given schema id using ion_content_by_id map
     fn elements(&self, id: &str) -> IonSchemaResult<Vec<OwnedElement>> {
         // if ion content exists for the given id  in the map then return ion content as OwnedElements
         let ion_content = self.ion_content_by_id.get(id).ok_or_else(|| {

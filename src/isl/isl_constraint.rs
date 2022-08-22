@@ -102,7 +102,7 @@ impl IslConstraint {
         IslConstraint::ByteLength(Range::NonNegativeInteger(length))
     }
 
-    /// Creates an [IslConstraint::CodePointLength] using the range specified in it
+    /// Creates an [IslConstraint::CodepointLength] using the range specified in it
     pub fn codepoint_length(length: RangeImpl<usize>) -> IslConstraint {
         IslConstraint::CodepointLength(Range::NonNegativeInteger(length))
     }
@@ -146,7 +146,7 @@ impl IslConstraint {
         ))
     }
 
-    /// Creates a [IslConstraint::ValidValues] using the [OwnedElements] specified inside it
+    /// Creates a [IslConstraint::ValidValues] using the [OwnedElement]s specified inside it
     pub fn valid_values_with_values(values: Vec<OwnedElement>) -> IonSchemaResult<IslConstraint> {
         let valid_values: IonSchemaResult<Vec<ValidValue>> =
             values.iter().map(|e| e.try_into()).collect();
@@ -445,7 +445,7 @@ impl IslConstraint {
 }
 
 /// Represents the `annotations` constraint
-/// [annotations]: https://amzn.github.io/ion-schema/docs/spec.html#annotations
+/// `annotations`: `<https://amzn.github.io/ion-schema/docs/spec.html#annotations>`
 // The `required` annotation provided on the list of annotations is not represented here,
 // requirement of an annotation is represented in the annotation itself by the field `is_required` of `Annotation` struct.
 #[derive(Debug, Clone, PartialEq)]
@@ -496,7 +496,7 @@ impl TryFrom<&OwnedElement> for IslAnnotationsConstraint {
 }
 
 /// Represents the `valid_values` constraint
-/// [valid_Values]: https://amzn.github.io/ion-schema/docs/spec.html#annotations
+/// `valid_values`: `<https://amzn.github.io/ion-schema/docs/spec.html#annotations>`
 #[derive(Debug, Clone, PartialEq)]
 pub struct IslValidValuesConstraint {
     valid_values: Vec<ValidValue>,
@@ -555,7 +555,7 @@ impl TryFrom<&OwnedElement> for IslValidValuesConstraint {
 }
 
 /// Represents the `regex` constraint
-/// [regex]: https://amzn.github.io/ion-schema/docs/spec.html#regex
+/// `regex`: `<https://amzn.github.io/ion-schema/docs/spec.html#regex>`
 #[derive(Debug, Clone, PartialEq)]
 pub struct IslRegexConstraint {
     case_insensitive: bool,

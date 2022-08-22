@@ -11,7 +11,7 @@ use ion_rs::value::{Builder, Element};
 use ion_rs::IonType;
 use std::rc::Rc;
 
-/// Provides validation for Type
+/// Provides validation for [`TypeDefinition`]
 pub trait TypeValidator {
     /// If the specified value violates one or more of this type's constraints,
     /// returns `false`, otherwise `true`
@@ -120,7 +120,7 @@ impl TypeRef {
     }
 }
 
-/// Represents a [BuiltInTypeDefinition] which stores a resolved builtin ISl type using [TypeStore]
+/// Represents a [`BuiltInTypeDefinition`] which stores a resolved builtin ISl type using [`TypeStore`]
 #[derive(Debug, Clone, PartialEq)]
 pub enum BuiltInTypeDefinition {
     Atomic(IonType, Nullability),
@@ -165,7 +165,7 @@ impl BuiltInTypeDefinition {
     }
 }
 
-/// Represents a [TypeDefinition] which stores a resolved ISL type using [TypeStore]
+/// Represents a [`TypeDefinition`] which stores a resolved ISL type using [`TypeStore`]
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeDefinition {
     Named(TypeDefinitionImpl),
@@ -174,7 +174,7 @@ pub enum TypeDefinition {
 }
 
 impl TypeDefinition {
-    /// Creates a [IslType::Named] using the [IslConstraint] defined within it
+    /// Creates a named [`TypeDefinition`] using the [`IslConstraint`] defined within it
     pub fn named<A: Into<String>, B: Into<Vec<Constraint>>>(
         name: A,
         constraints: B,
@@ -185,12 +185,12 @@ impl TypeDefinition {
         ))
     }
 
-    /// Creates a [IslType::Anonymous] using the [IslConstraint] defined within it
+    /// Creates an anonymous [`TypeDefinition`] using the [`IslConstraint`] defined within it
     pub fn anonymous<A: Into<Vec<Constraint>>>(constraints: A) -> TypeDefinition {
         TypeDefinition::Anonymous(TypeDefinitionImpl::new(None, constraints.into()))
     }
 
-    /// Provides the underlying constraints of [TypeDefinitionImpl]
+    /// Provides the underlying constraints of [`TypeDefinitionImpl`]
     pub fn constraints(&self) -> &[Constraint] {
         match &self {
             TypeDefinition::Named(named_type) => named_type.constraints(),
@@ -199,7 +199,7 @@ impl TypeDefinition {
         }
     }
 
-    /// Returns an occurs constraint as range if it exists in the [TypeDefinition] otherwise returns `occurs: required`
+    /// Returns an occurs constraint as range if it exists in the [`TypeDefinition`] otherwise returns `occurs: required`
     pub fn get_occurs_constraint(&self, validation_constraint_name: &str) -> Range {
         // verify if the type_def contains `occurs` constraint and fill occurs_range
         // Otherwise if there is no `occurs` constraint specified then use `occurs: required`
@@ -289,7 +289,7 @@ impl TypeValidator for TypeDefinition {
     }
 }
 
-/// A [TypeDefinitionImpl] consists of an optional name and zero or more constraints.
+/// A [`TypeDefinitionImpl`] consists of an optional name and zero or more constraints.
 #[derive(Debug, Clone)]
 pub struct TypeDefinitionImpl {
     name: Option<String>,
@@ -316,7 +316,10 @@ impl TypeDefinitionImpl {
         &self.constraints
     }
 
-    /// Parse constraints inside an [OwnedStruct] to a schema type definition and return its [TypeId]
+    /// Parse constraints inside an [`IslTypeImpl`] to a schema type definition, update the [`PendingTypes`]
+    /// and return its [`TypeId`] if the conversion was successful, otherwise return an [`IonSchemaError`]
+    ///
+    /// [`IonSchemaError`]: crate::result::IonSchemaError
     pub fn parse_from_isl_type_and_update_pending_types(
         isl_type: &IslTypeImpl,
         type_store: &mut TypeStore,

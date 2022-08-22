@@ -1,4 +1,4 @@
-//! Represents the `IonSchemaResult` type for error handling.
+//! Represents the [`IonSchemaResult`] type for error handling.
 //!
 //! [`IonSchemaResult<T, E>`][`IonSchemaResult`]  is the type used for returning and propagating errors.
 //! It is an enum with the variants, Ok(T), representing success and containing a value,and Err(E), representing an [`IonSchemaError`].

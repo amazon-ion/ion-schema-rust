@@ -39,7 +39,7 @@ impl IslType {
     }
 }
 
-/// Represents both named and anonymous [IslType]s and can be converted to a solid [TypeDefinition] using TypeStore
+/// Represents both named and anonymous [IslType]s and can be converted to a resolved type definition
 /// Named ISL type grammar: `type:: { name: <NAME>, <CONSTRAINT>...}`
 /// Anonymous ISL type grammar: `{ <CONSTRAINT>... }`
 #[derive(Debug, Clone)]
