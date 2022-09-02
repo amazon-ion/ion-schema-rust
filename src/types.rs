@@ -128,7 +128,7 @@ pub enum BuiltInTypeDefinition {
 }
 
 /// Represents whether an atomic built-in type is nullable or not
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Nullability {
     Nullable,
     NotNullable,
@@ -256,13 +256,11 @@ impl TypeValidator for TypeDefinition {
 
                             Ok(())
                         }
-                        IonSchemaElement::Document(document) => {
-                            return Err(Violation::new(
-                                "type_constraint",
-                                ViolationCode::TypeMismatched,
-                                &format!("expected type {:?}, found document", ion_type),
-                            ));
-                        }
+                        IonSchemaElement::Document(document) => Err(Violation::new(
+                            "type_constraint",
+                            ViolationCode::TypeMismatched,
+                            &format!("expected type {:?}, found document", ion_type),
+                        )),
                     }
                 }
                 BuiltInTypeDefinition::Derived(other_type) => {

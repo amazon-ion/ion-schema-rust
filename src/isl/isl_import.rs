@@ -4,7 +4,7 @@ use ion_rs::value::{Element, Struct};
 
 /// Represents an import in an ISL schema.
 /// For more information: `<https://amzn.github.io/ion-schema/docs/spec.html#imports>`
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IslImport {
     Schema(String),
     Type(IslImportType),
@@ -59,7 +59,7 @@ impl IslImport {
 /// Represents typed and type aliased [IslImport]s
 /// Typed import grammar: `{ id: <ID>, type: <TYPE_NAME> }`
 /// Type aliased import grammar: `{ id: <ID>, type: <TYPE_NAME>, as: <TYPE_ALIAS> }`
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IslImportType {
     id: String,
     type_name: String,

@@ -378,9 +378,18 @@ impl<T: std::cmp::PartialOrd> RangeImpl<T> {
         start: RangeBoundaryValue<T>,
         end: RangeBoundaryValue<T>,
     ) -> IonSchemaResult<Self> {
+        if start.range_boundary_value() == None
+            && end.range_boundary_value() == None
+            && (start.range_boundary_type() == &RangeBoundaryType::Exclusive
+                || end.range_boundary_type() == &RangeBoundaryType::Exclusive)
+        {
+            return invalid_schema_error(
+                "Exclusive min or max are not allowed for range boundary values",
+            );
+        }
         if start == end
-            && start.range_boundary_type() == &RangeBoundaryType::Exclusive
-            && end.range_boundary_type() == &RangeBoundaryType::Exclusive
+            && (start.range_boundary_type() == &RangeBoundaryType::Exclusive
+                || end.range_boundary_type() == &RangeBoundaryType::Exclusive)
         {
             return invalid_schema_error("Empty ranges are not allowed");
         }
@@ -575,9 +584,28 @@ impl<T: std::cmp::PartialOrd> RangeImpl<T> {
                 RangeImpl::range(v1, v2)
             }
             (TypedRangeBoundaryValue::Min, TypedRangeBoundaryValue::Timestamp(v2)) => {
+                // verify that v2 here doesn't have an unknown offset
+                // For timestamp ranges neither boundaries should have an unknown offset
+                if let Some(range_end_timestamp_value) = v2.range_boundary_value() {
+                    if range_end_timestamp_value.offset() == None {
+                        return invalid_schema_error(
+                            "Range boundary can not have an unknown offset",
+                        );
+                    }
+                }
+
                 RangeImpl::range(RangeBoundaryValue::Min, v2)
             }
             (TypedRangeBoundaryValue::Timestamp(v1), TypedRangeBoundaryValue::Max) => {
+                // verify that v1 here doesn't have an unknown offset
+                // For timestamp ranges neither boundaries should have an unknown offset
+                if let Some(range_end_timestamp_value) = v1.range_boundary_value() {
+                    if range_end_timestamp_value.offset() == None {
+                        return invalid_schema_error(
+                            "Range boundary can not have an unknown offset",
+                        );
+                    }
+                }
                 RangeImpl::range(v1, RangeBoundaryValue::Max)
             }
             (TypedRangeBoundaryValue::Timestamp(Value(v1, _)), _) => {
@@ -764,7 +792,7 @@ impl TypedRangeBoundaryValue {
     }
 }
 /// Represents a range boundary value (i.e. min, max or a value in terms of [RangeBoundaryType])
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum RangeBoundaryValue<T> {
     Max,
     Min,
@@ -776,6 +804,27 @@ impl<T> RangeBoundaryValue<T> {
         match self {
             Value(_, range_boundary_type) => range_boundary_type,
             _ => &RangeBoundaryType::Inclusive,
+        }
+    }
+
+    pub fn range_boundary_value(&self) -> Option<&T> {
+        match self {
+            Value(v, _) => Some(v),
+            _ => None,
+        }
+    }
+}
+
+// This PartialEq implementation doesn't consider RangeBoundaryType for equivalence
+impl<T: std::cmp::PartialEq> PartialEq for RangeBoundaryValue<T> {
+    fn eq(&self, other: &Self) -> bool {
+        match (&self, other) {
+            (Max, Max) => true,
+            (Max, _) => false,
+            (Min, Min) => true,
+            (Min, _) => false,
+            (Value(v1, _), Value(v2, _)) => v1 == v2,
+            (Value(_, _), _) => false,
         }
     }
 }
@@ -795,7 +844,7 @@ impl<T: std::cmp::PartialOrd> PartialOrd for RangeBoundaryValue<T> {
 }
 
 /// Represents the range boundary types in terms of exclusivity (i.e. inclusive or exclusive)
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
 pub enum RangeBoundaryType {
     Inclusive,
     Exclusive,
@@ -804,7 +853,7 @@ pub enum RangeBoundaryType {
 /// Represents if the range is non negative integer range or not
 /// This will be used while creating an integer range from OwnedElement
 /// to explicitly state if its non negative or not
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RangeType {
     Precision, // used by precision constraint to specify non negative integer precision with minimum value as `1`
     NonNegativeInteger, // used by byte_length, container_length and codepoint_length to specify non negative integer range
@@ -815,7 +864,7 @@ pub enum RangeType {
 
 /// Represents number boundary values
 /// A number can be float, integer or decimal
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
 pub struct Number {
     big_decimal_value: BigDecimal,
 }
