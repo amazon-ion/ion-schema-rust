@@ -846,7 +846,7 @@ impl<T: std::cmp::PartialOrd> PartialOrd for RangeBoundaryValue<T> {
 }
 
 /// Represents the range boundary types in terms of exclusivity (i.e. inclusive or exclusive)
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
 pub enum RangeBoundaryType {
     Inclusive,
     Exclusive,
@@ -855,7 +855,7 @@ pub enum RangeBoundaryType {
 /// Represents if the range is non negative integer range or not
 /// This will be used while creating an integer range from OwnedElement
 /// to explicitly state if its non negative or not
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RangeType {
     Precision, // used by precision constraint to specify non negative integer precision with minimum value as `1`
     NonNegativeInteger, // used by byte_length, container_length and codepoint_length to specify non negative integer range
@@ -866,7 +866,7 @@ pub enum RangeType {
 
 /// Represents number boundary values
 /// A number can be float, integer or decimal
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
 pub struct Number {
     big_decimal_value: BigDecimal,
 }

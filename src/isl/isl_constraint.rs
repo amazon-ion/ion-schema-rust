@@ -448,7 +448,7 @@ impl IslConstraint {
 /// `annotations`: `<https://amzn.github.io/ion-schema/docs/spec.html#annotations>`
 // The `required` annotation provided on the list of annotations is not represented here,
 // requirement of an annotation is represented in the annotation itself by the field `is_required` of `Annotation` struct.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IslAnnotationsConstraint {
     pub is_closed: bool,
     pub is_ordered: bool,
@@ -556,7 +556,7 @@ impl TryFrom<&OwnedElement> for IslValidValuesConstraint {
 
 /// Represents the `regex` constraint
 /// `regex`: `<https://amzn.github.io/ion-schema/docs/spec.html#regex>`
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IslRegexConstraint {
     case_insensitive: bool,
     multi_line: bool,

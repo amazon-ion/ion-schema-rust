@@ -11,7 +11,7 @@ use std::cmp::Ordering;
 ///                | required::<SYMBOL>
 ///                | optional::<SYMBOL>
 /// `annotations`: `<https://amzn.github.io/ion-schema/docs/spec.html#annotations>`
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Annotation {
     value: String,
     is_required: bool, // Specifies whether an annotation's occurrence is required or optional
@@ -44,7 +44,7 @@ impl Annotation {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TimestampPrecision {
     Year,
     Month,

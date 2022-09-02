@@ -362,7 +362,7 @@ impl Constraint {
 
 /// Implements an `all_of` constraint of Ion Schema
 /// [all_of]: https://amzn.github.io/ion-schema/docs/spec.html#all_of
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AllOfConstraint {
     type_ids: Vec<TypeId>,
 }
@@ -415,7 +415,7 @@ impl ConstraintValidator for AllOfConstraint {
 
 /// Implements an `any_of` constraint of Ion Schema
 /// [any_of]: https://amzn.github.io/ion-schema/docs/spec.html#any_of
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AnyOfConstraint {
     type_ids: Vec<TypeId>,
 }
@@ -465,7 +465,7 @@ impl ConstraintValidator for AnyOfConstraint {
 
 /// Implements an `one_of` constraint of Ion Schema
 /// [one_of]: https://amzn.github.io/ion-schema/docs/spec.html#one_of
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OneOfConstraint {
     type_ids: Vec<TypeId>,
 }
@@ -501,7 +501,7 @@ impl ConstraintValidator for OneOfConstraint {
             }
         }
         let total_valid_types = valid_types.len();
-        return match total_valid_types {
+        match total_valid_types {
             0 => Err(Violation::with_violations(
                 "one_of",
                 ViolationCode::NoTypesMatched,
@@ -515,13 +515,13 @@ impl ConstraintValidator for OneOfConstraint {
                 &format!("value matches {} types, expected 1", total_valid_types),
                 violations,
             )),
-        };
+        }
     }
 }
 
 /// Implements a `not` constraint
 /// [type]: https://amzn.github.io/ion-schema/docs/spec.html#not
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NotConstraint {
     type_id: TypeId,
 }
@@ -563,7 +563,7 @@ impl ConstraintValidator for NotConstraint {
 
 /// Implements a `type` constraint
 /// [type]: https://amzn.github.io/ion-schema/docs/spec.html#type
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypeConstraint {
     type_id: TypeId,
 }
@@ -621,7 +621,7 @@ impl ConstraintValidator for OccursConstraint {
 
 /// Implements an `ordered_elements` constraint of Ion Schema
 /// [ordered_elements]: https://amzn.github.io/ion-schema/docs/spec.html#ordered_elements
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OrderedElementsConstraint {
     type_ids: Vec<TypeId>,
 }
@@ -748,7 +748,7 @@ impl ConstraintValidator for OrderedElementsConstraint {
             )?;
         }
 
-        return if values_iter.peek() != None {
+        if values_iter.peek() != None {
             // check if there still values left at the end of sequence (list/sexp), when we have already
             // completed visiting through all of the ordered elements type_defs
             Err(Violation::with_violations(
@@ -760,13 +760,13 @@ impl ConstraintValidator for OrderedElementsConstraint {
             ))
         } else {
             Ok(())
-        };
+        }
     }
 }
 
 /// Implements an `fields` constraint of Ion Schema
 /// [fields]: https://amzn.github.io/ion-schema/docs/spec.html#fields
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FieldsConstraint {
     fields: HashMap<String, TypeId>,
     open_content: bool,
@@ -875,7 +875,7 @@ impl ConstraintValidator for FieldsConstraint {
 
 /// Implements Ion Schema's `contains` constraint
 /// [contains]: https://amzn.github.io/ion-schema/docs/spec.html#contains
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContainsConstraint {
     // TODO: convert this into a HashSet once we have an implementation of Hash for OwnedElement in ion-rust
     // Reference ion-rust issue: https://github.com/amzn/ion-rust/issues/220
@@ -1100,7 +1100,7 @@ impl ConstraintValidator for CodepointLengthConstraint {
 
 /// Implements the `element` constraint
 /// [element]: https://amzn.github.io/ion-schema/docs/spec.html#element
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ElementConstraint {
     type_id: TypeId,
 }
@@ -1199,7 +1199,7 @@ impl ConstraintValidator for ElementConstraint {
 /// [annotations]: https://amzn.github.io/ion-schema/docs/spec.html#annotations
 // The `required` annotation provided on the list of annotations is not represented here,
 // requirement of an annotation is represented in the annotation itself by the field `is_required` of `Annotation` struct.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AnnotationsConstraint {
     is_closed: bool,
     is_ordered: bool,
