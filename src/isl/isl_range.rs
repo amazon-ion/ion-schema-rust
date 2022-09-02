@@ -585,12 +585,11 @@ impl<T: std::cmp::PartialOrd> RangeImpl<T> {
             }
             (TypedRangeBoundaryValue::Min, TypedRangeBoundaryValue::Timestamp(v2)) => {
                 // verify that v2 here doesn't have an unknown offset
-                // For timestamp ranges either both boundaries should have an unknown offset or both have a known offset
-                // as Min will have a known offset as per UTC v2 can nopt have an unknown offset
+                // For timestamp ranges neither boundaries should have an unknown offset
                 if let Some(range_end_timestamp_value) = v2.range_boundary_value() {
                     if range_end_timestamp_value.offset() == None {
                         return invalid_schema_error(
-                            "Both range boundaries should have known offset",
+                            "Range boundary can not have an unknown offset",
                         );
                     }
                 }
@@ -599,12 +598,11 @@ impl<T: std::cmp::PartialOrd> RangeImpl<T> {
             }
             (TypedRangeBoundaryValue::Timestamp(v1), TypedRangeBoundaryValue::Max) => {
                 // verify that v1 here doesn't have an unknown offset
-                // For timestamp ranges either both boundaries should have an unknown offset or both have a known offset
-                // as Max will have a known offset as per UTC v1 can nopt have an unknown offset
+                // For timestamp ranges neither boundaries should have an unknown offset
                 if let Some(range_end_timestamp_value) = v1.range_boundary_value() {
                     if range_end_timestamp_value.offset() == None {
                         return invalid_schema_error(
-                            "Both range boundaries should have known offset",
+                            "Range boundary can not have an unknown offset",
                         );
                     }
                 }
