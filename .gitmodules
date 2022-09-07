@@ -4,3 +4,6 @@
 [submodule "ion-schema-schemas"]
 	path = ion-schema-schemas
 	url = https://github.com/amzn/ion-schema-schemas.git
+[submodule "wasm-schema-sandbox/www/ace-builds"]
+	path = wasm-schema-sandbox/www/ace-builds
+	url = https://github.com/ajaxorg/ace-builds.git
