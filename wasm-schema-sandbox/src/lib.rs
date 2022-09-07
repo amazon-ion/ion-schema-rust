@@ -2,7 +2,7 @@ use ion_schema::authority::{DocumentAuthority, MapDocumentAuthority};
 use ion_schema::external::ion_rs::value::owned::OwnedElement;
 use ion_schema::external::ion_rs::value::reader::{element_reader, ElementReader};
 use ion_schema::external::ion_rs::IonResult;
-use ion_schema::result::{IonSchemaResult, ValidationResult};
+use ion_schema::result::IonSchemaResult;
 use ion_schema::schema::Schema;
 use ion_schema::system::SchemaSystem;
 use ion_schema::types::TypeRef;
@@ -17,11 +17,6 @@ macro_rules! log {
     ( $( $t:tt )* ) => {
         web_sys::console::log_1(&format!( $( $t )* ).into());
     }
-}
-
-// Verify if the given value is valid and print violation for invalid value
-fn check_value(value: OwnedElement, type_ref: &TypeRef) -> ValidationResult {
-    type_ref.validate(&value)
 }
 
 fn load(text: &str) -> IonResult<OwnedElement> {
@@ -99,8 +94,13 @@ impl SchemaValidationResult {
 
 #[wasm_bindgen]
 pub fn validate(ion: &str, schema: &str, schema_type: &str) -> SchemaValidationResult {
-    // map with (id, ion content) to represent `sample_number` schema
-    let map_authority = [("sample_number.isl", schema)];
+    // Provide schema id for the schema you want to load (schema_id is the schema file name here)
+    // This will be the id of schema, provided within the map authority defined below
+    let schema_id = "schema.isl";
+
+    // map with (id, ion content) to represent schema
+    // the id here represents the schema id and for this map authority `schema.isl` is used as a unique id
+    let map_authority = [(schema_id, schema)];
 
     log!("inside schema validation function");
     // Create a MapDocumentAuthority using a map like above with
@@ -113,9 +113,6 @@ pub fn validate(ion: &str, schema: &str, schema_type: &str) -> SchemaValidationR
     let mut schema_system = SchemaSystem::new(document_authorities);
 
     log!("created schema system successfully!");
-
-    // Provide schema id for the schema you want to load (schema_id is the schema file name here)
-    let schema_id = "sample_number.isl";
 
     // Load schema
     let schema_result: IonSchemaResult<Rc<Schema>> = schema_system.load_schema(schema_id);
@@ -139,7 +136,6 @@ pub fn validate(ion: &str, schema: &str, schema_type: &str) -> SchemaValidationR
 
     log!("loaded schema successfully!");
 
-    // This example uses a schema that was created using how to load a schema section (`my_schema.isl`)?
     // Retrieve a particular type from this schema
     let type_ref_result: Option<TypeRef> = schema.get_type(schema_type);
 
@@ -185,8 +181,8 @@ pub fn validate(ion: &str, schema: &str, schema_type: &str) -> SchemaValidationR
 
     log!("loaded ion value successfully!");
 
-    // Validate data based on the type: 'my_int_type'
-    let result = check_value(value.to_owned(), &type_ref);
+    // Validate data based on `schema_type`
+    let result = type_ref.validate(&value);
 
     log!("validation complete!");
 
