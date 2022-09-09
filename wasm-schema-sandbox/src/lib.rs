@@ -171,10 +171,7 @@ pub fn validate(ion: &str, schema: &str, schema_type: &str) -> SchemaValidationR
                 "".to_string(),
                 ion.to_string(),
                 true,
-                format!(
-                    "Can not parse given Ion value: {} for validation",
-                    ion.to_string()
-                ),
+                format!("Can not parse given Ion value: {} for validation", ion),
             )
         }
     };
@@ -197,7 +194,7 @@ pub fn validate(ion: &str, schema: &str, schema_type: &str) -> SchemaValidationR
 
     let result: SchemaValidationResult = SchemaValidationResult::new(
         result.is_ok(),
-        violation.to_owned(),
+        violation,
         format!("{}", value),
         false,
         "".to_string(),

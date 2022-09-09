@@ -29,7 +29,7 @@ wasm-pack build
 ```
 6. Start the node server from `wasm-schema-sandbox` package's `www` directory:
 ```bash
-cd wwww
+cd www
 npm install
 npm run start
 ```
