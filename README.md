@@ -33,17 +33,19 @@ schema_footer::{
 ```rust
 use ion_schema::authority::{DocumentAuthority, FileSystemDocumentAuthority};
 use ion_schema::external::ion_rs::value::owned::OwnedElement;
-use ion_schema::result::{ValidationResult, IonSchemaResult};
-use ion_schema::types::TypeRef;
+use ion_schema::result::{IonSchemaResult, ValidationResult};
 use ion_schema::schema::Schema;
 use ion_schema::system::SchemaSystem;
+use ion_schema::types::TypeRef;
+use ion_schema::IonSchemaElement;
+use std::fmt::Debug;
 use std::path::Path;
 use std::rc::Rc;
 
 fn main() -> IonSchemaResult<()> {
     // Create authorities vector containing all the authorities that will be used to load a schema based on schema id
     let document_authorities: Vec<Box<dyn DocumentAuthority>> = vec![Box::new(
-        FileSystemDocumentAuthority::new(Path::new("schema")), // provide a path to the authority base folder containing schemas
+        FileSystemDocumentAuthority::new(Path::new("schemas")), // provide a path to the authority base folder containing schemas
     )];
 
     // Create a new schema system from given document authorities
@@ -74,7 +76,7 @@ fn main() -> IonSchemaResult<()> {
 fn check_value<I: Into<IonSchemaElement> + Debug + Clone>(value: I, type_ref: &TypeRef) {
     let validation_result: ValidationResult = type_ref.validate(value.to_owned());
     if let Err(violation) = validation_result {
-        println!("{:?}", value);
+        println!("{}", value.into());
         println!("{:#?}", violation);
     }
 }
@@ -83,7 +85,7 @@ fn check_value<I: Into<IonSchemaElement> + Debug + Clone>(value: I, type_ref: &T
 ### Output
 When run, the code above produces the following output:
 ```
-OwnedElement { annotations: [], value: Float(5000.0) }
+5e3
 Violation {
     constraint: "my_int_type",
     code: TypeConstraintsUnsatisfied,
@@ -93,6 +95,20 @@ Violation {
             constraint: "type_constraint",
             code: TypeMismatched,
             message: "expected type Integer, found Float",
+            violations: [],
+        },
+    ],
+}
+/* Ion document */ 5 true 6e3 /* end */
+Violation {
+    constraint: "my_int_type",
+    code: TypeConstraintsUnsatisfied,
+    message: "value didn't satisfy type constraint(s)",
+    violations: [
+        Violation {
+            constraint: "type_constraint",
+            code: TypeMismatched,
+            message: "expected type Integer, found document",
             violations: [],
         },
     ],
