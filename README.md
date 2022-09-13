@@ -6,6 +6,8 @@
 
 An implementation of [Amazon Ion Schema](http://amzn.github.io/ion-schema) in Rust.
 
+If you want to try out a web tool to validate your Ion values using `ion-schema-rust`, please visit: https://amzn.github.io/ion-schema/sandbox
+
 **This package is considered experimental, under active/early development, and the API is subject to change.**
 
 ## Getting Started
@@ -114,6 +116,8 @@ Violation {
     ],
 }
 ```
+
+For more getting started examples, please visit: https://amzn.github.io/ion-schema/docs/cookbook/ion-schema-rust-getting-started
 
 ## Development
 
