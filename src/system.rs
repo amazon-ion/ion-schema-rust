@@ -502,8 +502,27 @@ impl TypeStore {
             })
     }
 
-    /// Provides the [`TypeId`] associated with given name if it exists in the [`TypeStore`]  
-    /// Otherwise returns None
+    /// Provides the [`TypeId`] associated with given name if it exists in the [`TypeStore`] either as
+    /// a built-in type or a type defined within schema; Otherwise returns None
+    pub(crate) fn get_built_in_type_id_or_defined_type_id_by_name(
+        &self,
+        name: &str,
+    ) -> Option<&TypeId> {
+        let type_name = match name {
+            "int" => "integer",
+            "bool" => "boolean",
+            "$int" => "$integer",
+            "$bool" => "$boolean",
+            _ => name,
+        };
+        self.ids_by_name
+            .get(name)
+            .or_else(|| self.imported_type_ids_by_name.get(name))
+            .or_else(|| self.builtin_type_ids_by_name.get(type_name))
+    }
+
+    /// Provides the [`TypeId`] associated with given name if it exists in the [`TypeStore`] as a type
+    /// defined within schema (This doesn't include built-in types); Otherwise returns None
     pub(crate) fn get_type_id_by_name(&self, name: &str) -> Option<&TypeId> {
         self.ids_by_name
             .get(name)

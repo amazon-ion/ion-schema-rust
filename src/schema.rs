@@ -53,10 +53,12 @@ impl Schema {
         SchemaTypeIterator::new(Rc::clone(&self.types), self.types.get_imports())
     }
 
-    /// Returns the requested type, if present in this schema;
+    /// Returns the requested type, if present in this schema or a a built in type;
     /// otherwise returns None.
     pub fn get_type<A: AsRef<str>>(&self, name: A) -> Option<TypeRef> {
-        let type_id = self.types.get_type_id_by_name(name.as_ref())?;
+        let type_id = self
+            .types
+            .get_built_in_type_id_or_defined_type_id_by_name(name.as_ref())?;
         Some(TypeRef::new(*type_id, Rc::clone(&self.types)))
     }
 
@@ -303,6 +305,20 @@ mod schema_tests {
 
     #[rstest(
         valid_values, invalid_values, schema, type_name,
+        case::built_in_type(
+        load(r#"
+                5
+                0
+                -2
+            "#),
+        load(r#"
+                false
+                "hello"
+                5.4
+            "#),
+        load_schema_from_text(r#" // No schema defined, uses built-in types"#),
+        "int"
+        ),
         case::type_constraint(
             load(r#"
                 5
