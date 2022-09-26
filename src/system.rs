@@ -517,7 +517,6 @@ impl TypeStore {
         };
         self.ids_by_name
             .get(name)
-            .or_else(|| self.imported_type_ids_by_name.get(name))
             .or_else(|| self.builtin_type_ids_by_name.get(type_name))
     }
 
