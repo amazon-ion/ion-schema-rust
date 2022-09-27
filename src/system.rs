@@ -681,7 +681,7 @@ impl Resolver {
         let mut found_footer = false;
 
         // ISL version marker regex
-        let isl_version_marker = Regex::new(r"^\$ion_schema_\d+_\d+").unwrap();
+        let isl_version_marker = Regex::new(r"^\$ion_schema_\d.*$").unwrap();
 
         for value in elements {
             // verify if value is an ISL version marker and if it has valid format
