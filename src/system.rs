@@ -33,6 +33,7 @@ use ion_rs::value::owned::{text_token, OwnedElement, OwnedSymbolToken};
 use ion_rs::value::reader::{element_reader, ElementReader};
 use ion_rs::value::{Element, Sequence, Struct};
 use ion_rs::IonType;
+use regex::Regex;
 use std::collections::HashMap;
 use std::io::ErrorKind;
 use std::rc::Rc;
@@ -502,8 +503,26 @@ impl TypeStore {
             })
     }
 
-    /// Provides the [`TypeId`] associated with given name if it exists in the [`TypeStore`]  
-    /// Otherwise returns None
+    /// Provides the [`TypeId`] associated with given name if it exists in the [`TypeStore`] either as
+    /// a built-in type or a type defined within schema; Otherwise returns None
+    pub(crate) fn get_built_in_type_id_or_defined_type_id_by_name(
+        &self,
+        name: &str,
+    ) -> Option<&TypeId> {
+        let type_name = match name {
+            "int" => "integer",
+            "bool" => "boolean",
+            "$int" => "$integer",
+            "$bool" => "$boolean",
+            _ => name,
+        };
+        self.ids_by_name
+            .get(name)
+            .or_else(|| self.builtin_type_ids_by_name.get(type_name))
+    }
+
+    /// Provides the [`TypeId`] associated with given name if it exists in the [`TypeStore`] as a type
+    /// defined within schema (This doesn't include built-in types); Otherwise returns None
     pub(crate) fn get_type_id_by_name(&self, name: &str) -> Option<&TypeId> {
         self.ids_by_name
             .get(name)
@@ -661,8 +680,24 @@ impl Resolver {
         let mut found_header = false;
         let mut found_footer = false;
 
+        // ISL version marker regex
+        let isl_version_marker = Regex::new(r"^\$ion_schema_\d.*$").unwrap();
+
         for value in elements {
+            // verify if value is an ISL version marker and if it has valid format
+            if value.ion_type() == IonType::Symbol
+                && isl_version_marker.is_match(value.as_str().unwrap())
+            {
+                // This implementation only supports Ion Schema 1.0
+                if value.as_str() != Some(r"$ion_schema_1_0") {
+                    return invalid_schema_error(
+                        "Unsupported Ion Schema version: ${it.stringValue()}",
+                    );
+                }
+            }
+
             let annotations: Vec<&OwnedSymbolToken> = value.annotations().collect();
+
             // load header for schema
             if annotations.contains(&&text_token("schema_header")) {
                 found_header = true;
@@ -1320,5 +1355,53 @@ mod schema_system_tests {
         // verify if the schema loads without any errors
         let schema = schema_system.load_schema("sample.isl");
         assert!(schema.is_ok());
+    }
+
+    #[test]
+    fn valid_isl_version_marker_test() {
+        // map with (id, ion content)
+        let map_authority = [(
+            "sample.isl",
+            r#"
+               $ion_schema_1_0
+            "#,
+        )];
+        let mut schema_system =
+            SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
+        // verify if the schema loads without any errors
+        let schema = schema_system.load_schema("sample.isl");
+        assert!(schema.is_ok());
+    }
+
+    #[test]
+    fn invalid_isl_version_marker_test() {
+        // map with (id, ion content)
+        let map_authority = [(
+            "sample.isl",
+            r#"
+                $ion_schema_4_5
+            "#,
+        )];
+        let mut schema_system =
+            SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
+        // verify if the schema return error for invalid ISL version marker
+        let schema = schema_system.load_schema("sample.isl");
+        assert!(schema.is_err());
+    }
+
+    #[test]
+    fn unsupported_isl_version_marker_test() {
+        // map with (id, ion content)
+        let map_authority = [(
+            "sample.isl",
+            r#"
+                $ion_schema_2_0
+            "#,
+        )];
+        let mut schema_system =
+            SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
+        // verify if the schema return error for unsupported ISL version marker
+        let schema = schema_system.load_schema("sample.isl");
+        assert!(schema.is_err());
     }
 }
