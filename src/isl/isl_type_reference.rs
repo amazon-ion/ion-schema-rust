@@ -134,7 +134,7 @@ impl IslTypeRef {
     }
 
     /// Return TypeId for given built-in type name from type_store
-    fn get_type_id_from_built_in_type_name(
+    fn get_type_id_from_type_name(
         alias: &str,
         type_store: &mut TypeStore,
         pending_types: &mut PendingTypes,
@@ -143,26 +143,22 @@ impl IslTypeRef {
             // verify if the given alias is a Built-in type and if it is then return the type id from type_store
             // All Built-in types are preloaded into the type_store
             // Built-in types includes all ion types and derived types like any, lob, text, number, $int, $float, ...
-            Ok(type_id)
+            return Ok(type_id);
         } else if let Some(type_id) = pending_types.get_type_id_by_name(alias, type_store) {
-            // verify if the AliasType actually exists in the type_store or throw an error
-            Ok(type_id)
+            // verify if the AliasType actually exists in the type_store or pending types
+            return Ok(type_id);
         } else if let Some(parent) = pending_types.get_parent() {
             // if it is a self referencing type resolve it using parent information from type_store
             if parent.0.eq(alias) {
-                Ok(parent.1)
-            } else {
-                unresolvable_schema_error(format!(
-                    "Could not resolve type reference: {:?} does not exist",
-                    alias
-                ))
+                return Ok(parent.1);
             }
-        } else {
-            unresolvable_schema_error(format!(
-                "Could not resolve type reference: {:?} does not exist",
-                alias
-            ))
         }
+        // Otherwise if the type is not found from any of the above places
+        // then the type definition might be defined below this type definition in the schema
+        // hence add current type into the pending types and at the end when the pending types
+        // are moved to type store, verify that the type definition exists somewhere in the schema following current type
+        // This is basically deferring the type reference from here and later checking its existence
+        Ok(pending_types.add_deferred_type_with_name(alias, type_store))
     }
 
     // TODO: break match arms into helper methods as we add more constraints
@@ -174,7 +170,7 @@ impl IslTypeRef {
     ) -> IonSchemaResult<TypeId> {
         match type_reference {
             IslTypeRef::Named(alias) => {
-                IslTypeRef::get_type_id_from_built_in_type_name(alias, type_store, pending_types)
+                IslTypeRef::get_type_id_from_type_name(alias, type_store, pending_types)
             }
             IslTypeRef::Anonymous(isl_type) => {
                 let type_id = pending_types.get_total_types(type_store);
