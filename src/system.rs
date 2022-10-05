@@ -54,6 +54,24 @@ use std::rc::Rc;
 /// that we do not have a complete definition for yet. When the
 /// [`SchemaSystem`] finishes loading these types, the type definitions in
 /// [`PendingTypes`] can be promoted the [`TypeStore`].
+///
+/// Deferred type definition:
+/// A deferred type definition is added to [`PendingTypes`] whenever encountered type reference whose definition
+/// is outside the scope of current type definition that is being resolved.
+/// e.g.
+/// type:: {
+///     name: foo,
+///     type: bar,
+/// }
+/// type:: {
+///     name: bar,
+///     type: int
+/// }
+///
+/// For above example, `bar` will be saved as deferred type definition until we resolve the definition of `bar`.
+/// When the [`SchemaSystem`] finishes loading the type `foo`, the type definitions in
+/// [`PendingTypes`] including deferred type definitions will be promoted to the [`TypeStore`].
+/// Once we resolve type definition for `bar` it will be updated in the [`TypeStore`].
 #[derive(Debug, Clone, Default)]
 pub struct PendingTypes {
     builtin_type_ids_by_name: HashMap<String, TypeId>,
@@ -71,7 +89,10 @@ impl PendingTypes {
     ///                       Based on given enum variant isl_import we will add the types to type_store.
     ///                       Otherwise we will add all the types from this PendingTypes to TypeStore.
     /// * `isl_type_names` - The isl type names defined within the schema. This will be used to determine
-    ///                      if a type definition actually exists within the schema.
+    ///                      if a type definition actually exists within the schema. If a type definition from this list
+    ///                      exists in [`PendingTypes`] it would have been added as a deferred type definition.
+    ///                      This deferred type will be loaded into [`TypeStore`] as it is and will be replaced with a type definition
+    ///                      once it is resolved.
     /// Returns true, if this update is not for an isl import type or it is for an isl import type but it is added to the type_store
     /// Otherwise, returns false if this update is for an isl import type and it is not yet added to the type_store.
     pub fn update_type_store(
@@ -212,9 +233,10 @@ impl PendingTypes {
                         && !isl_type_names
                             .contains(named_type_def.name().as_ref().unwrap().as_str())
                     {
-                        return unresolvable_schema_error(
-                            "Unable to load schema due to unresolvable type",
-                        );
+                        return unresolvable_schema_error(format!(
+                            "Unable to load schema due to unresolvable type {}",
+                            named_type_def.name().as_ref().unwrap()
+                        ));
                     }
                     type_store.add_named_type(named_type_def)
                 }
@@ -254,9 +276,10 @@ impl PendingTypes {
                                 && !isl_type_names
                                     .contains(named_type_def.name().as_ref().unwrap().as_str())
                             {
-                                return unresolvable_schema_error(
-                                    "Unable to load schema due to unresolvable type",
-                                );
+                                return unresolvable_schema_error(format!(
+                                    "Unable to load schema due to unresolvable type {}",
+                                    named_type_def.name().as_ref().unwrap()
+                                ));
                             }
                             // imports all types into imported_type_ids_by_name section of type_store
                             type_store.add_isl_imported_type(None, named_type_def);
@@ -266,7 +289,7 @@ impl PendingTypes {
                             // then return an error
                             if named_type_def.is_deferred_type_def() {
                                 return unresolvable_schema_error(
-                                    "Type definition being imported has dependency to a type reference which is not being imported from import schema",
+                                    format!("Transitive dependency to type definition {} is not allowed for type or alias import: {}", named_type_def.name().as_ref().unwrap(), import_type_name),
                                 );
                             }
                             // skip the specified import type as it will be already loaded by parent method that uses this helper method
@@ -707,14 +730,14 @@ impl Resolver {
             match isl_type {
                 IslType::Named(named_isl_type) => {
                     TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
-                        &named_isl_type,
+                        named_isl_type,
                         type_store,
                         pending_types,
                     )?
                 }
                 IslType::Anonymous(anonymous_isl_type) => {
                     TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
-                        &anonymous_isl_type,
+                        anonymous_isl_type,
                         type_store,
                         pending_types,
                     )?
@@ -1427,7 +1450,7 @@ mod schema_system_tests {
     }
 
     #[test]
-    fn schema_system_map_authority_with_invalid_inline_import_type_test() {
+    fn schema_system_map_authority_with_invalid_type_import_test() {
         // map with (id, ion content)
         let map_authority = [
             (
@@ -1456,7 +1479,7 @@ mod schema_system_tests {
                     type::{
                       name: my_text,
                       one_of: [
-                        my_string, // this type reference was not improted in sample.isl
+                        my_string, // this type reference was not imported in sample.isl
                         symbol,
                       ],
                     }
@@ -1503,6 +1526,53 @@ mod schema_system_tests {
                     }
                     
                     schema_footer::{
+                    }
+                "#,
+        )];
+        let mut schema_system =
+            SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
+        // verify if the schema loads without any errors
+        let schema = schema_system.load_schema("sample.isl");
+        assert!(schema.is_ok());
+    }
+
+    #[test]
+    fn schema_system_map_authority_with_multiple_codependent_type_definitions() {
+        // map with (id, ion content)
+        let map_authority = [(
+            "sample.isl",
+            r#"
+                    type::{
+                       name: node_a,
+                       type: list,
+                       element: node_b,
+                    }
+                    
+                    type::{
+                       name: node_b,
+                       type: sexp,
+                       element: node_a,
+                    }
+                "#,
+        )];
+        let mut schema_system =
+            SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
+        // verify if the schema loads without any errors
+        let schema = schema_system.load_schema("sample.isl");
+        assert!(schema.is_ok());
+    }
+
+    #[test]
+    fn schema_system_map_authority_with_self_referencing_type_definition() {
+        // map with (id, ion content)
+        let map_authority = [(
+            "sample.isl",
+            r#"
+                    type::{
+                       name: binary_heap_node,
+                       type: sexp,
+                       element: { one_of: [ binary_heap_node, int ] },
+                       container_length: range::[0, 2],
                     }
                 "#,
         )];
