@@ -285,12 +285,16 @@ impl PendingTypes {
                             type_store.add_isl_imported_type(None, named_type_def);
                         }
                         Some(import_type_name) => {
-                            // if there are any deferred type definitions for this import
-                            // then return an error
-                            if named_type_def.is_deferred_type_def() {
-                                return unresolvable_schema_error(
-                                    format!("Transitive dependency to type definition {} is not allowed for type or alias import: {}", named_type_def.name().as_ref().unwrap(), import_type_name),
-                                );
+                            // check if the type definitions that are not yet resolved actually exists within the schema
+                            // we can use the isl_type_names to make sure if they exists, otherwise return error.
+                            if named_type_def.is_deferred_type_def()
+                                && !isl_type_names
+                                    .contains(named_type_def.name().as_ref().unwrap().as_str())
+                            {
+                                return unresolvable_schema_error(format!(
+                                    "Unable to load schema due to unresolvable type {}",
+                                    named_type_def.name().as_ref().unwrap()
+                                ));
                             }
                             // skip the specified import type as it will be already loaded by parent method that uses this helper method
                             if named_type_def.name().as_ref().unwrap().eq(import_type_name) {
@@ -1450,7 +1454,7 @@ mod schema_system_tests {
     }
 
     #[test]
-    fn schema_system_map_authority_with_invalid_type_import_test() {
+    fn schema_system_map_authority_with_valid_transitive_type_import_test() {
         // map with (id, ion content)
         let map_authority = [
             (
@@ -1479,7 +1483,7 @@ mod schema_system_tests {
                     type::{
                       name: my_text,
                       one_of: [
-                        my_string, // this type reference was not imported in sample.isl
+                        my_string, 
                         symbol,
                       ],
                     }
@@ -1496,8 +1500,59 @@ mod schema_system_tests {
         ];
         let mut schema_system =
             SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
-        // verify if the schema loads with an error for invalid type import,
-        // which has a dependency on a type reference that was not imported
+        // verify if the schema loads without any error
+        let schema = schema_system.load_schema("sample.isl");
+        assert!(schema.is_ok());
+    }
+
+    #[test]
+    fn schema_system_map_authority_with_invalid_transitive_type_import_test() {
+        // map with (id, ion content)
+        let map_authority = [
+            (
+                "sample.isl",
+                r#"
+                    schema_header::{
+                      imports: [ { id: "sample_builtin_nullable_types.isl", type: my_text } ],
+                    }
+                    
+                    type::{
+                      name: my_type,
+                      type: my_string, // this type reference was not imported by name in sample.isl 
+                    }
+                    
+                    schema_footer::{
+                    }
+                "#,
+            ),
+            (
+                "sample_builtin_nullable_types.isl",
+                r#"
+                    schema_header::{
+                      imports: [],
+                    }
+                    
+                    type::{
+                      name: my_text,
+                      one_of: [
+                        my_string, 
+                        symbol,
+                      ],
+                    }
+                    
+                    type::{
+                        name: my_string,
+                        type: string,
+                    }
+                    
+                    schema_footer::{
+                    }
+                "#,
+            ),
+        ];
+        let mut schema_system =
+            SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
+        // verify if the schema loads with an error for invalid transitive type import
         let schema = schema_system.load_schema("sample.isl");
         assert!(schema.is_err());
     }
