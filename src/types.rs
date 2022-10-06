@@ -277,11 +277,37 @@ impl TypeValidator for TypeDefinition {
 pub struct TypeDefinitionImpl {
     name: Option<String>,
     constraints: Vec<Constraint>,
+    // `is_deferred_type_def` indicates if this is a deferred type def which will be resolved later
+    // e.g.
+    // ```
+    // type:: {
+    //  name: foo,
+    //  type: bar,
+    // }
+    // type:: {
+    //  name: bar,
+    //  type: int
+    // }
+    // ```
+    // For above example, `bar` will be saved as deferred type definition until we resolve the definition of `bar`
+    is_deferred_type_def: bool,
 }
 
 impl TypeDefinitionImpl {
     pub fn new(name: Option<String>, constraints: Vec<Constraint>) -> Self {
-        Self { name, constraints }
+        Self {
+            name,
+            constraints,
+            is_deferred_type_def: false,
+        }
+    }
+
+    pub fn new_deferred_type_def(name: String) -> Self {
+        Self {
+            name: Some(name),
+            constraints: vec![],
+            is_deferred_type_def: true,
+        }
     }
 
     pub fn name(&self) -> &Option<String> {
@@ -292,7 +318,12 @@ impl TypeDefinitionImpl {
         Self {
             name: Some(alias),
             constraints: self.constraints,
+            is_deferred_type_def: self.is_deferred_type_def,
         }
+    }
+
+    pub fn is_deferred_type_def(&self) -> bool {
+        self.is_deferred_type_def
     }
 
     pub fn constraints(&self) -> &[Constraint] {
@@ -319,7 +350,7 @@ impl TypeDefinitionImpl {
         }
 
         // add this unresolved type to context for type_id
-        let type_id = pending_types.add_type(type_store);
+        let type_id = pending_types.add_type(type_store, type_name.to_owned());
 
         // convert IslConstraint to Constraint
         let mut found_type_constraint = false;
@@ -433,6 +464,7 @@ mod type_definition_tests {
     use ion_rs::Decimal;
     use ion_rs::Integer;
     use rstest::*;
+    use std::collections::HashSet;
 
     // TODO: Remove type ids for assertion to make tests more readable
     #[rstest(
@@ -645,7 +677,9 @@ mod type_definition_tests {
                     pending_types,
                 )
                 .unwrap();
-                pending_types.update_type_store(type_store, None).unwrap();
+                pending_types
+                    .update_type_store(type_store, None, &HashSet::new())
+                    .unwrap();
                 type_store.get_type_by_id(type_id).unwrap()
             }
             IslType::Anonymous(anonymous_isl_type) => {
@@ -655,7 +689,9 @@ mod type_definition_tests {
                     pending_types,
                 )
                 .unwrap();
-                pending_types.update_type_store(type_store, None).unwrap();
+                pending_types
+                    .update_type_store(type_store, None, &HashSet::new())
+                    .unwrap();
                 type_store.get_type_by_id(type_id).unwrap()
             }
         };

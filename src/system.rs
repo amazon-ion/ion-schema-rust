@@ -34,7 +34,7 @@ use ion_rs::value::reader::{element_reader, ElementReader};
 use ion_rs::value::{Element, Sequence, Struct};
 use ion_rs::IonType;
 use regex::Regex;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::ErrorKind;
 use std::rc::Rc;
 
@@ -46,12 +46,32 @@ use std::rc::Rc;
 /// * A reference to itself. This could happen in a recursive structure like a
 ///   linked list or binary tree.
 /// * A nested anonymous type definition.
+/// * A reference to type definition that is followed by current type definition. These type references
+///   will be deferred to later check if a type definition with that name exists in the schema.
 /// Because the [`SchemaSystem`] does not yet know the complete definition
 /// of these types, it cannot find them in the [`TypeStore`].
 /// An instance of [`PendingTypes`] is used to track information about types
 /// that we do not have a complete definition for yet. When the
 /// [`SchemaSystem`] finishes loading these types, the type definitions in
 /// [`PendingTypes`] can be promoted the [`TypeStore`].
+///
+/// Deferred type definition:
+/// A deferred type definition is added to [`PendingTypes`] whenever encountered type reference whose definition
+/// is outside the scope of current type definition that is being resolved.
+/// e.g.
+/// type:: {
+///     name: foo,
+///     type: bar,
+/// }
+/// type:: {
+///     name: bar,
+///     type: int
+/// }
+///
+/// For above example, `bar` will be saved as deferred type definition until we resolve the definition of `bar`.
+/// When the [`SchemaSystem`] finishes loading the type `foo`, the type definitions in
+/// [`PendingTypes`] including deferred type definitions will be promoted to the [`TypeStore`].
+/// Once we resolve type definition for `bar` it will be updated in the [`TypeStore`].
 #[derive(Debug, Clone, Default)]
 pub struct PendingTypes {
     builtin_type_ids_by_name: HashMap<String, TypeId>,
@@ -68,18 +88,28 @@ impl PendingTypes {
     /// * `load_isl_import` - If this argument is Some(isl_import), then we are not within an import process of schema.
     ///                       Based on given enum variant isl_import we will add the types to type_store.
     ///                       Otherwise we will add all the types from this PendingTypes to TypeStore.
+    /// * `isl_type_names` - The isl type names defined within the schema. This will be used to determine
+    ///                      if a type definition actually exists within the schema. If a type definition from this list
+    ///                      exists in [`PendingTypes`] it would have been added as a deferred type definition.
+    ///                      This deferred type will be loaded into [`TypeStore`] as it is and will be replaced with a type definition
+    ///                      once it is resolved.
     /// Returns true, if this update is not for an isl import type or it is for an isl import type but it is added to the type_store
     /// Otherwise, returns false if this update is for an isl import type and it is not yet added to the type_store.
     pub fn update_type_store(
         &mut self,
         type_store: &mut TypeStore,
         load_isl_import: Option<&IslImport>,
+        isl_type_names: &HashSet<&str>,
     ) -> IonSchemaResult<bool> {
         // if load_isl_import is not None, then match the enum variant and update type store with import types accordingly
         if let Some(import) = load_isl_import {
             match import {
                 IslImport::Schema(_) => {
-                    self.update_type_store_with_all_isl_imported_types(None, type_store)?;
+                    self.update_type_store_with_all_isl_imported_types(
+                        None,
+                        type_store,
+                        isl_type_names,
+                    )?;
                 }
                 IslImport::Type(isl_import) => {
                     // if import has a specified type to import then only add that type
@@ -91,6 +121,7 @@ impl PendingTypes {
                         self.update_type_store_with_all_isl_imported_types(
                             Some(isl_import.type_name()),
                             type_store,
+                            isl_type_names,
                         )?;
                     } else {
                         // if the named_type_def appears as None then it means we haven't reached
@@ -117,6 +148,7 @@ impl PendingTypes {
                         self.update_type_store_with_all_isl_imported_types(
                             Some(isl_import.type_name()),
                             type_store,
+                            isl_type_names,
                         )?;
                     } else {
                         // if the named_type_def appears as None then it means we haven't reached
@@ -128,7 +160,7 @@ impl PendingTypes {
             }
         } else {
             // if load_isl_import is None i.e. it is the root schema, then update type_store with all the types inside this PendingTypes
-            self.update_type_store_with_all_types(type_store)?;
+            self.update_type_store_with_all_types(type_store, isl_type_names)?;
         }
         self.types_by_id.clear();
         self.ids_by_name.clear();
@@ -182,7 +214,11 @@ impl PendingTypes {
     }
 
     // helper method to update type store with all the types from this PendingTypes
-    fn update_type_store_with_all_types(&self, type_store: &mut TypeStore) -> IonSchemaResult<()> {
+    fn update_type_store_with_all_types(
+        &self,
+        type_store: &mut TypeStore,
+        isl_type_names: &HashSet<&str>,
+    ) -> IonSchemaResult<()> {
         for optional_type in &self.types_by_id {
             // return an error if any of the type in types_by_id vector is None/Unresolved
             let type_def = optional_type.to_owned().ok_or_else(|| {
@@ -190,7 +226,20 @@ impl PendingTypes {
             })?;
 
             match type_def {
-                TypeDefinition::Named(named_type_def) => type_store.add_named_type(named_type_def),
+                TypeDefinition::Named(named_type_def) => {
+                    // check if the type definitions that are not yet resolved actually exists within the schema
+                    // we can use the isl_type_names to make sure if they exists, otherwise return error.
+                    if named_type_def.is_deferred_type_def()
+                        && !isl_type_names
+                            .contains(named_type_def.name().as_ref().unwrap().as_str())
+                    {
+                        return unresolvable_schema_error(format!(
+                            "Unable to load schema due to unresolvable type {}",
+                            named_type_def.name().as_ref().unwrap()
+                        ));
+                    }
+                    type_store.add_named_type(named_type_def)
+                }
                 TypeDefinition::Anonymous(anonymous_type_def) => {
                     type_store.add_anonymous_type(anonymous_type_def)
                 }
@@ -209,6 +258,7 @@ impl PendingTypes {
         &self,
         isl_imported_type_name: Option<&str>,
         type_store: &mut TypeStore,
+        isl_type_names: &HashSet<&str>,
     ) -> IonSchemaResult<()> {
         for optional_type in &self.types_by_id {
             // return an error if any of the type in types_by_id vector is None/Unresolved
@@ -220,10 +270,32 @@ impl PendingTypes {
                 TypeDefinition::Named(named_type_def) => {
                     match isl_imported_type_name {
                         None => {
+                            // check if the type definitions that are not yet resolved actually exists within the schema
+                            // we can use the isl_type_names to make sure if they exists, otherwise return error.
+                            if named_type_def.is_deferred_type_def()
+                                && !isl_type_names
+                                    .contains(named_type_def.name().as_ref().unwrap().as_str())
+                            {
+                                return unresolvable_schema_error(format!(
+                                    "Unable to load schema due to unresolvable type {}",
+                                    named_type_def.name().as_ref().unwrap()
+                                ));
+                            }
                             // imports all types into imported_type_ids_by_name section of type_store
                             type_store.add_isl_imported_type(None, named_type_def);
                         }
                         Some(import_type_name) => {
+                            // check if the type definitions that are not yet resolved actually exists within the schema
+                            // we can use the isl_type_names to make sure if they exists, otherwise return error.
+                            if named_type_def.is_deferred_type_def()
+                                && !isl_type_names
+                                    .contains(named_type_def.name().as_ref().unwrap().as_str())
+                            {
+                                return unresolvable_schema_error(format!(
+                                    "Unable to load schema due to unresolvable type {}",
+                                    named_type_def.name().as_ref().unwrap()
+                                ));
+                            }
                             // skip the specified import type as it will be already loaded by parent method that uses this helper method
                             if named_type_def.name().as_ref().unwrap().eq(import_type_name) {
                                 continue;
@@ -264,56 +336,6 @@ impl PendingTypes {
         }
     }
 
-    /// Adds the [`NamedTypeDefinition`] and the associated name in the [`PendingTypes`] and returns the [`TypeId`] for it
-    /// If the given name already exists in the [`TypeStore`] or [`PendingTypes`] it returns the associated [`TypeId`]
-    pub(crate) fn add_named_type(
-        &mut self,
-        name: &str,
-        type_def: TypeDefinitionImpl,
-        type_store: &mut TypeStore,
-    ) -> TypeId {
-        if let Some(exists) = self.ids_by_name.get(name) {
-            return exists.to_owned();
-        }
-        if let Some(exists) = type_store.get_type_id_by_name(name) {
-            return exists.to_owned();
-        }
-        let type_id = self.types_by_id.len();
-        self.ids_by_name.insert(name.to_owned(), type_id);
-        self.types_by_id.push(Some(TypeDefinition::Named(type_def)));
-        type_id + type_store.types_by_id.len()
-    }
-
-    /// Adds the [`BuiltInTypeDefinition`] in the [`PendingTypes`] and returns the [`TypeId`] for it
-    /// If the given name already exists in the [`TypeStore`] or [`PendingTypes`] it returns the associated [`TypeId`]
-    pub(crate) fn add_builtin_type(
-        &mut self,
-        builtin_type_definition: &BuiltInTypeDefinition,
-        type_store: &mut TypeStore,
-    ) -> TypeId {
-        let builtin_type_name = match builtin_type_definition {
-            BuiltInTypeDefinition::Atomic(ion_type, is_nullable) => match is_nullable {
-                Nullability::Nullable => format!("${}", ion_type),
-                Nullability::NotNullable => format!("{}", ion_type),
-            },
-            BuiltInTypeDefinition::Derived(other_type) => other_type.name().to_owned().unwrap(),
-        };
-
-        if let Some(exists) = self.builtin_type_ids_by_name.get(&builtin_type_name) {
-            return exists.to_owned();
-        }
-        if let Some(exists) = type_store.get_builtin_type_id(&builtin_type_name) {
-            return exists.to_owned();
-        }
-        let type_id = self.types_by_id.len();
-        self.builtin_type_ids_by_name
-            .insert(builtin_type_name, type_id);
-        self.types_by_id.push(Some(TypeDefinition::BuiltIn(
-            builtin_type_definition.to_owned(),
-        )));
-        type_id + type_store.types_by_id.len()
-    }
-
     /// Updates the unresolved named type that was added as None while loading types in a schema
     /// with a resolved [TypeDefinition]
     pub(crate) fn update_named_type(
@@ -323,16 +345,18 @@ impl PendingTypes {
         type_def: TypeDefinitionImpl,
         type_store: &mut TypeStore,
     ) -> TypeId {
-        let type_id = type_id - type_store.types_by_id.len();
         if let Some(exists) = self.ids_by_name.get(name) {
-            return exists.to_owned();
+            return exists.to_owned() + type_store.types_by_id.len();
         }
-        if let Some(exists) = type_store.get_type_id_by_name(name) {
-            return exists.to_owned();
+        match type_store.update_deferred_type_def(type_def.to_owned(), name) {
+            None => {
+                let type_id = type_id - type_store.types_by_id.len();
+                self.ids_by_name.insert(name.to_owned(), type_id);
+                self.types_by_id[type_id] = Some(TypeDefinition::Named(type_def));
+                type_id + type_store.types_by_id.len()
+            }
+            Some(exists) => exists,
         }
-        self.ids_by_name.insert(name.to_owned(), type_id);
-        self.types_by_id[type_id] = Some(TypeDefinition::Named(type_def));
-        type_id + type_store.types_by_id.len()
     }
 
     /// Updates the unresolved anonymous type that was added as None while loading types in a schema
@@ -368,9 +392,35 @@ impl PendingTypes {
     }
 
     /// Adds the unresolved type as None before it gets resolved and gets the associated [`TypeId`]
-    pub(crate) fn add_type(&mut self, type_store: &mut TypeStore) -> TypeId {
+    pub(crate) fn add_type(
+        &mut self,
+        type_store: &mut TypeStore,
+        type_name: Option<String>,
+    ) -> TypeId {
+        if let Some(name) = type_name {
+            if let Some(exists) = self.ids_by_name.get(&name) {
+                return exists.to_owned() + type_store.types_by_id.len();
+            }
+            if let Some(exists) = type_store.get_type_id_by_name(&name) {
+                return exists.to_owned();
+            }
+        }
         let type_id = self.types_by_id.len();
         self.types_by_id.push(None);
+        type_id + type_store.types_by_id.len()
+    }
+
+    /// Adds the unresolved type as None before it gets resolved and gets the associated [`TypeId`]
+    pub(crate) fn add_deferred_type_with_name(
+        &mut self,
+        alias: &str,
+        type_store: &mut TypeStore,
+    ) -> TypeId {
+        let type_id = self.types_by_id.len();
+        self.ids_by_name.insert(alias.to_owned(), type_id);
+        self.types_by_id.push(Some(TypeDefinition::Named(
+            TypeDefinitionImpl::new_deferred_type_def(alias.to_owned()),
+        )));
         type_id + type_store.types_by_id.len()
     }
 }
@@ -563,6 +613,27 @@ impl TypeStore {
         type_id
     }
 
+    /// Updates the deferred [`NamedTypeDefinition`] for given type definition name
+    /// If the name already exists in the [`TypeStore`] it returns the associated [`TypeId`]
+    /// otherwise return [`None`]
+    pub(crate) fn update_deferred_type_def(
+        &mut self,
+        type_def: TypeDefinitionImpl,
+        name: &str,
+    ) -> Option<TypeId> {
+        if let Some(exists) = self.ids_by_name.get(name) {
+            if let Some(TypeDefinition::Named(existing_type_def)) = self.get_type_by_id(*exists) {
+                // if existing_type_def is a deferred type def then this is the definition for it,
+                // resolve the deferred type definition here by replacing with given type definition
+                if existing_type_def.is_deferred_type_def() {
+                    self.types_by_id[*exists] = TypeDefinition::Named(type_def);
+                }
+            }
+            return Some(*exists);
+        }
+        None
+    }
+
     /// Adds the [BuiltInTypeDefinition] in the [TypeStore] and returns the [TypeId] for it
     /// If the name already exists in the [TypeStore] it returns the associated [TypeId]
     pub(crate) fn add_builtin_type(
@@ -637,32 +708,49 @@ impl Resolver {
         id: A,
         isl_types: B,
     ) -> IonSchemaResult<Schema> {
+        let isl_types = isl_types.into();
         // create type_store and pending types which will be used to create type definition
         let type_store = &mut TypeStore::default();
         let pending_types = &mut PendingTypes::default();
-        for isl_type in isl_types.into() {
+
+        // get all isl type names from given isl types
+        // this will be used to resolve type references which might not have yet resolved while loading a type definition
+        let isl_type_names: HashSet<&str> = HashSet::from_iter(
+            isl_types
+                .iter()
+                .filter(|t| matches!(t, IslType::Named(_)))
+                .map(|t| match t {
+                    IslType::Named(named_isl_type) => {
+                        named_isl_type.name().as_ref().unwrap().as_str()
+                    }
+                    IslType::Anonymous(_) => {
+                        unreachable!("already filtered named types")
+                    }
+                }),
+        );
+
+        for isl_type in &isl_types {
             // convert [IslType] into [TypeDefinition]
             match isl_type {
                 IslType::Named(named_isl_type) => {
                     TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
-                        &named_isl_type,
+                        named_isl_type,
                         type_store,
                         pending_types,
-                    )
-                    .unwrap()
+                    )?
                 }
                 IslType::Anonymous(anonymous_isl_type) => {
                     TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
-                        &anonymous_isl_type,
+                        anonymous_isl_type,
                         type_store,
                         pending_types,
-                    )
-                    .unwrap()
+                    )?
                 }
             };
         }
+
         // add all types from pending_types to type_store
-        pending_types.update_type_store(type_store, None)?;
+        pending_types.update_type_store(type_store, None, &isl_type_names)?;
         Ok(Schema::new(id, Rc::new(type_store.to_owned())))
     }
 
@@ -763,6 +851,14 @@ impl Resolver {
             let imported_schema = self.load_schema(import_id, type_store, Some(isl_import))?;
         }
 
+        // get all isl type names that are defined within the schema
+        // this will be used to resolve type references which might not have yet resolved while loading a type definition
+        let isl_type_names: HashSet<&str> = HashSet::from_iter(
+            isl.types()
+                .iter()
+                .map(|t| t.name().as_ref().unwrap().as_str()),
+        );
+
         // Resolve all ISL types and constraints
         for isl_type in isl.types() {
             let pending_types = &mut PendingTypes::default();
@@ -774,9 +870,9 @@ impl Resolver {
                 pending_types,
             )?;
 
-            // add all types from context to type_store
+            // add all types from pending types to type_store
             added_imported_type_to_type_store =
-                pending_types.update_type_store(type_store, load_isl_import)?;
+                pending_types.update_type_store(type_store, load_isl_import, &isl_type_names)?;
         }
 
         // if currently loading an ISL import (i.e. load_isl_import != None)
@@ -913,7 +1009,7 @@ impl SchemaSystem {
         )?;
 
         // add all types from context to type_store
-        pending_types.update_type_store(type_store, None)?;
+        pending_types.update_type_store(type_store, None, &HashSet::new())?;
 
         Ok(type_id)
     }
@@ -1350,6 +1446,191 @@ mod schema_system_tests {
                 "#,
             ),
         ];
+        let mut schema_system =
+            SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
+        // verify if the schema loads without any errors
+        let schema = schema_system.load_schema("sample.isl");
+        assert!(schema.is_ok());
+    }
+
+    #[test]
+    fn schema_system_map_authority_with_valid_transitive_type_import_test() {
+        // map with (id, ion content)
+        let map_authority = [
+            (
+                "sample.isl",
+                r#"
+                    schema_header::{
+                      imports: [ { id: "sample_builtin_nullable_types.isl", type: my_text } ],
+                    }
+                    
+                    type::{
+                      name: my_type,
+                      type: my_text
+                    }
+                    
+                    schema_footer::{
+                    }
+                "#,
+            ),
+            (
+                "sample_builtin_nullable_types.isl",
+                r#"
+                    schema_header::{
+                      imports: [],
+                    }
+                    
+                    type::{
+                      name: my_text,
+                      one_of: [
+                        my_string, 
+                        symbol,
+                      ],
+                    }
+                    
+                    type::{
+                        name: my_string,
+                        type: string,
+                    }
+                    
+                    schema_footer::{
+                    }
+                "#,
+            ),
+        ];
+        let mut schema_system =
+            SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
+        // verify if the schema loads without any error
+        let schema = schema_system.load_schema("sample.isl");
+        assert!(schema.is_ok());
+    }
+
+    #[test]
+    fn schema_system_map_authority_with_invalid_transitive_type_import_test() {
+        // map with (id, ion content)
+        let map_authority = [
+            (
+                "sample.isl",
+                r#"
+                    schema_header::{
+                      imports: [ { id: "sample_builtin_nullable_types.isl", type: my_text } ],
+                    }
+                    
+                    type::{
+                      name: my_type,
+                      type: my_string, // this type reference was not imported by name in sample.isl 
+                    }
+                    
+                    schema_footer::{
+                    }
+                "#,
+            ),
+            (
+                "sample_builtin_nullable_types.isl",
+                r#"
+                    schema_header::{
+                      imports: [],
+                    }
+                    
+                    type::{
+                      name: my_text,
+                      one_of: [
+                        my_string, 
+                        symbol,
+                      ],
+                    }
+                    
+                    type::{
+                        name: my_string,
+                        type: string,
+                    }
+                    
+                    schema_footer::{
+                    }
+                "#,
+            ),
+        ];
+        let mut schema_system =
+            SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
+        // verify if the schema loads with an error for invalid transitive type import
+        let schema = schema_system.load_schema("sample.isl");
+        assert!(schema.is_err());
+    }
+
+    #[test]
+    fn schema_system_map_authority_with_multiple_type_definitions() {
+        // map with (id, ion content)
+        let map_authority = [(
+            "sample.isl",
+            r#"
+                    schema_header::{
+                      imports: [],
+                    }
+                    
+                    type::{
+                      name: my_text,
+                      one_of: [
+                        my_string, 
+                        symbol,
+                      ],
+                    }
+                    
+                    type::{
+                        name: my_string,
+                        type: string,
+                    }
+                    
+                    schema_footer::{
+                    }
+                "#,
+        )];
+        let mut schema_system =
+            SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
+        // verify if the schema loads without any errors
+        let schema = schema_system.load_schema("sample.isl");
+        assert!(schema.is_ok());
+    }
+
+    #[test]
+    fn schema_system_map_authority_with_multiple_codependent_type_definitions() {
+        // map with (id, ion content)
+        let map_authority = [(
+            "sample.isl",
+            r#"
+                    type::{
+                       name: node_a,
+                       type: list,
+                       element: node_b,
+                    }
+                    
+                    type::{
+                       name: node_b,
+                       type: sexp,
+                       element: node_a,
+                    }
+                "#,
+        )];
+        let mut schema_system =
+            SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
+        // verify if the schema loads without any errors
+        let schema = schema_system.load_schema("sample.isl");
+        assert!(schema.is_ok());
+    }
+
+    #[test]
+    fn schema_system_map_authority_with_self_referencing_type_definition() {
+        // map with (id, ion content)
+        let map_authority = [(
+            "sample.isl",
+            r#"
+                    type::{
+                       name: binary_heap_node,
+                       type: sexp,
+                       element: { one_of: [ binary_heap_node, int ] },
+                       container_length: range::[0, 2],
+                    }
+                "#,
+        )];
         let mut schema_system =
             SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
         // verify if the schema loads without any errors
