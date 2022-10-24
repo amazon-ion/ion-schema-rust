@@ -778,9 +778,10 @@ impl Resolver {
             {
                 // This implementation only supports Ion Schema 1.0
                 if value.as_str() != Some(r"$ion_schema_1_0") {
-                    return invalid_schema_error(
-                        "Unsupported Ion Schema version: ${it.stringValue()}",
-                    );
+                    return invalid_schema_error(format!(
+                        "Unsupported Ion Schema version: {}",
+                        value
+                    ));
                 }
             }
 
