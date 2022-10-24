@@ -16,6 +16,7 @@ use ion_rs::{Integer, IonType};
 use regex::{Regex, RegexBuilder};
 use std::collections::HashMap;
 use std::convert::TryInto;
+use std::fmt::{Display, Formatter};
 use std::iter::Peekable;
 use std::str::Chars;
 
@@ -1525,6 +1526,21 @@ impl ValidValuesConstraint {
     }
 }
 
+impl Display for ValidValuesConstraint {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "[ ")?;
+        let mut peekable_itr = self.valid_values.iter().peekable();
+        while peekable_itr.peek().is_some() {
+            let valid_value = peekable_itr.next().unwrap();
+            write!(f, "{}", valid_value)?;
+            if peekable_itr.peek().is_some() {
+                write!(f, ", ")?;
+            }
+        }
+        write!(f, " ]")
+    }
+}
+
 impl ConstraintValidator for ValidValuesConstraint {
     fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
         match value {
@@ -1556,7 +1572,7 @@ impl ConstraintValidator for ValidValuesConstraint {
                     "valid_values",
                     ViolationCode::InvalidValue,
                     &format!(
-                        "expected valid_values to be from {:?}, found {:?}",
+                        "expected valid_values to be from {}, found {}",
                         &self, value
                     ),
                 ))
@@ -1565,7 +1581,7 @@ impl ConstraintValidator for ValidValuesConstraint {
                 "valid_values",
                 ViolationCode::InvalidValue,
                 &format!(
-                    "expected valid_values to be from {:?}, found {:?}",
+                    "expected valid_values to be from {}, found {}",
                     &self, value
                 ),
             )),

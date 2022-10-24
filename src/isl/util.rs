@@ -5,6 +5,7 @@ use ion_rs::value::owned::{text_token, Element};
 use ion_rs::value::IonElement;
 use ion_rs::Timestamp;
 use std::cmp::Ordering;
+use std::fmt::{Display, Formatter};
 
 /// Represents an annotation for `annotations` constraint.
 /// Grammar: <ANNOTATION> ::= <SYMBOL>
@@ -134,6 +135,28 @@ impl PartialOrd for TimestampPrecision {
     }
 }
 
+impl Display for TimestampPrecision {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(
+            f,
+            "{}",
+            match &self {
+                TimestampPrecision::Year => "year",
+                TimestampPrecision::Month => "month",
+                TimestampPrecision::Day => "day",
+                TimestampPrecision::Minute => "minute",
+                TimestampPrecision::Second => "second",
+                TimestampPrecision::Millisecond => "millisecond",
+                TimestampPrecision::Microsecond => "microsecond",
+                TimestampPrecision::Nanosecond => "nanosecond",
+                TimestampPrecision::OtherFractionalSeconds(_) => {
+                    "fractional second"
+                }
+            }
+        )
+    }
+}
+
 /// Represents a valid value to be ued within `valid_values` constraint
 /// ValidValue could either be a range or Element
 /// Grammar: <VALID_VALUE> ::= <VALUE>
@@ -161,6 +184,15 @@ impl TryFrom<&Element> for ValidValue {
             )
         } else {
             Ok(ValidValue::Element(value.to_owned()))
+        }
+    }
+}
+
+impl Display for ValidValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            ValidValue::Range(range) => write!(f, "{}", range),
+            ValidValue::Element(element) => write!(f, "{}", element),
         }
     }
 }

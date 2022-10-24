@@ -10,6 +10,7 @@ use ion_rs::value::{IonElement, IonSequence};
 use ion_rs::{Decimal, Integer, IonType, Timestamp};
 use num_bigint::BigInt;
 use std::cmp::Ordering;
+use std::fmt::{Display, Formatter};
 use std::prelude::rust_2021::TryInto;
 use std::str::FromStr;
 
@@ -363,6 +364,22 @@ impl From<NumberRange> for Range {
     }
 }
 
+impl Display for Range {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match &self {
+            Range::Integer(integer) => write!(f, "{}", integer),
+            Range::NonNegativeInteger(non_negative_integer) => {
+                write!(f, "{}", non_negative_integer)
+            }
+            Range::TimestampPrecision(timestamp_precision) => write!(f, "{}", timestamp_precision),
+            Range::Timestamp(timestamp) => write!(f, "{}", timestamp),
+            Range::Decimal(decimal) => write!(f, "{}", decimal),
+            Range::Float(float) => write!(f, "{}", float),
+            Range::Number(number) => write!(f, "{}", number),
+        }
+    }
+}
+
 /// Represents a generic range where some constraints can be defined using this range
 // this is a generic implementation of ranges
 #[derive(Debug, Clone, PartialEq)]
@@ -664,6 +681,12 @@ impl<T: PartialOrd> RangeImpl<T> {
     }
 }
 
+impl<T: Display> Display for RangeImpl<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "[ {}, {} ]", &self.start, &self.end)
+    }
+}
+
 // This lets us turn any `T` into a RangeBoundaryValue<T>::Value(_, Inclusive)
 impl<T> From<T> for RangeBoundaryValue<T> {
     fn from(value: T) -> RangeBoundaryValue<T> {
@@ -842,6 +865,29 @@ impl<T: std::cmp::PartialOrd> PartialOrd for RangeBoundaryValue<T> {
     }
 }
 
+impl<T: Display> Display for RangeBoundaryValue<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(
+            f,
+            "{}",
+            match &self {
+                Max => "max".to_string(),
+                Min => "min".to_string(),
+                Value(value, range_boundary_type) => {
+                    format!(
+                        "{}{}",
+                        match range_boundary_type {
+                            RangeBoundaryType::Inclusive => "",
+                            RangeBoundaryType::Exclusive => "exclusive::",
+                        },
+                        value
+                    )
+                }
+            }
+        )
+    }
+}
+
 /// Represents the range boundary types in terms of exclusivity (i.e. inclusive or exclusive)
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
 pub enum RangeBoundaryType {
@@ -920,5 +966,11 @@ impl From<&Integer> for Number {
                 Integer::BigInt(big_int_val) => big_int_val.to_owned().into(),
             },
         }
+    }
+}
+
+impl Display for Number {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{}", &self.big_decimal_value)
     }
 }

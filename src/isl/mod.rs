@@ -144,6 +144,7 @@ mod isl_tests {
     use ion_rs::value::reader::element_reader;
     use ion_rs::value::reader::ElementReader;
     use rstest::*;
+    use std::io::Write;
 
     // helper function to create NamedIslType for isl tests
     fn load_named_type(text: &str) -> IslType {
@@ -641,5 +642,57 @@ mod isl_tests {
             let range_contains_result = range.as_ref().unwrap().contains(&invalid_value);
             assert!(!range_contains_result)
         }
+    }
+
+    #[rstest(
+    range,
+    expected,
+    case::range_with_integer(
+        IntegerRange::new(
+            RangeBoundaryValue::Min,
+            IntegerValue::I64(5)
+        ).unwrap(),
+        "[ min, 5 ]"
+    ),
+    case::range_with_float(
+        FloatRange::new(
+            2e1,
+            5e1
+        ).unwrap(),
+        "[ 20, 50 ]"
+    ),
+    case::range_with_decimal(
+        DecimalRange::new(
+            Decimal::new(204, -1),
+            Decimal::new(505, -1)
+        ).unwrap(),
+        "[ 204d-1, 505d-1 ]"
+    ),
+    case::range_with_timestamp(
+        TimestampRange::new(
+            Timestamp::with_year(2020).with_month(1).with_day(1).build().unwrap(),
+            Timestamp::with_year(2021).with_month(1).with_day(1).build().unwrap()
+        ).unwrap(),
+        "[ 2020-01-01T, 2021-01-01T ]"
+    ),
+    case::range_with_timestamp_precision(
+        TimestampPrecisionRange::new(
+            TimestampPrecision::Year,
+            TimestampPrecision::Month
+        ).unwrap(),
+        "[ year, month ]"
+    ),
+    case::range_with_number(
+        NumberRange::new(
+            Number::from(&IntegerValue::I64(1)),
+            Number::try_from(&Decimal::new(55, -1)).unwrap()
+        ).unwrap(),
+        "[ 1, 5.5 ]"
+    )
+    )]
+    fn range_display(range: impl Into<Range>, expected: String) {
+        let mut buf = Vec::new();
+        write!(&mut buf, "{}", range.into()).unwrap();
+        assert_eq!(expected, String::from_utf8(buf).unwrap());
     }
 }
