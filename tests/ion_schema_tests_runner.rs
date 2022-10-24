@@ -1,7 +1,8 @@
 use ion_rs::result::IonError;
-use ion_rs::value::owned::{text_token, OwnedElement, OwnedSymbolToken};
+use ion_rs::value::owned::{text_token, Element};
 use ion_rs::value::reader::{element_reader, ElementReader};
-use ion_rs::value::{Element, Sequence};
+use ion_rs::value::{IonElement, IonSequence};
+use ion_rs::Symbol;
 use ion_schema::authority::FileSystemDocumentAuthority;
 use ion_schema::system::{SchemaSystem, TypeId, TypeStore};
 use ion_schema::types::TypeRef;
@@ -109,19 +110,19 @@ fn validation_tests(path: &str) {
         .iterate_over(&ion_content)
         .unwrap_or_else(|_| panic!("Could not get owned elements from schema file: {}", path));
     let schema_content = iterator
-        .collect::<Result<Vec<OwnedElement>, IonError>>()
+        .collect::<Result<Vec<Element>, IonError>>()
         .unwrap_or_else(|_| panic!("Could not get owned elements from schema file: {}", path));
 
     let type_store = &mut TypeStore::default();
-    let mut invalid_values: Vec<OwnedElement> = vec![];
-    let mut valid_values: Vec<OwnedElement> = vec![];
+    let mut invalid_values: Vec<Element> = vec![];
+    let mut valid_values: Vec<Element> = vec![];
     let mut type_id: Option<TypeId> = None;
 
     // store all the errors encountered while testing
     let mut failed_tests = vec![];
 
     for element in schema_content {
-        let annotations: Vec<&OwnedSymbolToken> = element.annotations().collect();
+        let annotations: Vec<&Symbol> = element.annotations().collect();
         if annotations.contains(&&text_token("invalid_type")) {
             // check for an invalid type validation
             let type_def_result = schema_system.schema_type_from_element(&element, type_store);

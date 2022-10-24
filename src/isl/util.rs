@@ -1,8 +1,8 @@
 use crate::isl::isl_range::{Range, RangeType};
 use crate::result::{invalid_schema_error, IonSchemaError};
 use ion_rs::types::timestamp::Precision;
-use ion_rs::value::owned::{text_token, OwnedElement};
-use ion_rs::value::{Element, SymbolToken};
+use ion_rs::value::owned::{text_token, Element};
+use ion_rs::value::IonElement;
 use ion_rs::Timestamp;
 use std::cmp::Ordering;
 
@@ -31,7 +31,7 @@ impl Annotation {
     }
 
     // Returns a bool value that represents if an annotation is required or not
-    pub(crate) fn is_annotation_required(value: &OwnedElement, list_level_required: bool) -> bool {
+    pub(crate) fn is_annotation_required(value: &Element, list_level_required: bool) -> bool {
         if value.annotations().any(|a| a.text().unwrap() == "required") {
             true
         } else if list_level_required {
@@ -135,7 +135,7 @@ impl PartialOrd for TimestampPrecision {
 }
 
 /// Represents a valid value to be ued within `valid_values` constraint
-/// ValidValue could either be a range or OwnedElement
+/// ValidValue could either be a range or Element
 /// Grammar: <VALID_VALUE> ::= <VALUE>
 ///                | <RANGE<TIMESTAMP>>
 ///                | <RANGE<NUMBER>>
@@ -143,13 +143,13 @@ impl PartialOrd for TimestampPrecision {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValidValue {
     Range(Range),
-    Element(OwnedElement),
+    Element(Element),
 }
 
-impl TryFrom<&OwnedElement> for ValidValue {
+impl TryFrom<&Element> for ValidValue {
     type Error = IonSchemaError;
 
-    fn try_from(value: &OwnedElement) -> Result<Self, Self::Error> {
+    fn try_from(value: &Element) -> Result<Self, Self::Error> {
         if value.annotations().any(|a| a == &text_token("range")) {
             Ok(ValidValue::Range(Range::from_ion_element(
                 value,

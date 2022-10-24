@@ -6,9 +6,9 @@ use crate::result::{
 };
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::types::TypeDefinitionImpl;
-use ion_rs::value::owned::OwnedElement;
+use ion_rs::value::owned::Element;
 use ion_rs::value::reader::{element_reader, ElementReader};
-use ion_rs::value::{Element, Struct, SymbolToken};
+use ion_rs::value::{IonElement, IonStruct};
 use ion_rs::IonType;
 
 /// Provides an internal representation of a schema type reference.
@@ -65,9 +65,9 @@ impl IslTypeRef {
         })
     }
 
-    /// Tries to create an [IslTypeRef] from the given OwnedElement
+    /// Tries to create an [IslTypeRef] from the given Element
     pub fn from_ion_element(
-        value: &OwnedElement,
+        value: &Element,
         inline_imported_types: &mut Vec<IslImportType>,
     ) -> IonSchemaResult<Self> {
         match value.ion_type() {

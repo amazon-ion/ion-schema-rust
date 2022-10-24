@@ -140,7 +140,7 @@ mod isl_tests {
     use ion_rs::types::integer::Integer as IntegerValue;
     use ion_rs::types::timestamp::Timestamp;
     use ion_rs::value::owned::text_token;
-    use ion_rs::value::owned::OwnedElement;
+    use ion_rs::value::owned::Element;
     use ion_rs::value::reader::element_reader;
     use ion_rs::value::reader::ElementReader;
     use rstest::*;
@@ -285,7 +285,7 @@ mod isl_tests {
         load_anonymous_type(r#" // For a schema with element constraint as below:
                     { element: int }
                 "#),
-        IslType::anonymous([IslConstraint::element(IslTypeRef::named("int"))])
+        IslType::anonymous([IslConstraint::Element(IslTypeRef::named("int"))])
     ),
     case::annotations_constraint(
         load_anonymous_type(r#" // For a schema with annotations constraint as below:
@@ -379,8 +379,8 @@ mod isl_tests {
         )
     }
 
-    // helper function to return OwnedElements for range `contains` tests
-    fn elements<T: Into<OwnedElement> + std::clone::Clone>(values: &[T]) -> Vec<OwnedElement> {
+    // helper function to return Elements for range `contains` tests
+    fn elements<T: Into<Element> + std::clone::Clone>(values: &[T]) -> Vec<Element> {
         values.iter().cloned().map(|v| v.into()).collect()
     }
 
@@ -627,8 +627,8 @@ mod isl_tests {
     )]
     fn range_contains(
         range: IonSchemaResult<Range>,
-        valid_values: Vec<OwnedElement>,
-        invalid_values: Vec<OwnedElement>,
+        valid_values: Vec<Element>,
+        invalid_values: Vec<Element>,
     ) {
         // verify if the range contains given valid values
         for valid_value in valid_values {

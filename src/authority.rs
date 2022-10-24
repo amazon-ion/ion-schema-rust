@@ -62,7 +62,7 @@
 
 use crate::result::{unresolvable_schema_error_raw, IonSchemaResult};
 use ion_rs::result::IonError;
-use ion_rs::value::owned::OwnedElement;
+use ion_rs::value::owned::Element;
 use ion_rs::value::reader::{element_reader, ElementReader};
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -75,7 +75,7 @@ use std::path::{Path, PathBuf};
 /// The structure of a schema identifier string is defined by the
 /// Authority responsible for the schema/type(s) being imported.
 pub trait DocumentAuthority: Debug {
-    fn elements(&self, id: &str) -> IonSchemaResult<Vec<OwnedElement>>;
+    fn elements(&self, id: &str) -> IonSchemaResult<Vec<Element>>;
 }
 
 /// An [`DocumentAuthority`] implementation that attempts to resolve schema ids to files
@@ -99,13 +99,13 @@ impl FileSystemDocumentAuthority {
 }
 
 impl DocumentAuthority for FileSystemDocumentAuthority {
-    /// Returns a vector of [`OwnedElement`]s based on given schema id
-    fn elements(&self, id: &str) -> IonSchemaResult<Vec<OwnedElement>> {
+    /// Returns a vector of [`Element`]s based on given schema id
+    fn elements(&self, id: &str) -> IonSchemaResult<Vec<Element>> {
         let absolute_path = self.base_path().join(id);
         // if absolute_path exists for the given id then load schema with file contents
         let ion_content = fs::read(absolute_path)?;
         let iterator = element_reader().iterate_over(&ion_content)?;
-        let schema_content = iterator.collect::<Result<Vec<OwnedElement>, IonError>>()?;
+        let schema_content = iterator.collect::<Result<Vec<Element>, IonError>>()?;
         Ok(schema_content)
     }
 }
@@ -113,7 +113,7 @@ impl DocumentAuthority for FileSystemDocumentAuthority {
 /// An [`DocumentAuthority`] implementation that attempts to resolve schema ids to ion elements using the map.
 #[derive(Debug, Clone)]
 pub struct MapDocumentAuthority {
-    ion_content_by_id: HashMap<String, String>, // This map represents (id, ion content) which can used to resolve schema ids to Vec<OwnedElement>
+    ion_content_by_id: HashMap<String, String>, // This map represents (id, ion content) which can used to resolve schema ids to Vec<Element>
 }
 
 impl MapDocumentAuthority {
@@ -128,9 +128,9 @@ impl MapDocumentAuthority {
 }
 
 impl DocumentAuthority for MapDocumentAuthority {
-    /// Returns a vector of [`OwnedElement`]s based on given schema id using ion_content_by_id map
-    fn elements(&self, id: &str) -> IonSchemaResult<Vec<OwnedElement>> {
-        // if ion content exists for the given id  in the map then return ion content as OwnedElements
+    /// Returns a vector of [`Element`]s based on given schema id using ion_content_by_id map
+    fn elements(&self, id: &str) -> IonSchemaResult<Vec<Element>> {
+        // if ion content exists for the given id  in the map then return ion content as Elements
         let ion_content = self.ion_content_by_id.get(id).ok_or_else(|| {
             unresolvable_schema_error_raw(format!(
                 "MapDocumentAuthority does not contain schema with id: {}",
@@ -138,7 +138,7 @@ impl DocumentAuthority for MapDocumentAuthority {
             ))
         })?;
         let iterator = element_reader().iterate_over(ion_content.as_bytes())?;
-        let schema_content = iterator.collect::<Result<Vec<OwnedElement>, IonError>>()?;
+        let schema_content = iterator.collect::<Result<Vec<Element>, IonError>>()?;
         Ok(schema_content)
     }
 }

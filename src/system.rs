@@ -20,6 +20,7 @@
 //! ```
 
 use crate::authority::DocumentAuthority;
+use crate::external::ion_rs::Symbol;
 use crate::isl::isl_import::{IslImport, IslImportType};
 use crate::isl::isl_type::{IslType, IslTypeImpl};
 use crate::isl::IslSchema;
@@ -29,9 +30,9 @@ use crate::result::{
 };
 use crate::schema::Schema;
 use crate::types::{BuiltInTypeDefinition, Nullability, TypeDefinition, TypeDefinitionImpl};
-use ion_rs::value::owned::{text_token, OwnedElement, OwnedSymbolToken};
+use ion_rs::value::owned::{text_token, Element};
 use ion_rs::value::reader::{element_reader, ElementReader};
-use ion_rs::value::{Element, Sequence, Struct};
+use ion_rs::value::{IonElement, IonSequence, IonStruct};
 use ion_rs::IonType;
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
@@ -755,7 +756,7 @@ impl Resolver {
     }
 
     /// Converts given owned elements into ISL representation
-    pub fn isl_schema_from_elements<I: Iterator<Item = OwnedElement>>(
+    pub fn isl_schema_from_elements<I: Iterator<Item = Element>>(
         &mut self,
         elements: I,
         id: &str,
@@ -784,7 +785,7 @@ impl Resolver {
                 }
             }
 
-            let annotations: Vec<&OwnedSymbolToken> = value.annotations().collect();
+            let annotations: Vec<&Symbol> = value.annotations().collect();
 
             // load header for schema
             if annotations.contains(&&text_token("schema_header")) {
@@ -801,7 +802,7 @@ impl Resolver {
             }
             // load types for schema
             else if annotations.contains(&&text_token("type")) {
-                // convert OwnedElement to IslType
+                // convert Element to IslType
                 let isl_type: IslTypeImpl =
                     IslTypeImpl::from_owned_element(&value, &mut isl_inline_imports)?;
                 isl_types.push(isl_type);
@@ -976,10 +977,10 @@ impl SchemaSystem {
         self.resolver.schema_from_isl_types(id, isl_types)
     }
 
-    /// Creates a type from given OwnedElement using [`TypeStore`]
+    /// Creates a type from given Element using [`TypeStore`]
     pub fn schema_type_from_element(
         &mut self,
-        type_content: &OwnedElement,
+        type_content: &Element,
         type_store: &mut TypeStore,
     ) -> IonSchemaResult<TypeId> {
         // convert to isl_type
