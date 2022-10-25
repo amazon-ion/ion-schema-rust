@@ -1533,7 +1533,7 @@ impl Display for ValidValuesConstraint {
         if let Some(item) = itr.next() {
             write!(f, "{}", item)?;
         }
-        while let Some(item) = itr.next() {
+        for item in itr {
             write!(f, ", {}", item)?;
         }
         write!(f, " ]")
