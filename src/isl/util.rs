@@ -137,23 +137,19 @@ impl PartialOrd for TimestampPrecision {
 
 impl Display for TimestampPrecision {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(
-            f,
-            "{}",
-            match &self {
-                TimestampPrecision::Year => "year",
-                TimestampPrecision::Month => "month",
-                TimestampPrecision::Day => "day",
-                TimestampPrecision::Minute => "minute",
-                TimestampPrecision::Second => "second",
-                TimestampPrecision::Millisecond => "millisecond",
-                TimestampPrecision::Microsecond => "microsecond",
-                TimestampPrecision::Nanosecond => "nanosecond",
-                TimestampPrecision::OtherFractionalSeconds(_) => {
-                    "fractional second"
-                }
+        match &self {
+            TimestampPrecision::Year => write!(f, "{}", "year"),
+            TimestampPrecision::Month => write!(f, "{}", "month"),
+            TimestampPrecision::Day => write!(f, "{}", "day"),
+            TimestampPrecision::Minute => write!(f, "{}", "minute"),
+            TimestampPrecision::Second => write!(f, "{}", "second"),
+            TimestampPrecision::Millisecond => write!(f, "{}", "millisecond"),
+            TimestampPrecision::Microsecond => write!(f, "{}", "microsecond"),
+            TimestampPrecision::Nanosecond => write!(f, "{}", "nanosecond"),
+            TimestampPrecision::OtherFractionalSeconds(scale) => {
+                write!(f, "fractional second (10e{})", scale * -1)
             }
-        )
+        }
     }
 }
 

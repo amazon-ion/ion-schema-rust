@@ -1529,13 +1529,12 @@ impl ValidValuesConstraint {
 impl Display for ValidValuesConstraint {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(f, "[ ")?;
-        let mut peekable_itr = self.valid_values.iter().peekable();
-        while peekable_itr.peek().is_some() {
-            let valid_value = peekable_itr.next().unwrap();
-            write!(f, "{}", valid_value)?;
-            if peekable_itr.peek().is_some() {
-                write!(f, ", ")?;
-            }
+        let mut itr = self.valid_values.iter();
+        if let Some(item) = itr.next() {
+            write!(f, "{}", item)?;
+        }
+        while let Some(item) = itr.next() {
+            write!(f, ", {}", item)?;
         }
         write!(f, " ]")
     }

@@ -683,7 +683,7 @@ impl<T: PartialOrd> RangeImpl<T> {
 
 impl<T: Display> Display for RangeImpl<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "[ {}, {} ]", &self.start, &self.end)
+        write!(f, "range::[ {}, {} ]", &self.start, &self.end)
     }
 }
 
@@ -874,14 +874,7 @@ impl<T: Display> Display for RangeBoundaryValue<T> {
                 Max => "max".to_string(),
                 Min => "min".to_string(),
                 Value(value, range_boundary_type) => {
-                    format!(
-                        "{}{}",
-                        match range_boundary_type {
-                            RangeBoundaryType::Inclusive => "",
-                            RangeBoundaryType::Exclusive => "exclusive::",
-                        },
-                        value
-                    )
+                    format!("{}{}", range_boundary_type, value)
                 }
             }
         )
@@ -893,6 +886,19 @@ impl<T: Display> Display for RangeBoundaryValue<T> {
 pub enum RangeBoundaryType {
     Inclusive,
     Exclusive,
+}
+
+impl Display for RangeBoundaryType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(
+            f,
+            "{}",
+            match &self {
+                RangeBoundaryType::Inclusive => "",
+                RangeBoundaryType::Exclusive => "exclusive::",
+            }
+        )
+    }
 }
 
 /// Represents if the range is non negative integer range or not

@@ -652,42 +652,42 @@ mod isl_tests {
             RangeBoundaryValue::Min,
             IntegerValue::I64(5)
         ).unwrap(),
-        "[ min, 5 ]"
+        "range::[ min, 5 ]"
     ),
     case::range_with_float(
         FloatRange::new(
             2e1,
             5e1
         ).unwrap(),
-        "[ 20, 50 ]"
+        "range::[ 20, 50 ]"
     ),
     case::range_with_decimal(
         DecimalRange::new(
             Decimal::new(204, -1),
             Decimal::new(505, -1)
         ).unwrap(),
-        "[ 204d-1, 505d-1 ]"
+        "range::[ 204d-1, 505d-1 ]"
     ),
     case::range_with_timestamp(
         TimestampRange::new(
             Timestamp::with_year(2020).with_month(1).with_day(1).build().unwrap(),
             Timestamp::with_year(2021).with_month(1).with_day(1).build().unwrap()
         ).unwrap(),
-        "[ 2020-01-01T, 2021-01-01T ]"
+        "range::[ 2020-01-01T, 2021-01-01T ]"
     ),
     case::range_with_timestamp_precision(
         TimestampPrecisionRange::new(
             TimestampPrecision::Year,
             TimestampPrecision::Month
         ).unwrap(),
-        "[ year, month ]"
+        "range::[ year, month ]"
     ),
     case::range_with_number(
         NumberRange::new(
             Number::from(&IntegerValue::I64(1)),
             Number::try_from(&Decimal::new(55, -1)).unwrap()
         ).unwrap(),
-        "[ 1, 5.5 ]"
+        "range::[ 1, 5.5 ]"
     )
     )]
     fn range_display(range: impl Into<Range>, expected: String) {
