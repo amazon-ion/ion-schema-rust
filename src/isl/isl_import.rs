@@ -1,6 +1,6 @@
 use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
-use ion_rs::value::owned::OwnedElement;
-use ion_rs::value::{Element, Struct};
+use ion_rs::value::owned::Element;
+use ion_rs::value::{IonElement, IonStruct};
 
 /// Represents an import in an ISL schema.
 /// For more information: `<https://amzn.github.io/ion-schema/docs/spec.html#imports>`
@@ -20,8 +20,8 @@ impl IslImport {
         }
     }
 
-    /// Parse constraints inside an [OwnedElement] to an [IslImport]
-    pub fn from_ion_element(value: &OwnedElement) -> IonSchemaResult<IslImport> {
+    /// Parse constraints inside an [Element] to an [IslImport]
+    pub fn from_ion_element(value: &Element) -> IonSchemaResult<IslImport> {
         let import = try_to!(value.as_struct());
         let id = match import.get("id") {
             Some(import_id) => try_to!(import_id.as_str()),

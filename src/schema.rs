@@ -113,13 +113,13 @@ impl Iterator for SchemaTypeIterator {
 mod schema_tests {
     use super::*;
     use crate::system::Resolver;
-    use ion_rs::value::owned::OwnedElement;
+    use ion_rs::value::owned::Element;
     use ion_rs::value::reader::element_reader;
     use ion_rs::value::reader::ElementReader;
     use rstest::*;
 
     // helper function to be used by schema tests
-    fn load(text: &str) -> Vec<OwnedElement> {
+    fn load(text: &str) -> Vec<Element> {
         element_reader()
             .read_all(text.as_bytes())
             .expect("parsing failed unexpectedly")
@@ -128,7 +128,7 @@ mod schema_tests {
     // helper function to be used by validation tests
     fn load_schema_from_text(text: &str) -> Rc<Schema> {
         let owned_elements = load(text).into_iter();
-        // create a type_store and resolver instance to be used for loading OwnedElements as schema
+        // create a type_store and resolver instance to be used for loading Elements as schema
         let type_store = &mut TypeStore::default();
         let mut resolver = Resolver::new(vec![]);
 
@@ -282,11 +282,11 @@ mod schema_tests {
         1 // this includes named type regex_type
     )
     )]
-    fn owned_elements_to_schema<I: Iterator<Item = OwnedElement>>(
+    fn owned_elements_to_schema<I: Iterator<Item = Element>>(
         owned_elements: I,
         total_types: usize,
     ) {
-        // create a type_store and resolver instance to be used for loading OwnedElements as schema
+        // create a type_store and resolver instance to be used for loading Elements as schema
         let type_store = &mut TypeStore::default();
         let mut resolver = Resolver::new(vec![]);
 
@@ -1049,8 +1049,8 @@ mod schema_tests {
         ),
     )]
     fn type_validation(
-        valid_values: Vec<OwnedElement>,
-        invalid_values: Vec<OwnedElement>,
+        valid_values: Vec<Element>,
+        invalid_values: Vec<Element>,
         schema: Rc<Schema>,
         type_name: &str,
     ) {

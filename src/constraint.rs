@@ -10,12 +10,13 @@ use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::types::{TypeDefinition, TypeValidator};
 use crate::violation::{Violation, ViolationCode};
 use crate::IonSchemaElement;
-use ion_rs::value::owned::OwnedElement;
-use ion_rs::value::{Element, Sequence, Struct, SymbolToken};
+use ion_rs::value::owned::Element;
+use ion_rs::value::{IonElement, IonSequence, IonStruct};
 use ion_rs::{Integer, IonType};
 use regex::{Regex, RegexBuilder};
 use std::collections::HashMap;
 use std::convert::TryInto;
+use std::fmt::{Display, Formatter};
 use std::iter::Peekable;
 use std::str::Chars;
 
@@ -85,8 +86,8 @@ impl Constraint {
         Constraint::OrderedElements(OrderedElementsConstraint::new(type_ids.into()))
     }
 
-    /// Creates a [Constraint::Contains] referring to [OwnedElements] specified inside it
-    pub fn contains<A: Into<Vec<OwnedElement>>>(values: A) -> Constraint {
+    /// Creates a [Constraint::Contains] referring to [Elements] specified inside it
+    pub fn contains<A: Into<Vec<Element>>>(values: A) -> Constraint {
         Constraint::Contains(ContainsConstraint::new(values.into()))
     }
 
@@ -114,12 +115,8 @@ impl Constraint {
         Constraint::Element(ElementConstraint::new(type_id))
     }
 
-    /// Creates a [Constraint::Annotations] using [str]s and [OwnedElement]s specified inside it
-    pub fn annotations<
-        'a,
-        A: IntoIterator<Item = &'a str>,
-        B: IntoIterator<Item = OwnedElement>,
-    >(
+    /// Creates a [Constraint::Annotations] using [str]s and [Element]s specified inside it
+    pub fn annotations<'a, A: IntoIterator<Item = &'a str>, B: IntoIterator<Item = Element>>(
         annotations_modifiers: A,
         annotations: B,
     ) -> Constraint {
@@ -171,9 +168,9 @@ impl Constraint {
         Constraint::Fields(FieldsConstraint::new(fields.collect(), true))
     }
 
-    /// Creates a [Constraint::ValidValues] using the [OwnedElement]s specified inside it
-    /// Returns an IonSchemaError if any of the OwnedElements have an annotation other than `range`
-    pub fn valid_values_with_values(values: Vec<OwnedElement>) -> IonSchemaResult<Constraint> {
+    /// Creates a [Constraint::ValidValues] using the [Element]s specified inside it
+    /// Returns an IonSchemaError if any of the Elements have an annotation other than `range`
+    pub fn valid_values_with_values(values: Vec<Element>) -> IonSchemaResult<Constraint> {
         let valid_values: IonSchemaResult<Vec<ValidValue>> =
             values.iter().map(|e| e.try_into()).collect();
         Ok(Constraint::ValidValues(ValidValuesConstraint {
@@ -372,7 +369,7 @@ impl AllOfConstraint {
         Self { type_ids }
     }
 
-    /// Tries to create an [AllOf] constraint from the given OwnedElement
+    /// Tries to create an [AllOf] constraint from the given Element
     pub fn resolve_from_isl_constraint(
         type_references: &[IslTypeRef],
         type_store: &mut TypeStore,
@@ -425,7 +422,7 @@ impl AnyOfConstraint {
         Self { type_ids }
     }
 
-    /// Tries to create an [AnyOf] constraint from the given OwnedElement
+    /// Tries to create an [AnyOf] constraint from the given Element
     pub fn resolve_from_isl_constraint(
         type_references: &[IslTypeRef],
         type_store: &mut TypeStore,
@@ -475,7 +472,7 @@ impl OneOfConstraint {
         Self { type_ids }
     }
 
-    /// Tries to create an [OneOf] constraint from the given OwnedElement
+    /// Tries to create an [OneOf] constraint from the given Element
     pub fn resolve_from_isl_constraint(
         type_references: &[IslTypeRef],
         type_store: &mut TypeStore,
@@ -531,7 +528,7 @@ impl NotConstraint {
         Self { type_id }
     }
 
-    /// Tries to create a [Not] constraint from the given OwnedElement
+    /// Tries to create a [Not] constraint from the given Element
     pub fn resolve_from_isl_constraint(
         type_reference: &IslTypeRef,
         type_store: &mut TypeStore,
@@ -573,7 +570,7 @@ impl TypeConstraint {
         Self { type_id }
     }
 
-    /// Tries to create a `type` constraint from the given [OwnedElement]
+    /// Tries to create a `type` constraint from the given [Element]
     pub fn resolve_from_isl_constraint(
         type_reference: &IslTypeRef,
         type_store: &mut TypeStore,
@@ -631,7 +628,7 @@ impl OrderedElementsConstraint {
         Self { type_ids }
     }
 
-    /// Tries to create an [OrderedElements] constraint from the given OwnedElement
+    /// Tries to create an [OrderedElements] constraint from the given Element
     pub fn resolve_from_isl_constraint(
         type_references: &[IslTypeRef],
         type_store: &mut TypeStore,
@@ -647,7 +644,7 @@ impl OrderedElementsConstraint {
     /// Validates a type_def for occurs constraint using values_iter
     fn type_def_occurs_validation<'a>(
         type_def: &TypeDefinition,
-        values_iter: &mut Peekable<Box<dyn Iterator<Item = &OwnedElement> + 'a>>,
+        values_iter: &mut Peekable<Box<dyn Iterator<Item = &Element> + 'a>>,
         type_store: &TypeStore,
     ) -> ValidationResult {
         let occurs_range: Range = type_def.get_occurs_constraint("ordered_elements");
@@ -734,7 +731,7 @@ impl ConstraintValidator for OrderedElementsConstraint {
                 Some(sequence) => sequence.iter().peekable(),
             },
             IonSchemaElement::Document(document) => {
-                let itr: Box<dyn Iterator<Item = &OwnedElement>> = Box::new(document.iter());
+                let itr: Box<dyn Iterator<Item = &Element>> = Box::new(document.iter());
                 itr.peekable()
             }
         };
@@ -785,7 +782,7 @@ impl FieldsConstraint {
         self.open_content
     }
 
-    /// Tries to create an [Fields] constraint from the given OwnedElement
+    /// Tries to create an [Fields] constraint from the given Element
     pub fn resolve_from_isl_constraint(
         fields: &HashMap<String, IslTypeRef>,
         type_store: &mut TypeStore,
@@ -832,7 +829,7 @@ impl ConstraintValidator for FieldsConstraint {
         // get the values corresponding to the field_name and perform occurs_validation based on the type_def
         for (field_name, type_id) in &self.fields {
             let type_def = type_store.get_type_by_id(*type_id).unwrap();
-            let values: Vec<&OwnedElement> = ion_struct.get_all(field_name).collect();
+            let values: Vec<&Element> = ion_struct.get_all(field_name).collect();
 
             // perform occurs validation for type_def for all values of the given field_name
             let occurs_range: Range = type_def.get_occurs_constraint("fields");
@@ -877,13 +874,13 @@ impl ConstraintValidator for FieldsConstraint {
 /// [contains]: https://amzn.github.io/ion-schema/docs/spec.html#contains
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContainsConstraint {
-    // TODO: convert this into a HashSet once we have an implementation of Hash for OwnedElement in ion-rust
+    // TODO: convert this into a HashSet once we have an implementation of Hash for Element in ion-rust
     // Reference ion-rust issue: https://github.com/amzn/ion-rust/issues/220
-    values: Vec<OwnedElement>,
+    values: Vec<Element>,
 }
 
 impl ContainsConstraint {
-    pub fn new(values: Vec<OwnedElement>) -> Self {
+    pub fn new(values: Vec<Element>) -> Self {
         Self { values }
     }
 }
@@ -891,7 +888,7 @@ impl ContainsConstraint {
 impl ConstraintValidator for ContainsConstraint {
     fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
         // Create a peekable iterator for given sequence
-        let values: Vec<OwnedElement> = match &value {
+        let values: Vec<Element> = match &value {
             IonSchemaElement::SingleElement(element) => {
                 match element.as_sequence() {
                     None => {
@@ -1110,7 +1107,7 @@ impl ElementConstraint {
         Self { type_id }
     }
 
-    /// Tries to create an element constraint from the given OwnedElement
+    /// Tries to create an element constraint from the given Element
     pub fn resolve_from_isl_constraint(
         type_reference: &IslTypeRef,
         type_store: &mut TypeStore,
@@ -1236,7 +1233,7 @@ impl AnnotationsConstraint {
 
     pub fn validate_ordered_annotations(
         &self,
-        value: &OwnedElement,
+        value: &Element,
         type_store: &TypeStore,
         violations: Vec<Violation>,
     ) -> ValidationResult {
@@ -1292,7 +1289,7 @@ impl AnnotationsConstraint {
 
     pub fn validate_unordered_annotations(
         &self,
-        value: &OwnedElement,
+        value: &Element,
         type_store: &TypeStore,
         violations: Vec<Violation>,
     ) -> ValidationResult {
@@ -1529,6 +1526,20 @@ impl ValidValuesConstraint {
     }
 }
 
+impl Display for ValidValuesConstraint {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "[ ")?;
+        let mut itr = self.valid_values.iter();
+        if let Some(item) = itr.next() {
+            write!(f, "{}", item)?;
+        }
+        for item in itr {
+            write!(f, ", {}", item)?;
+        }
+        write!(f, " ]")
+    }
+}
+
 impl ConstraintValidator for ValidValuesConstraint {
     fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
         match value {
@@ -1560,7 +1571,7 @@ impl ConstraintValidator for ValidValuesConstraint {
                     "valid_values",
                     ViolationCode::InvalidValue,
                     &format!(
-                        "expected valid_values to be from {:?}, found {:?}",
+                        "expected valid_values to be from {}, found {}",
                         &self, value
                     ),
                 ))
@@ -1569,7 +1580,7 @@ impl ConstraintValidator for ValidValuesConstraint {
                 "valid_values",
                 ViolationCode::InvalidValue,
                 &format!(
-                    "expected valid_values to be from {:?}, found {:?}",
+                    "expected valid_values to be from {}, found {}",
                     &self, value
                 ),
             )),

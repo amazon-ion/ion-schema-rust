@@ -6,8 +6,8 @@ use crate::result::{IonSchemaResult, ValidationResult};
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::violation::{Violation, ViolationCode};
 use crate::IonSchemaElement;
-use ion_rs::value::owned::{text_token, OwnedElement};
-use ion_rs::value::{Builder, Element};
+use ion_rs::value::owned::{text_token, Element};
+use ion_rs::value::{Builder, IonElement};
 use ion_rs::IonType;
 use std::rc::Rc;
 
@@ -41,7 +41,7 @@ impl TypeRef {
 
     /// Provides the validation for the given value based on this schema type
     /// ```
-    /// use ion_rs::value::owned::OwnedElement;
+    /// use ion_rs::value::owned::Element;
     /// use ion_schema::IonSchemaElement;
     /// use ion_schema::authority::{FileSystemDocumentAuthority, DocumentAuthority};
     /// use ion_schema::system::SchemaSystem;
@@ -49,10 +49,10 @@ impl TypeRef {
     /// use std::path::Path;
     ///
     /// fn main() -> IonSchemaResult<()> {
-    ///     // create an IonSchemaElement from an OwnedElement
+    ///     // create an IonSchemaElement from an Element
     ///     use ion_schema::authority::MapDocumentAuthority;
-    ///     let owned_element: OwnedElement = 4.into();
-    ///     let document: Vec<OwnedElement> = vec![4.into(), "hello".to_string().into(), true.into()];
+    ///     let owned_element: Element = 4.into();
+    ///     let document: Vec<Element> = vec![4.into(), "hello".to_string().into(), true.into()];
     ///
     ///     let map_authority = [
     ///         (
@@ -87,7 +87,7 @@ impl TypeRef {
     pub fn validate<I: Into<IonSchemaElement>>(&self, value: I) -> ValidationResult {
         let type_def = self.type_store.get_type_by_id(self.id).unwrap();
 
-        // convert given IonSchemaElement to an OwnedElement
+        // convert given IonSchemaElement to an Element
         let schema_element: IonSchemaElement = value.into();
 
         type_def.validate(&schema_element, &self.type_store)
@@ -182,7 +182,7 @@ impl TypeValidator for BuiltInTypeDefinition {
             BuiltInTypeDefinition::Derived(other_type) => {
                 if other_type.name() == &Some("document".to_owned()) {
                     // Verify whether the given derived type is document
-                    // And check if it is using enum variant IonSchemaElement::Document
+                    // And check if it is using enum variant IonSchemaIonElement::Document
                     if value.as_document() == None {
                         return Err(Violation::new(
                             "type_constraint",
@@ -378,7 +378,7 @@ impl TypeDefinitionImpl {
 
             let isl_constraint = IslConstraint::from_ion_element(
                 "type",
-                &OwnedElement::new_symbol(text_token("any")),
+                &Element::new_symbol(text_token("any")),
                 &isl_type_name,
                 &mut vec![],
             )?;

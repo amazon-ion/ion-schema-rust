@@ -2,11 +2,11 @@
 extern crate clap;
 use clap::{App, ArgMatches};
 use ion_rs::value::native_writer::NativeElementWriter;
-use ion_rs::value::owned::OwnedElement;
+use ion_rs::value::owned::Element;
 use ion_rs::value::reader::element_reader;
 use ion_rs::value::reader::ElementReader;
 use ion_rs::value::writer::ElementWriter;
-use ion_rs::Writer;
+use ion_rs::IonWriter;
 use ion_rs::{IonResult, IonType, TextWriterBuilder};
 use ion_schema::authority::{DocumentAuthority, FileSystemDocumentAuthority};
 use ion_schema::result::IonSchemaResult;
@@ -124,7 +124,7 @@ fn validate(command_args: &ArgMatches) -> IonSchemaResult<()> {
 }
 
 // TODO: this will be provided by OwnedElement's implementation of `Display` in a future release
-fn element_to_string(element: &OwnedElement) -> IonResult<String> {
+fn element_to_string(element: &Element) -> IonResult<String> {
     let mut buffer = Vec::new();
     let text_writer = TextWriterBuilder::new().build(std::io::Cursor::new(&mut buffer))?;
     let mut element_writer = NativeElementWriter::new(text_writer);

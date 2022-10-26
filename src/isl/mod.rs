@@ -140,10 +140,11 @@ mod isl_tests {
     use ion_rs::types::integer::Integer as IntegerValue;
     use ion_rs::types::timestamp::Timestamp;
     use ion_rs::value::owned::text_token;
-    use ion_rs::value::owned::OwnedElement;
+    use ion_rs::value::owned::Element;
     use ion_rs::value::reader::element_reader;
     use ion_rs::value::reader::ElementReader;
     use rstest::*;
+    use std::io::Write;
 
     // helper function to create NamedIslType for isl tests
     fn load_named_type(text: &str) -> IslType {
@@ -285,7 +286,7 @@ mod isl_tests {
         load_anonymous_type(r#" // For a schema with element constraint as below:
                     { element: int }
                 "#),
-        IslType::anonymous([IslConstraint::element(IslTypeRef::named("int"))])
+        IslType::anonymous([IslConstraint::Element(IslTypeRef::named("int"))])
     ),
     case::annotations_constraint(
         load_anonymous_type(r#" // For a schema with annotations constraint as below:
@@ -379,8 +380,8 @@ mod isl_tests {
         )
     }
 
-    // helper function to return OwnedElements for range `contains` tests
-    fn elements<T: Into<OwnedElement> + std::clone::Clone>(values: &[T]) -> Vec<OwnedElement> {
+    // helper function to return Elements for range `contains` tests
+    fn elements<T: Into<Element> + std::clone::Clone>(values: &[T]) -> Vec<Element> {
         values.iter().cloned().map(|v| v.into()).collect()
     }
 
@@ -627,8 +628,8 @@ mod isl_tests {
     )]
     fn range_contains(
         range: IonSchemaResult<Range>,
-        valid_values: Vec<OwnedElement>,
-        invalid_values: Vec<OwnedElement>,
+        valid_values: Vec<Element>,
+        invalid_values: Vec<Element>,
     ) {
         // verify if the range contains given valid values
         for valid_value in valid_values {
@@ -641,5 +642,57 @@ mod isl_tests {
             let range_contains_result = range.as_ref().unwrap().contains(&invalid_value);
             assert!(!range_contains_result)
         }
+    }
+
+    #[rstest(
+    range,
+    expected,
+    case::range_with_integer(
+        IntegerRange::new(
+            RangeBoundaryValue::Min,
+            IntegerValue::I64(5)
+        ).unwrap(),
+        "range::[ min, 5 ]"
+    ),
+    case::range_with_float(
+        FloatRange::new(
+            2e1,
+            5e1
+        ).unwrap(),
+        "range::[ 20, 50 ]"
+    ),
+    case::range_with_decimal(
+        DecimalRange::new(
+            Decimal::new(204, -1),
+            Decimal::new(505, -1)
+        ).unwrap(),
+        "range::[ 204d-1, 505d-1 ]"
+    ),
+    case::range_with_timestamp(
+        TimestampRange::new(
+            Timestamp::with_year(2020).with_month(1).with_day(1).build().unwrap(),
+            Timestamp::with_year(2021).with_month(1).with_day(1).build().unwrap()
+        ).unwrap(),
+        "range::[ 2020-01-01T, 2021-01-01T ]"
+    ),
+    case::range_with_timestamp_precision(
+        TimestampPrecisionRange::new(
+            TimestampPrecision::Year,
+            TimestampPrecision::Month
+        ).unwrap(),
+        "range::[ year, month ]"
+    ),
+    case::range_with_number(
+        NumberRange::new(
+            Number::from(&IntegerValue::I64(1)),
+            Number::try_from(&Decimal::new(55, -1)).unwrap()
+        ).unwrap(),
+        "range::[ 1, 5.5 ]"
+    )
+    )]
+    fn range_display(range: impl Into<Range>, expected: String) {
+        let mut buf = Vec::new();
+        write!(&mut buf, "{}", range.into()).unwrap();
+        assert_eq!(expected, String::from_utf8(buf).unwrap());
     }
 }

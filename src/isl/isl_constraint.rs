@@ -5,9 +5,9 @@ use crate::isl::util::{Annotation, TimestampPrecision, ValidValue};
 use crate::result::{
     invalid_schema_error, invalid_schema_error_raw, IonSchemaError, IonSchemaResult,
 };
-use ion_rs::value::owned::{text_token, OwnedElement};
-use ion_rs::value::{Element, Sequence};
-use ion_rs::value::{Struct, SymbolToken};
+use ion_rs::value::owned::{text_token, Element};
+use ion_rs::value::IonStruct;
+use ion_rs::value::{IonElement, IonSequence};
 use ion_rs::IonType;
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
@@ -20,7 +20,7 @@ pub enum IslConstraint {
     AnyOf(Vec<IslTypeRef>),
     ByteLength(Range),
     CodepointLength(Range),
-    Contains(Vec<OwnedElement>),
+    Contains(Vec<Element>),
     ContentClosed,
     ContainerLength(Range),
     Element(IslTypeRef),
@@ -87,8 +87,8 @@ impl IslConstraint {
         IslConstraint::Not(isl_type)
     }
 
-    /// Creates a [IslConstraint::Contains] using the [OwnedElement] specified inside it
-    pub fn contains<A: Into<Vec<OwnedElement>>>(values: A) -> IslConstraint {
+    /// Creates a [IslConstraint::Contains] using the [Element] specified inside it
+    pub fn contains<A: Into<Vec<Element>>>(values: A) -> IslConstraint {
         IslConstraint::Contains(values.into())
     }
 
@@ -117,12 +117,8 @@ impl IslConstraint {
         IslConstraint::Element(isl_type)
     }
 
-    /// Creates an [IslConstraint::Annotations] using [str]s and [OwnedElement]s specified inside it
-    pub fn annotations<
-        'a,
-        A: IntoIterator<Item = &'a str>,
-        B: IntoIterator<Item = OwnedElement>,
-    >(
+    /// Creates an [IslConstraint::Annotations] using [str]s and [Element]s specified inside it
+    pub fn annotations<'a, A: IntoIterator<Item = &'a str>, B: IntoIterator<Item = Element>>(
         annotations_modifiers: A,
         annotations: B,
     ) -> IslConstraint {
@@ -146,8 +142,8 @@ impl IslConstraint {
         ))
     }
 
-    /// Creates a [IslConstraint::ValidValues] using the [OwnedElement]s specified inside it
-    pub fn valid_values_with_values(values: Vec<OwnedElement>) -> IonSchemaResult<IslConstraint> {
+    /// Creates a [IslConstraint::ValidValues] using the [Element]s specified inside it
+    pub fn valid_values_with_values(values: Vec<Element>) -> IonSchemaResult<IslConstraint> {
         let valid_values: IonSchemaResult<Vec<ValidValue>> =
             values.iter().map(|e| e.try_into()).collect();
         Ok(IslConstraint::ValidValues(IslValidValuesConstraint {
@@ -171,10 +167,10 @@ impl IslConstraint {
         ))
     }
 
-    /// Parse constraints inside an [OwnedElement] to an [IslConstraint]
+    /// Parse constraints inside an [Element] to an [IslConstraint]
     pub fn from_ion_element(
         constraint_name: &str,
-        value: &OwnedElement,
+        value: &Element,
         type_name: &str,
         inline_imported_types: &mut Vec<IslImportType>,
     ) -> IonSchemaResult<IslConstraint> {
@@ -234,7 +230,7 @@ impl IslConstraint {
                     )));
                 }
 
-                let values: Vec<OwnedElement> = value
+                let values: Vec<Element> = value
                     .as_sequence()
                     .unwrap()
                     .iter()
@@ -275,7 +271,7 @@ impl IslConstraint {
             "element" => {
                 let type_reference: IslTypeRef =
                     IslTypeRef::from_ion_element(value, inline_imported_types)?;
-                Ok(IslConstraint::Element(type_reference))
+                Ok(IslConstraint::element(type_reference))
             }
             "fields" => {
                 let fields: HashMap<String, IslTypeRef> =
@@ -388,7 +384,7 @@ impl IslConstraint {
 
     // helper method for from_ion_element to get isl type references from given ion element
     fn isl_type_references_from_ion_element(
-        value: &OwnedElement,
+        value: &Element,
         inline_imported_types: &mut Vec<IslImportType>,
         constraint_name: &str,
     ) -> IonSchemaResult<Vec<IslTypeRef>> {
@@ -416,7 +412,7 @@ impl IslConstraint {
 
     // helper method for from_ion_element to get isl fields from given ion element
     fn isl_fields_from_ion_element(
-        value: &OwnedElement,
+        value: &Element,
         inline_imported_types: &mut Vec<IslImportType>,
     ) -> IonSchemaResult<HashMap<String, IslTypeRef>> {
         if value.is_null() {
@@ -465,10 +461,10 @@ impl IslAnnotationsConstraint {
     }
 }
 
-impl TryFrom<&OwnedElement> for IslAnnotationsConstraint {
+impl TryFrom<&Element> for IslAnnotationsConstraint {
     type Error = IonSchemaError;
 
-    fn try_from(value: &OwnedElement) -> IonSchemaResult<Self> {
+    fn try_from(value: &Element) -> IonSchemaResult<Self> {
         let annotation_modifiers: Vec<&str> =
             value.annotations().map(|sym| sym.text().unwrap()).collect();
 
@@ -524,10 +520,10 @@ impl IslValidValuesConstraint {
     }
 }
 
-impl TryFrom<&OwnedElement> for IslValidValuesConstraint {
+impl TryFrom<&Element> for IslValidValuesConstraint {
     type Error = IonSchemaError;
 
-    fn try_from(value: &OwnedElement) -> IonSchemaResult<Self> {
+    fn try_from(value: &Element) -> IonSchemaResult<Self> {
         if value.annotations().any(|a| a == &text_token("range")) {
             return IslValidValuesConstraint::new(vec![ValidValue::Range(
                 Range::from_ion_element(value, RangeType::NumberOrTimestamp)?,

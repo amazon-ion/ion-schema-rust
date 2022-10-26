@@ -3,9 +3,9 @@
 
 use crate::external::ion_rs::IonType;
 use crate::violation::{Violation, ViolationCode};
-use ion_rs::value::owned::OwnedElement;
+use ion_rs::value::owned::Element;
 use ion_rs::value::reader::{element_reader, ElementReader};
-use ion_rs::value::{Element, Sequence, SymbolToken};
+use ion_rs::value::{IonElement, IonSequence};
 use std::fmt::{Display, Formatter};
 /// A [`try`]-like macro to workaround the [`Option`]/[`Result`] nested APIs.
 /// These API require checking the type and then calling the appropriate getter function
@@ -36,18 +36,18 @@ pub mod external {
     pub use ion_rs;
 }
 
-/// Provide an Ion schema element which includes all OwnedElements and a document type
+/// Provide an Ion schema Element which includes all Elements and a document type
 ///
 /// ## Example:
 /// In general `TypeRef` `validate()` takes in IonSchemaElement as the value to be validated.
 /// In order to create an `IonSchemaElement`:
 ///
 /// ```
-/// use ion_rs::value::owned::OwnedElement;
+/// use ion_rs::value::owned::Element;
 /// use ion_schema::IonSchemaElement;
 ///
-/// // create an IonSchemaElement from an OwnedElement
-/// let owned_element: OwnedElement = 4.into();
+/// // create an IonSchemaElement from an Element
+/// let owned_element: Element = 4.into();
 /// let ion_schema_element: IonSchemaElement = (&owned_element).into();
 ///
 /// // create an IonSchemaElement for document type based on vector of owned elements
@@ -55,19 +55,19 @@ pub mod external {
 /// ```
 #[derive(Debug, Clone)]
 pub enum IonSchemaElement {
-    SingleElement(OwnedElement),
-    Document(Vec<OwnedElement>),
+    SingleElement(Element),
+    Document(Vec<Element>),
 }
 
 impl IonSchemaElement {
-    pub fn as_element(&self) -> Option<&OwnedElement> {
+    pub fn as_element(&self) -> Option<&Element> {
         match self {
             IonSchemaElement::SingleElement(element) => Some(element),
             IonSchemaElement::Document(_) => None,
         }
     }
 
-    pub fn as_document(&self) -> Option<&Vec<OwnedElement>> {
+    pub fn as_document(&self) -> Option<&Vec<Element>> {
         match self {
             IonSchemaElement::SingleElement(_) => None,
             IonSchemaElement::Document(document) => Some(document),
@@ -78,11 +78,11 @@ impl IonSchemaElement {
         &self,
         types: &[IonType],
         constraint_name: &str,
-    ) -> Result<&OwnedElement, Violation> {
+    ) -> Result<&Element, Violation> {
         match self {
             IonSchemaElement::SingleElement(element) => {
                 if !types.contains(&element.ion_type()) || element.is_null() {
-                    // If it's an OwnedElement but the type isn't one of `types`,
+                    // If it's an Element but the type isn't one of `types`,
                     // return a Violation with the constraint name.
                     return Err(Violation::new(
                         constraint_name,
@@ -90,7 +90,7 @@ impl IonSchemaElement {
                         &format!("expected {:?} but found {}", types, element.ion_type()),
                     ));
                 }
-                // If it's an OwnedElement of an expected type, return a ref to it.
+                // If it's an Element of an expected type, return a ref to it.
                 Ok(element)
             }
             IonSchemaElement::Document(_) => {
@@ -122,19 +122,19 @@ impl Display for IonSchemaElement {
     }
 }
 
-impl From<&OwnedElement> for IonSchemaElement {
-    fn from(value: &OwnedElement) -> Self {
+impl From<&Element> for IonSchemaElement {
+    fn from(value: &Element) -> Self {
         if value.annotations().any(|a| a.text() == Some("document")) {
             let sequence = match value.ion_type() {
                 IonType::String => load(value.as_str().unwrap()),
                 IonType::List | IonType::SExpression => {
-                    let elements: Vec<OwnedElement> = value
+                    let ion_elements: Vec<Element> = value
                         .as_sequence()
                         .unwrap()
                         .iter()
                         .map(|oe| oe.to_owned())
                         .collect();
-                    elements
+                    ion_elements
                 }
                 _ => {
                     panic!("invalid document")
@@ -146,14 +146,14 @@ impl From<&OwnedElement> for IonSchemaElement {
     }
 }
 
-impl From<&Vec<OwnedElement>> for IonSchemaElement {
-    fn from(value: &Vec<OwnedElement>) -> Self {
+impl From<&Vec<Element>> for IonSchemaElement {
+    fn from(value: &Vec<Element>) -> Self {
         IonSchemaElement::Document(value.to_owned())
     }
 }
 
 // helper function to be used by schema tests
-fn load(text: &str) -> Vec<OwnedElement> {
+fn load(text: &str) -> Vec<Element> {
     element_reader()
         .read_all(text.as_bytes())
         .expect("parsing failed unexpectedly")

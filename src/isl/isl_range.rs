@@ -5,12 +5,12 @@ use crate::result::{
 };
 use ion_rs::external::bigdecimal::BigDecimal;
 use ion_rs::types::integer::IntAccess;
-use ion_rs::value::owned::{text_token, OwnedElement};
-use ion_rs::value::SymbolToken;
-use ion_rs::value::{Element, Sequence};
+use ion_rs::value::owned::{text_token, Element};
+use ion_rs::value::{IonElement, IonSequence};
 use ion_rs::{Decimal, Integer, IonType, Timestamp};
 use num_bigint::BigInt;
 use std::cmp::Ordering;
+use std::fmt::{Display, Formatter};
 use std::prelude::rust_2021::TryInto;
 use std::str::FromStr;
 
@@ -60,7 +60,7 @@ pub enum Range {
 
 impl Range {
     /// Provides a boolean value to specify whether the given value is within the range or not
-    pub fn contains(&self, value: &OwnedElement) -> bool {
+    pub fn contains(&self, value: &Element) -> bool {
         match self {
             Range::Integer(int_range) if value.ion_type() == IonType::Integer => {
                 int_range.contains(value.as_integer().unwrap().to_owned())
@@ -112,7 +112,7 @@ impl Range {
                 };
                 number_range.contains(value)
             }
-            _ => false, // if the provided OwnedElement of a different type than the given range type, contains returns false
+            _ => false, // if the provided Element of a different type than the given range type, contains returns false
         }
     }
 
@@ -138,9 +138,9 @@ impl Range {
         )
     }
 
-    /// Parse an [OwnedElement] into a [Range] using the [RangeType]
+    /// Parse an [Element] into a [Range] using the [RangeType]
     // `range_type` is used to determine range type for integer non negative ranges or number ranges
-    pub fn from_ion_element(value: &OwnedElement, range_type: RangeType) -> IonSchemaResult<Range> {
+    pub fn from_ion_element(value: &Element, range_type: RangeType) -> IonSchemaResult<Range> {
         // if an integer value is passed here then convert it into a range
         // eg. if `1` is passed as value then return a range [1,1]
         return if let Some(integer_value) = value.as_integer() {
@@ -361,6 +361,22 @@ impl From<TimestampPrecisionRange> for Range {
 impl From<NumberRange> for Range {
     fn from(value: NumberRange) -> Self {
         Range::Number(value)
+    }
+}
+
+impl Display for Range {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match &self {
+            Range::Integer(integer) => write!(f, "{}", integer),
+            Range::NonNegativeInteger(non_negative_integer) => {
+                write!(f, "{}", non_negative_integer)
+            }
+            Range::TimestampPrecision(timestamp_precision) => write!(f, "{}", timestamp_precision),
+            Range::Timestamp(timestamp) => write!(f, "{}", timestamp),
+            Range::Decimal(decimal) => write!(f, "{}", decimal),
+            Range::Float(float) => write!(f, "{}", float),
+            Range::Number(number) => write!(f, "{}", number),
+        }
     }
 }
 
@@ -665,6 +681,12 @@ impl<T: PartialOrd> RangeImpl<T> {
     }
 }
 
+impl<T: Display> Display for RangeImpl<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "range::[ {}, {} ]", &self.start, &self.end)
+    }
+}
+
 // This lets us turn any `T` into a RangeBoundaryValue<T>::Value(_, Inclusive)
 impl<T> From<T> for RangeBoundaryValue<T> {
     fn from(value: T) -> RangeBoundaryValue<T> {
@@ -673,7 +695,7 @@ impl<T> From<T> for RangeBoundaryValue<T> {
 }
 
 /// Provides typed range boundary values
-// this is a wrapper around generic `RangeBoundaryValue` and is used when generating ranges from an ion element
+// this is a wrapper around generic `RangeBoundaryValue` and is used when generating ranges from an ion IonElement
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub(crate) enum TypedRangeBoundaryValue {
     Min,
@@ -689,7 +711,7 @@ pub(crate) enum TypedRangeBoundaryValue {
 
 impl TypedRangeBoundaryValue {
     fn from_ion_element(
-        boundary: &OwnedElement,
+        boundary: &Element,
         range_type: RangeType,
     ) -> IonSchemaResult<TypedRangeBoundaryValue> {
         let range_boundary_type = if boundary
@@ -843,6 +865,22 @@ impl<T: std::cmp::PartialOrd> PartialOrd for RangeBoundaryValue<T> {
     }
 }
 
+impl<T: Display> Display for RangeBoundaryValue<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(
+            f,
+            "{}",
+            match &self {
+                Max => "max".to_string(),
+                Min => "min".to_string(),
+                Value(value, range_boundary_type) => {
+                    format!("{}{}", range_boundary_type, value)
+                }
+            }
+        )
+    }
+}
+
 /// Represents the range boundary types in terms of exclusivity (i.e. inclusive or exclusive)
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
 pub enum RangeBoundaryType {
@@ -850,8 +888,21 @@ pub enum RangeBoundaryType {
     Exclusive,
 }
 
+impl Display for RangeBoundaryType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(
+            f,
+            "{}",
+            match &self {
+                RangeBoundaryType::Inclusive => "",
+                RangeBoundaryType::Exclusive => "exclusive::",
+            }
+        )
+    }
+}
+
 /// Represents if the range is non negative integer range or not
-/// This will be used while creating an integer range from OwnedElement
+/// This will be used while creating an integer range from Element
 /// to explicitly state if its non negative or not
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RangeType {
@@ -921,5 +972,11 @@ impl From<&Integer> for Number {
                 Integer::BigInt(big_int_val) => big_int_val.to_owned().into(),
             },
         }
+    }
+}
+
+impl Display for Number {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{}", &self.big_decimal_value)
     }
 }

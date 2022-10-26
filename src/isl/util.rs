@@ -1,10 +1,11 @@
 use crate::isl::isl_range::{Range, RangeType};
 use crate::result::{invalid_schema_error, IonSchemaError};
 use ion_rs::types::timestamp::Precision;
-use ion_rs::value::owned::{text_token, OwnedElement};
-use ion_rs::value::{Element, SymbolToken};
+use ion_rs::value::owned::{text_token, Element};
+use ion_rs::value::IonElement;
 use ion_rs::Timestamp;
 use std::cmp::Ordering;
+use std::fmt::{Display, Formatter};
 
 /// Represents an annotation for `annotations` constraint.
 /// Grammar: <ANNOTATION> ::= <SYMBOL>
@@ -31,7 +32,7 @@ impl Annotation {
     }
 
     // Returns a bool value that represents if an annotation is required or not
-    pub(crate) fn is_annotation_required(value: &OwnedElement, list_level_required: bool) -> bool {
+    pub(crate) fn is_annotation_required(value: &Element, list_level_required: bool) -> bool {
         if value.annotations().any(|a| a.text().unwrap() == "required") {
             true
         } else if list_level_required {
@@ -134,8 +135,26 @@ impl PartialOrd for TimestampPrecision {
     }
 }
 
+impl Display for TimestampPrecision {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match &self {
+            TimestampPrecision::Year => write!(f, "year"),
+            TimestampPrecision::Month => write!(f, "month"),
+            TimestampPrecision::Day => write!(f, "day"),
+            TimestampPrecision::Minute => write!(f, "minute"),
+            TimestampPrecision::Second => write!(f, "second"),
+            TimestampPrecision::Millisecond => write!(f, "millisecond"),
+            TimestampPrecision::Microsecond => write!(f, "microsecond"),
+            TimestampPrecision::Nanosecond => write!(f, "nanosecond"),
+            TimestampPrecision::OtherFractionalSeconds(scale) => {
+                write!(f, "fractional second (10e{})", scale * -1)
+            }
+        }
+    }
+}
+
 /// Represents a valid value to be ued within `valid_values` constraint
-/// ValidValue could either be a range or OwnedElement
+/// ValidValue could either be a range or Element
 /// Grammar: <VALID_VALUE> ::= <VALUE>
 ///                | <RANGE<TIMESTAMP>>
 ///                | <RANGE<NUMBER>>
@@ -143,13 +162,13 @@ impl PartialOrd for TimestampPrecision {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValidValue {
     Range(Range),
-    Element(OwnedElement),
+    Element(Element),
 }
 
-impl TryFrom<&OwnedElement> for ValidValue {
+impl TryFrom<&Element> for ValidValue {
     type Error = IonSchemaError;
 
-    fn try_from(value: &OwnedElement) -> Result<Self, Self::Error> {
+    fn try_from(value: &Element) -> Result<Self, Self::Error> {
         if value.annotations().any(|a| a == &text_token("range")) {
             Ok(ValidValue::Range(Range::from_ion_element(
                 value,
@@ -161,6 +180,15 @@ impl TryFrom<&OwnedElement> for ValidValue {
             )
         } else {
             Ok(ValidValue::Element(value.to_owned()))
+        }
+    }
+}
+
+impl Display for ValidValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            ValidValue::Range(range) => write!(f, "{}", range),
+            ValidValue::Element(element) => write!(f, "{}", element),
         }
     }
 }
