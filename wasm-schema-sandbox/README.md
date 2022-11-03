@@ -17,7 +17,7 @@ npm --version
 ```
 3. The easiest way to clone the `wasm-schema-sandbox` repository is to run the following command:
 ```bash
-git clone --recursive https://github.com/partiql/partiql-lang-rust.git
+git clone --recursive https://github.com/amzn/ion-schema-rust.git
 ```
 4. Enter the `wasm-schema-sandbox` root directory:
 ```bash
