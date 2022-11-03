@@ -1,5 +1,5 @@
 use ion_schema::authority::{DocumentAuthority, MapDocumentAuthority};
-use ion_schema::external::ion_rs::value::owned::OwnedElement;
+use ion_schema::external::ion_rs::value::owned::Element;
 use ion_schema::external::ion_rs::value::reader::{element_reader, ElementReader};
 use ion_schema::external::ion_rs::IonResult;
 use ion_schema::result::IonSchemaResult;
@@ -19,7 +19,7 @@ macro_rules! log {
     }
 }
 
-fn load(text: &str) -> IonResult<OwnedElement> {
+fn load(text: &str) -> IonResult<Element> {
     element_reader().read_one(text.as_bytes())
 }
 
@@ -160,7 +160,7 @@ pub fn validate(ion: &str, schema: &str, schema_type: &str) -> SchemaValidationR
         format!("got type definition for: {} successfully!", schema_type)
     );
 
-    // get OwnedElement from given ion text
+    // get Element from given ion text
     let value_result = load(ion);
 
     let value = match value_result {
