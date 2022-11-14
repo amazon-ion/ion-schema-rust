@@ -22,6 +22,15 @@ impl IslType {
         IslType::Anonymous(IslTypeImpl::new(None, constraints.into()))
     }
 
+    /// Provides a name if the ISL type is named type definition
+    /// Otherwise returns None
+    pub fn name(&self) -> &Option<String> {
+        match self {
+            IslType::Named(named_isl_type) => named_isl_type.name(),
+            IslType::Anonymous(_) => &None,
+        }
+    }
+
     /// Provides the underlying constraints of [IslTypeImpl]
     pub fn constraints(&self) -> &[IslConstraint] {
         match &self {

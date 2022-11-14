@@ -73,7 +73,7 @@
 //                    returning resolved types in a schema) and store generated [TypeId] in the constraint.
 
 use crate::isl::isl_import::{IslImport, IslImportType};
-use crate::isl::isl_type::IslTypeImpl;
+use crate::isl::isl_type::IslType;
 
 pub mod isl_constraint;
 pub mod isl_import;
@@ -88,9 +88,9 @@ pub struct IslSchema {
     // Represents all the IslImports inside the schema file.
     // For more information: https://amzn.github.io/ion-schema/docs/spec.html#imports
     imports: Vec<IslImport>,
-    // Represents all the IslTypeImpls defined in this schema file.
+    // Represents all the IslType defined in this schema file.
     // For more information: https://amzn.github.io/ion-schema/docs/spec.html#type-definitions
-    types: Vec<IslTypeImpl>,
+    types: Vec<IslType>,
     // Represents all the inline IslImportTypes in this schema file.
     inline_imported_types: Vec<IslImportType>,
 }
@@ -98,7 +98,7 @@ pub struct IslSchema {
 impl IslSchema {
     pub fn new(
         imports: Vec<IslImport>,
-        types: Vec<IslTypeImpl>,
+        types: Vec<IslType>,
         inline_imports: Vec<IslImportType>,
     ) -> Self {
         Self {
@@ -112,7 +112,7 @@ impl IslSchema {
         &self.imports
     }
 
-    pub fn types(&self) -> &[IslTypeImpl] {
+    pub fn types(&self) -> &[IslType] {
         &self.types
     }
 
