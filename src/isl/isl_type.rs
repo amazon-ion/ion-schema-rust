@@ -89,12 +89,24 @@ impl IslTypeImpl {
         let ion_struct = try_to!(ion.as_struct());
 
         // parses the name of the type specified by schema
+        if ion_struct.get_all("name").count() > 1 {
+            return Err(invalid_schema_error_raw(
+                "type definition must only contain a single field that represents name of the type",
+            ));
+        }
         let type_name: Option<String> = match ion_struct.get("name") {
-            Some(name_element) => match name_element.as_str() {
-                Some(name) => Some(name.to_owned()),
+            Some(name_element) => match name_element.as_sym() {
+                Some(name_symbol) => match name_symbol.text() {
+                    None => {
+                        return Err(invalid_schema_error_raw(
+                            "type names must be a symbol with defined text",
+                        ))
+                    }
+                    Some(name) => Some(name.to_owned()),
+                },
                 None => {
                     return Err(invalid_schema_error_raw(
-                        "type names must be a string or a symbol with defined text",
+                        "type names must be a symbol with defined text",
                     ))
                 }
             },
