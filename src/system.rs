@@ -1667,6 +1667,43 @@ mod schema_system_tests {
     }
 
     #[test]
+    fn top_level_type_def_with_multiple_name_field() {
+        // map with (id, ion content)
+        let map_authority = [(
+            "sample.isl",
+            r#"
+                    type::{
+                        name: my_type,
+                        name: new_type
+                    }
+                "#,
+        )];
+        let mut schema_system =
+            SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
+        // verify if the schema return error for top level type definition with multiple `name` field
+        let schema = schema_system.load_schema("sample.isl");
+        assert!(schema.is_err());
+    }
+
+    #[test]
+    fn top_level_type_def_with_non_symbol_name_field() {
+        // map with (id, ion content)
+        let map_authority = [(
+            "sample.isl",
+            r#"
+                    type::{
+                        name: "my_type"
+                    }
+                "#,
+        )];
+        let mut schema_system =
+            SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
+        // verify if the schema return error for top level type definition with a `name` field of string type
+        let schema = schema_system.load_schema("sample.isl");
+        assert!(schema.is_err());
+    }
+
+    #[test]
     fn valid_isl_version_marker_test() {
         // map with (id, ion content)
         let map_authority = [(

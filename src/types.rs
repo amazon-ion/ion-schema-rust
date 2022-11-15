@@ -59,7 +59,7 @@ impl TypeRef {
     ///            "sample.isl",
     ///             r#"
     ///                 type::{
-    ///                     name: "my_int",
+    ///                     name: my_int,
     ///                     type: int,
     ///                 }
     ///             "#
