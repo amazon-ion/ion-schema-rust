@@ -720,14 +720,7 @@ impl Resolver {
             isl_types
                 .iter()
                 .filter(|t| matches!(t, IslType::Named(_)))
-                .map(|t| match t {
-                    IslType::Named(named_isl_type) => {
-                        named_isl_type.name().as_ref().unwrap().as_str()
-                    }
-                    IslType::Anonymous(_) => {
-                        unreachable!("already filtered named types")
-                    }
-                }),
+                .map(|t| t.name().as_ref().unwrap().as_str()),
         );
 
         for isl_type in &isl_types {
@@ -763,7 +756,7 @@ impl Resolver {
     ) -> IonSchemaResult<IslSchema> {
         // properties that will be stored in the ISL representation
         let mut isl_imports: Vec<IslImport> = vec![];
-        let mut isl_types: Vec<IslTypeImpl> = vec![];
+        let mut isl_types: Vec<IslType> = vec![];
         let mut isl_inline_imports: Vec<IslImportType> = vec![];
 
         let mut found_header = false;
@@ -806,7 +799,13 @@ impl Resolver {
                 // convert Element to IslType
                 let isl_type: IslTypeImpl =
                     IslTypeImpl::from_owned_element(&value, &mut isl_inline_imports)?;
-                isl_types.push(isl_type);
+                if isl_type.name().is_none() {
+                    // if a top level type definitions doesn't contain `name` field return an error
+                    return invalid_schema_error(
+                        "Top level types must contain field `name` in their definition",
+                    );
+                }
+                isl_types.push(IslType::Named(isl_type));
             }
             // load footer for schema
             else if annotations.contains(&&text_token("schema_footer")) {
@@ -858,6 +857,7 @@ impl Resolver {
         let isl_type_names: HashSet<&str> = HashSet::from_iter(
             isl.types()
                 .iter()
+                .filter(|t| matches!(t, IslType::Named(_)))
                 .map(|t| t.name().as_ref().unwrap().as_str()),
         );
 
@@ -865,12 +865,20 @@ impl Resolver {
         for isl_type in isl.types() {
             let pending_types = &mut PendingTypes::default();
 
-            // convert IslType to TypeDefinition
-            let type_id: TypeId = TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
-                isl_type,
-                type_store,
-                pending_types,
-            )?;
+            match isl_type {
+                IslType::Named(named_isl_type) => {
+                    // convert IslType to TypeDefinition
+                    let type_id: TypeId =
+                        TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
+                            named_isl_type,
+                            type_store,
+                            pending_types,
+                        )?;
+                }
+                IslType::Anonymous(_) => {
+                    unreachable!("Top level ISL type definitions are always named type definitions")
+                }
+            }
 
             // add all types from pending types to type_store
             added_imported_type_to_type_store =
@@ -1638,6 +1646,24 @@ mod schema_system_tests {
         // verify if the schema loads without any errors
         let schema = schema_system.load_schema("sample.isl");
         assert!(schema.is_ok());
+    }
+
+    #[test]
+    fn top_level_type_def_without_name_field() {
+        // map with (id, ion content)
+        let map_authority = [(
+            "sample.isl",
+            r#"
+                    type::{
+                        // top level type definition must contain a `name` field
+                    }
+                "#,
+        )];
+        let mut schema_system =
+            SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
+        // verify if the schema return error for top level type definition without `name` field
+        let schema = schema_system.load_schema("sample.isl");
+        assert!(schema.is_err());
     }
 
     #[test]
