@@ -14,7 +14,7 @@ use std::rc::Rc;
 use std::str::FromStr;
 use test_generator::test_resources;
 
-const TEST_ROOT_DIR: &str = "ion-schema-tests/";
+const TEST_ROOT_DIR: &str = "../ion-schema-tests/";
 
 // following test files will be ignored while testing
 // `test-resources` don't support to provide a skip-list of test files
@@ -70,7 +70,7 @@ const SKIP_LIST: &[&str] = &[
 // to rename test-case names hence using `rstest` for `$*.isl` test files
 // For more information: https://github.com/frehberg/test-generator/issues/11
 #[rstest(
-    path,
+    path_string,
     case::nullable_any_type("ion-schema-tests/ion_types/$any.isl"),
     case::nullable_blob_type("ion-schema-tests/ion_types/$blob.isl"),
     case::nullable_bool_type("ion-schema-tests/ion_types/$bool.isl"),
@@ -89,14 +89,24 @@ const SKIP_LIST: &[&str] = &[
     case::nullable_text_type("ion-schema-tests/ion_types/$text.isl"),
     case::nullable_timestamp_type("ion-schema-tests/ion_types/$timestamp.isl")
 )]
-fn validation_tests(path: &str) {
-    print!("{}...", path);
+fn validation_tests(path_string: &str) {
+    // The #[test_resources] macro provides file paths that are relative to the cargo workspace root
+    // but when this test is run, it seems the current directory is the "ion-schema/" directory, so
+    // we need to adjust the path to ensure that they are relative to the correct location.
+    let mut path_buf = PathBuf::from_str(TEST_ROOT_DIR).unwrap();
+    if path_string.starts_with("ion-schema-tests") {
+        path_buf.pop();
+    }
+    path_buf.push(path_string);
+    let path = path_buf.as_path();
+
+    print!("{}...", path.to_str().unwrap());
 
     // create a set of all skip list file paths
     let paths_to_skip = skip_list_as_set(SKIP_LIST);
 
     // ignore the files that are in SKIP_LIST
-    if paths_to_skip.contains(&PathBuf::from_str(path).unwrap()) {
+    if paths_to_skip.contains(&PathBuf::from_str(path_string).unwrap()) {
         println!("IGNORED");
         return;
     }
@@ -105,14 +115,24 @@ fn validation_tests(path: &str) {
     let mut schema_system = SchemaSystem::new(vec![Box::new(authority)]);
 
     // get the schema content from given schema file path
-    let ion_content =
-        fs::read(path).unwrap_or_else(|_| panic!("Could not read from given file {}", path));
+    let ion_content = fs::read(path)
+        .unwrap_or_else(|e| panic!("Could not read from given file {} \n {}", path_string, e));
     let iterator = element_reader()
         .iterate_over(&ion_content)
-        .unwrap_or_else(|_| panic!("Could not get owned elements from schema file: {}", path));
+        .unwrap_or_else(|_| {
+            panic!(
+                "Could not get owned elements from schema file: {}",
+                path_string
+            )
+        });
     let schema_content = iterator
         .collect::<Result<Vec<Element>, IonError>>()
-        .unwrap_or_else(|_| panic!("Could not get owned elements from schema file: {}", path));
+        .unwrap_or_else(|_| {
+            panic!(
+                "Could not get owned elements from schema file: {}",
+                path_string
+            )
+        });
 
     let type_store = &mut TypeStore::default();
     let mut invalid_values: Vec<Element> = vec![];

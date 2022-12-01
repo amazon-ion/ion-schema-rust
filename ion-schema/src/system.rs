@@ -1035,7 +1035,7 @@ mod schema_system_tests {
     #[test]
     fn schema_system_add_authorities_test() {
         let mut schema_system = SchemaSystem::new(vec![Box::new(
-            FileSystemDocumentAuthority::new(Path::new("src")),
+            FileSystemDocumentAuthority::new(Path::new("")),
         )]);
         schema_system.add_authority(Box::new(FileSystemDocumentAuthority::new(Path::new(
             "test",
@@ -1047,7 +1047,7 @@ mod schema_system_tests {
     #[test]
     fn schema_system_with_authority_test() {
         let mut schema_system = SchemaSystem::new(vec![Box::new(
-            FileSystemDocumentAuthority::new(Path::new("src")),
+            FileSystemDocumentAuthority::new(Path::new("")),
         )]);
         schema_system.with_authority(Box::new(FileSystemDocumentAuthority::new(Path::new(
             "test",
@@ -1059,7 +1059,7 @@ mod schema_system_tests {
     #[test]
     fn schema_system_with_authorities_test() {
         let mut schema_system = SchemaSystem::new(vec![Box::new(
-            FileSystemDocumentAuthority::new(Path::new("src")),
+            FileSystemDocumentAuthority::new(Path::new("")),
         )]);
         schema_system.with_authorities(vec![
             Box::new(FileSystemDocumentAuthority::new(Path::new("test"))),
