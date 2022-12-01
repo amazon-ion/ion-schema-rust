@@ -1,0 +1,18 @@
+[package]
+name = "ion-schema-tests-runner"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ion-rs = "0.15.0"
+ion-schema = { path = "../ion-schema" }
+quote = "1.0.21"
+syn = "1.0.102"
+proc-macro2 = "1.0.47"
+regex = "1.6.0"
+darling = "0.14.2"
