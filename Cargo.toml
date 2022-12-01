@@ -2,5 +2,6 @@
 
 members = [
     "ion-schema",
+    "ion-schema-tests-runner",
     "wasm-schema-sandbox",
 ]
