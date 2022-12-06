@@ -331,6 +331,12 @@ mod isl_tests {
             ]
         )
     ),
+    case::utf8_byte_length_constraint(
+        load_anonymous_type(r#" // For a schema with utf8_byte_length constraint as below:
+                        { utf8_byte_length: 3 }
+                    "#),
+        IslType::anonymous([IslConstraint::utf8_byte_length(3.into())])
+    ),
     case::regex_constraint(
         load_anonymous_type(r#" // For a schema with regex constraint as below:
                             { regex: "[abc]" }

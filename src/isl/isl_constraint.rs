@@ -34,6 +34,7 @@ pub enum IslConstraint {
     Scale(Range),
     TimestampPrecision(Range),
     Type(IslTypeRef),
+    Utf8ByteLength(Range),
     ValidValues(IslValidValuesConstraint),
 }
 
@@ -110,6 +111,11 @@ impl IslConstraint {
     /// Creates an [IslConstraint::TimestampPrecision] using the range specified in it
     pub fn timestamp_precision(precision: RangeImpl<TimestampPrecision>) -> IslConstraint {
         IslConstraint::TimestampPrecision(Range::TimestampPrecision(precision))
+    }
+
+    /// Creates an [IslConstraint::Utf8ByteLength] using the range specified in it
+    pub fn utf8_byte_length(length: NonNegativeIntegerRange) -> IslConstraint {
+        IslConstraint::Utf8ByteLength(Range::NonNegativeInteger(length))
     }
 
     /// Creates an [IslConstraint::Element] using the [IslTypeRef] referenced inside it
@@ -371,6 +377,10 @@ impl IslConstraint {
             "timestamp_precision" => Ok(IslConstraint::TimestampPrecision(
                 Range::from_ion_element(value, RangeType::TimestampPrecision)?,
             )),
+            "utf8_byte_length" => Ok(IslConstraint::Utf8ByteLength(Range::from_ion_element(
+                value,
+                RangeType::NonNegativeInteger,
+            )?)),
             "valid_values" => Ok(IslConstraint::ValidValues(value.try_into()?)),
             _ => Err(invalid_schema_error_raw(
                 "Type: ".to_owned()

@@ -52,6 +52,7 @@ pub enum Constraint {
     Scale(ScaleConstraint),
     TimestampPrecision(TimestampPrecisionConstraint),
     Type(TypeConstraint),
+    Utf8ByteLength(Utf8ByteLengthConstraint),
     ValidValues(ValidValuesConstraint),
 }
 
@@ -157,6 +158,13 @@ impl Constraint {
         Constraint::TimestampPrecision(TimestampPrecisionConstraint::new(
             Range::TimestampPrecision(precision),
         ))
+    }
+
+    /// Creates a [Constraint::Utf8ByteLength] from a [Range] specifying a length range.
+    pub fn utf8_byte_length(length: RangeImpl<usize>) -> Constraint {
+        Constraint::Utf8ByteLength(Utf8ByteLengthConstraint::new(Range::NonNegativeInteger(
+            length,
+        )))
     }
 
     /// Creates a [Constraint::Fields] referring to the fields represented by the provided field name and [TypeId]s.
@@ -309,6 +317,9 @@ impl Constraint {
                     TimestampPrecisionConstraint::new(timestamp_precision_range.to_owned()),
                 ))
             }
+            IslConstraint::Utf8ByteLength(utf8_byte_length) => Ok(Constraint::Utf8ByteLength(
+                Utf8ByteLengthConstraint::new(utf8_byte_length.to_owned()),
+            )),
             IslConstraint::ValidValues(valid_values) => {
                 Ok(Constraint::ValidValues(ValidValuesConstraint {
                     valid_values: valid_values.values().to_owned(),
@@ -351,6 +362,9 @@ impl Constraint {
             Constraint::Scale(scale) => scale.validate(value, type_store),
             Constraint::TimestampPrecision(timestamp_precision) => {
                 timestamp_precision.validate(value, type_store)
+            }
+            Constraint::Utf8ByteLength(utf8_byte_length) => {
+                utf8_byte_length.validate(value, type_store)
             }
             Constraint::ValidValues(valid_values) => valid_values.validate(value, type_store),
         }
@@ -1799,5 +1813,50 @@ impl PartialEq for RegexConstraint {
         self.expression.as_str().eq(other.expression.as_str())
             && self.case_insensitive == other.case_insensitive
             && self.multiline == other.multiline
+    }
+}
+
+/// Implements Ion Schema's `utf8_byte_length` constraint
+/// [utf8_byte_length]: https://amzn.github.io/ion-schema/docs/isl-1-0/spec#utf8_byte_length
+#[derive(Debug, Clone, PartialEq)]
+pub struct Utf8ByteLengthConstraint {
+    length_range: Range,
+}
+
+impl Utf8ByteLengthConstraint {
+    pub fn new(length_range: Range) -> Self {
+        Self { length_range }
+    }
+
+    pub fn length(&self) -> &Range {
+        &self.length_range
+    }
+}
+
+impl ConstraintValidator for Utf8ByteLengthConstraint {
+    fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
+        // get the size of given bytes
+        let size = value
+            .expect_element_of_type(&[IonType::String, IonType::Symbol], "utf8_byte_length")?
+            .as_str()
+            .unwrap()
+            .len();
+
+        // get isl length as a range
+        let length_range: &Range = self.length();
+
+        // return a Violation if the string/symbol size didn't follow utf8_byte_length constraint
+        if !length_range.contains(&(size as i64).into()) {
+            return Err(Violation::new(
+                "utf8_byte_length",
+                ViolationCode::InvalidLength,
+                &format!(
+                    "expected utf8 byte length {:?} found {}",
+                    length_range, size
+                ),
+            ));
+        }
+
+        Ok(())
     }
 }

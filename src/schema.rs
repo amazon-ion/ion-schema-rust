@@ -275,6 +275,12 @@ mod schema_tests {
                  "#).into_iter(),
         1 // this includes named type valid_values_type
     ),
+    case::utf8_byte_length_constraint(
+        load(r#" // For a schema with utf8_byte_length constraint as below:
+                        type:: { name: utf8_byte_length_type, utf8_byte_length: 3 }
+                    "#).into_iter(),
+        1 // this includes named type utf8_byte_length_type
+    ),
     case::regex_constraint(
         load(r#" // For a schema with regex constraint as below:
                     type:: { name: regex_type, regex: "[abc]" }
@@ -986,6 +992,32 @@ mod schema_tests {
                                 type::{ name: timestamp_precision_type, timestamp_precision: range::[month, second] }
                         "#),
             "timestamp_precision_type"
+        ),
+        case::utf8_byte_length_constraint(
+            load(r#"
+                          "hello"
+                          hello
+                          world
+                          "world"
+                          '\u00A2\u20AC'
+                        "#),
+            load(r#"
+                          null
+                          null.bool
+                          null.null
+                          null.string
+                          null.symbol
+                          ""
+                          "hi"
+                          hi
+                          "greetings"
+                          greetings
+                          '\u20AC\u20AC'
+                        "#),
+            load_schema_from_text(r#" // For a schema with byte_length constraint as below:
+                                type::{ name: utf8_byte_length_type, utf8_byte_length: 5 }
+                        "#),
+            "utf8_byte_length_type"
         ),
         case::valid_values_constraint(
             load(r#"

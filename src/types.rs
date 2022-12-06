@@ -644,6 +644,13 @@ mod type_definition_tests {
             Constraint::type_constraint(34)
         ])
     ),
+    case::utf8_byte_length_constraint(
+        /* For a schema with utf8_byte_length constraint as below:
+            { utf8_byte_length: 3 }
+        */
+        IslType::anonymous([IslConstraint::utf8_byte_length(3.into())]),
+        TypeDefinition::anonymous([Constraint::utf8_byte_length(3.into()), Constraint::type_constraint(34)])
+    ),
     case::regex_constraint(
         /* For a schema with regex constraint as below:
             { regex: "[abc]" }
