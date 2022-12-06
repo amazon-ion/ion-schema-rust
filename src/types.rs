@@ -183,7 +183,7 @@ impl TypeValidator for BuiltInTypeDefinition {
                 if other_type.name() == &Some("document".to_owned()) {
                     // Verify whether the given derived type is document
                     // And check if it is using enum variant IonSchemaIonElement::Document
-                    if value.as_document() == None {
+                    if Option::is_none(&value.as_document()) {
                         return Err(Violation::new(
                             "type_constraint",
                             ViolationCode::TypeMismatched,

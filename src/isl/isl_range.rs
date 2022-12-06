@@ -229,11 +229,7 @@ impl Range {
     ) -> IonSchemaResult<usize> {
         // minimum precision must be greater than or equal to 1
         // for more information: https://amzn.github.io/ion-schema/docs/spec.html#precision
-        let min_value = if range_type == &RangeType::Precision {
-            1
-        } else {
-            0
-        };
+        let min_value = i64::from(range_type == &RangeType::Precision);
         match value.as_i64() {
             Some(v) => {
                 if v >= min_value {
@@ -394,8 +390,8 @@ impl<T: std::cmp::PartialOrd> RangeImpl<T> {
         start: RangeBoundaryValue<T>,
         end: RangeBoundaryValue<T>,
     ) -> IonSchemaResult<Self> {
-        if start.range_boundary_value() == None
-            && end.range_boundary_value() == None
+        if Option::is_none(&start.range_boundary_value())
+            && Option::is_none(&end.range_boundary_value())
             && (start.range_boundary_type() == &RangeBoundaryType::Exclusive
                 || end.range_boundary_type() == &RangeBoundaryType::Exclusive)
         {
@@ -603,7 +599,7 @@ impl<T: std::cmp::PartialOrd> RangeImpl<T> {
                 // verify that v2 here doesn't have an unknown offset
                 // For timestamp ranges neither boundaries should have an unknown offset
                 if let Some(range_end_timestamp_value) = v2.range_boundary_value() {
-                    if range_end_timestamp_value.offset() == None {
+                    if Option::is_none(&range_end_timestamp_value.offset()) {
                         return invalid_schema_error(
                             "Range boundary can not have an unknown offset",
                         );
@@ -616,7 +612,7 @@ impl<T: std::cmp::PartialOrd> RangeImpl<T> {
                 // verify that v1 here doesn't have an unknown offset
                 // For timestamp ranges neither boundaries should have an unknown offset
                 if let Some(range_end_timestamp_value) = v1.range_boundary_value() {
-                    if range_end_timestamp_value.offset() == None {
+                    if Option::is_none(&range_end_timestamp_value.offset()) {
                         return invalid_schema_error(
                             "Range boundary can not have an unknown offset",
                         );

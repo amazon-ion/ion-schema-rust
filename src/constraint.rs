@@ -687,7 +687,7 @@ impl OrderedElementsConstraint {
 
         // greedily take as many values as we can of this type without going out
         // of the maximum of the range
-        while values_iter.peek() != None && occurs_range.contains(&(count + 1).into()) {
+        while Option::is_some(&values_iter.peek()) && occurs_range.contains(&(count + 1).into()) {
             // don't consume it until we know it's valid for the type
             if let Some(value) = values_iter.peek() {
                 let schema_element: IonSchemaElement = (*value).into();
@@ -703,7 +703,7 @@ impl OrderedElementsConstraint {
         }
 
         // verify if there is no values left to validate and if it follows `occurs` constraint for this expected type
-        if values_iter.peek() == None && !occurs_range.contains(&count.into()) {
+        if Option::is_none(&values_iter.peek()) && !occurs_range.contains(&count.into()) {
             // there's not enough values of this expected type
             return Err(Violation::new(
                 "ordered_elements",
@@ -759,7 +759,7 @@ impl ConstraintValidator for OrderedElementsConstraint {
             )?;
         }
 
-        if values_iter.peek() != None {
+        if Option::is_some(&values_iter.peek()) {
             // check if there still values left at the end of sequence (list/sexp), when we have already
             // completed visiting through all of the ordered elements type_defs
             Err(Violation::with_violations(
@@ -1235,7 +1235,7 @@ impl AnnotationsConstraint {
     ) -> bool {
         // As there are open content possible for annotations that doesn't have list-level `closed` annotation
         // traverse through the next annotations to find this expected, ordered and required annotation
-        while value_annotations.peek() != None && !self.is_closed {
+        while Option::is_some(&value_annotations.peek()) && !self.is_closed {
             if expected_annotation.value() == value_annotations.next().unwrap() {
                 return true;
             }
@@ -1284,7 +1284,7 @@ impl AnnotationsConstraint {
             }
         }
 
-        if self.is_closed && value_annotations.peek() != None {
+        if self.is_closed && Option::is_some(&value_annotations.peek()) {
             // check if there are still annotations left at the end of the list
             return Err(Violation::with_violations(
                 "annotations",
