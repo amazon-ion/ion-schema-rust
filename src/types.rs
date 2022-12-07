@@ -183,7 +183,7 @@ impl TypeValidator for BuiltInTypeDefinition {
                 if other_type.name() == &Some("document".to_owned()) {
                     // Verify whether the given derived type is document
                     // And check if it is using enum variant IonSchemaIonElement::Document
-                    if value.as_document() == None {
+                    if Option::is_none(&value.as_document()) {
                         return Err(Violation::new(
                             "type_constraint",
                             ViolationCode::TypeMismatched,
@@ -643,6 +643,13 @@ mod type_definition_tests {
             ).unwrap().into()),
             Constraint::type_constraint(34)
         ])
+    ),
+    case::utf8_byte_length_constraint(
+        /* For a schema with utf8_byte_length constraint as below:
+            { utf8_byte_length: 3 }
+        */
+        IslType::anonymous([IslConstraint::utf8_byte_length(3.into())]),
+        TypeDefinition::anonymous([Constraint::utf8_byte_length(3.into()), Constraint::type_constraint(34)])
     ),
     case::regex_constraint(
         /* For a schema with regex constraint as below:
