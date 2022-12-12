@@ -91,12 +91,11 @@ const SKIP_LIST: &[&str] = &[
 )]
 fn validation_tests(path_string: &str) {
     // The #[test_resources] macro provides file paths that are relative to the cargo workspace root
-    // but when this test is run, it seems the current directory is the "ion-schema/" directory, so
+    // but when this test is run, it the working directory is the "ion-schema/" directory, so
     // we need to adjust the path to ensure that they are relative to the correct location.
     let mut path_buf = PathBuf::from_str(TEST_ROOT_DIR).unwrap();
-    if path_string.starts_with("ion-schema-tests") {
-        path_buf.pop();
-    }
+    path_buf.pop(); // Remove "ion-schema-tests/" so that it is not duplicated.
+
     path_buf.push(path_string);
     let path = path_buf.as_path();
 
