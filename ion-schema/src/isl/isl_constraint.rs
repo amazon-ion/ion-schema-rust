@@ -1,7 +1,7 @@
 use crate::isl::isl_import::IslImportType;
 use crate::isl::isl_range::{IntegerRange, NonNegativeIntegerRange, Range, RangeImpl, RangeType};
 use crate::isl::isl_type_reference::IslTypeRef;
-use crate::isl::util::{Annotation, TimestampPrecision, ValidValue};
+use crate::isl::util::{Annotation, TimestampOffset, TimestampPrecision, ValidValue};
 use crate::result::{
     invalid_schema_error, invalid_schema_error_raw, IonSchemaError, IonSchemaResult,
 };
@@ -32,6 +32,7 @@ pub enum IslConstraint {
     Precision(Range),
     Regex(IslRegexConstraint),
     Scale(Range),
+    TimestampOffset(IslTimestampOffsetConstraint),
     TimestampPrecision(Range),
     Type(IslTypeRef),
     Utf8ByteLength(Range),
@@ -111,6 +112,11 @@ impl IslConstraint {
     /// Creates an [IslConstraint::TimestampPrecision] using the range specified in it
     pub fn timestamp_precision(precision: RangeImpl<TimestampPrecision>) -> IslConstraint {
         IslConstraint::TimestampPrecision(Range::TimestampPrecision(precision))
+    }
+
+    /// Creates an [IslConstraint::TimestampOffset] using the offset list specified in it
+    pub fn timestamp_offset(offsets: Vec<TimestampOffset>) -> IslConstraint {
+        IslConstraint::TimestampOffset(IslTimestampOffsetConstraint::new(offsets))
     }
 
     /// Creates an [IslConstraint::Utf8ByteLength] using the range specified in it
@@ -377,6 +383,69 @@ impl IslConstraint {
             "timestamp_precision" => Ok(IslConstraint::TimestampPrecision(
                 Range::from_ion_element(value, RangeType::TimestampPrecision)?,
             )),
+            "timestamp_offset" => {
+                use IonType::*;
+                if value.is_null() {
+                    return invalid_schema_error(
+                        "expected a list of valid offsets for an `timestamp_offset` constraint, found null",
+                    );
+                }
+
+                if value.annotations().next().is_some() {
+                    return invalid_schema_error("`timestamp_offset` list may not be annotated");
+                }
+
+                let valid_offsets: Vec<TimestampOffset> = match value.ion_type() {
+                    List => {
+                        let list_values = value.as_sequence().unwrap();
+                        if list_values.is_empty() {
+                            return invalid_schema_error(
+                                "`timestamp_offset` constraint must contain at least one offset",
+                            );
+                        }
+                        let list_vec: IonSchemaResult<Vec<TimestampOffset>> = list_values
+                            .iter()
+                            .map(|e| {
+                                if e.is_null() {
+                                    return invalid_schema_error(
+                                    "`timestamp_offset` values must be non-null strings, found null"
+                                );
+                                }
+
+                                if e.ion_type() != IonType::String {
+                                    return invalid_schema_error(format!(
+                                    "`timestamp_offset` values must be non-null strings, found {}",
+                                    e
+                                ));
+                                }
+
+                                if e.annotations().next().is_some() {
+                                    return invalid_schema_error(format!(
+                                        "`timestamp_offset` values may not be annotated, found {}",
+                                        e
+                                    ));
+                                }
+
+                                // unwrap here will not panic as we have already verified the ion type to be a string
+                                let string_value = e.as_str().unwrap();
+
+                                // convert the string to TimestampOffset which stores offset in minutes
+                                string_value.try_into()
+                            })
+                            .collect();
+                        list_vec?
+                    }
+                    _ => {
+                        return invalid_schema_error(format!(
+                            "ion type: {:?} is not supported with occurs constraint",
+                            value.ion_type()
+                        ))
+                    }
+                };
+                Ok(IslConstraint::TimestampOffset(
+                    IslTimestampOffsetConstraint::new(valid_offsets),
+                ))
+            }
             "utf8_byte_length" => Ok(IslConstraint::Utf8ByteLength(Range::from_ion_element(
                 value,
                 RangeType::NonNegativeInteger,
@@ -390,6 +459,17 @@ impl IslConstraint {
                     + " does not exist",
             )),
         }
+    }
+
+    // helper method to convert from a string to offset in minutes
+    fn offset_minutes(s: &str, range: Range) -> IonSchemaResult<i32> {
+        let int = s
+            .parse::<i32>()
+            .map_err(|e| invalid_schema_error_raw(format!("invalid timestamp offset {}", s)))?;
+        if !range.contains(&(int as i64).into()) {
+            return invalid_schema_error(format!("invalid timestamp offset {}", int));
+        }
+        Ok(int)
     }
 
     // helper method for from_ion_element to get isl type references from given ion element
@@ -588,5 +668,22 @@ impl IslRegexConstraint {
 
     pub fn multi_line(&self) -> bool {
         self.multi_line
+    }
+}
+
+/// Represents the `timestamp_offset` constraint
+/// `timestamp_offset`: `<https://amzn.github.io/ion-schema/docs/isl-1-0/spec#timestamp_offset>`
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IslTimestampOffsetConstraint {
+    valid_offsets: Vec<TimestampOffset>,
+}
+
+impl IslTimestampOffsetConstraint {
+    pub(crate) fn new(valid_offsets: Vec<TimestampOffset>) -> Self {
+        Self { valid_offsets }
+    }
+
+    pub fn valid_offsets(&self) -> &[TimestampOffset] {
+        &self.valid_offsets
     }
 }

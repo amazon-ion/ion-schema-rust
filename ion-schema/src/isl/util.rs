@@ -1,5 +1,7 @@
-use crate::isl::isl_range::{Range, RangeType};
-use crate::result::{invalid_schema_error, IonSchemaError};
+use crate::isl::isl_range::{Range, RangeBoundaryType, RangeBoundaryValue, RangeImpl, RangeType};
+use crate::result::{
+    invalid_schema_error, invalid_schema_error_raw, IonSchemaError, IonSchemaResult,
+};
 use ion_rs::types::timestamp::Precision;
 use ion_rs::value::owned::{text_token, Element};
 use ion_rs::value::IonElement;
@@ -190,5 +192,83 @@ impl Display for ValidValue {
             ValidValue::Range(range) => write!(f, "{}", range),
             ValidValue::Element(element) => write!(f, "{}", element),
         }
+    }
+}
+
+/// Represent a timestamp offset
+/// Offset value is stored in minutes as i32 value and unknown offset are stored as None
+/// For example, "+07::00" wil be stored as 420
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimestampOffset {
+    offset: Option<i32>,
+}
+
+impl TimestampOffset {
+    pub fn new(offset: Option<i32>) -> Self {
+        Self { offset }
+    }
+
+    pub fn offset(&self) -> &Option<i32> {
+        &self.offset
+    }
+
+    // helper method to convert from a string to offset in minutes
+    fn offset_minutes(s: &str, range: Range) -> IonSchemaResult<i32> {
+        let int = s
+            .parse::<i32>()
+            .map_err(|e| invalid_schema_error_raw(format!("invalid timestamp offset {}", s)))?;
+        if !range.contains(&(int as i64).into()) {
+            return invalid_schema_error(format!("invalid timestamp offset {}", int));
+        }
+        Ok(int)
+    }
+}
+
+impl TryFrom<&str> for TimestampOffset {
+    type Error = IonSchemaError;
+
+    fn try_from(string_value: &str) -> Result<Self, Self::Error> {
+        // unknown offset will be stored as None
+        if string_value == "-00:00" {
+            Ok(TimestampOffset::new(None))
+        } else {
+            if string_value.len() != 6 || string_value.chars().nth(3).unwrap() != ':' {
+                return invalid_schema_error(
+                    "`timestamp_offset` values must be of the form \"[+|-]hh:mm\"",
+                );
+            }
+            let sign = match string_value.chars().next().unwrap() {
+                '-' => -1,
+                '+' => 1,
+                _ => {
+                    return invalid_schema_error(format!(
+                        "Unrecognized `timestamp_offset` sign '{}'",
+                        string_value.chars().next().unwrap()
+                    ))
+                }
+            };
+            // translate to offset in +/- minutes
+            let hours = TimestampOffset::offset_minutes(
+                string_value.get(1..3).unwrap(),
+                Range::NonNegativeInteger(RangeImpl::new(
+                    RangeBoundaryValue::Value(0, RangeBoundaryType::Inclusive),
+                    RangeBoundaryValue::Value(23, RangeBoundaryType::Inclusive),
+                )?),
+            )?;
+            let minutes = TimestampOffset::offset_minutes(
+                string_value.get(4..6).unwrap(),
+                Range::NonNegativeInteger(RangeImpl::new(
+                    RangeBoundaryValue::Value(0, RangeBoundaryType::Inclusive),
+                    RangeBoundaryValue::Value(59, RangeBoundaryType::Inclusive),
+                )?),
+            )?;
+            Ok(TimestampOffset::new(Some(sign * (hours * 60 + minutes))))
+        }
+    }
+}
+
+impl From<Option<i32>> for TimestampOffset {
+    fn from(value: Option<i32>) -> Self {
+        Self { offset: value }
     }
 }

@@ -45,6 +45,7 @@ const SKIP_LIST: &[&str] = &[
     "ion-schema-tests/constraints/valid_values/validation_list_timestamp_ranges.isl",
     "ion-schema-tests/constraints/valid_values/validation_ranges.isl",
     "ion-schema-tests/constraints/valid_values/validation_timestamp_range.isl",
+    "ion-schema-tests/constraints/timestamp_offset/validation.isl",
 ];
 
 #[test_resources("ion-schema-tests/core_types/*.isl")]
@@ -66,6 +67,7 @@ const SKIP_LIST: &[&str] = &[
 #[test_resources("ion-schema-tests/constraints/valid_values/*.isl")]
 #[test_resources("ion-schema-tests/constraints/regex/*.isl")]
 #[test_resources("ion-schema-tests/constraints/utf8_byte_length/*.isl")]
+#[test_resources("ion-schema-tests/constraints/timestamp_offset/*.isl")]
 // `test_resources` breaks for test-case names containing `$` and it doesn't allow
 // to rename test-case names hence using `rstest` for `$*.isl` test files
 // For more information: https://github.com/frehberg/test-generator/issues/11
