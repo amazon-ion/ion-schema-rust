@@ -1,12 +1,12 @@
-use crate::isl::isl_range::{Range, RangeBoundaryType, RangeBoundaryValue, RangeImpl, RangeType};
-use crate::result::{
-    invalid_schema_error, invalid_schema_error_raw, IonSchemaError, IonSchemaResult,
-};
+use crate::isl::isl_range::{Range, RangeType};
+use crate::result::{invalid_schema_error, IonSchemaError};
 use ion_rs::types::timestamp::Precision;
 use ion_rs::value::owned::{text_token, Element};
 use ion_rs::value::IonElement;
 use ion_rs::Timestamp;
+use num_traits::abs;
 use std::cmp::Ordering;
+use std::fmt;
 use std::fmt::{Display, Formatter};
 
 /// Represents an annotation for `annotations` constraint.
@@ -211,17 +211,6 @@ impl TimestampOffset {
     pub fn offset(&self) -> &Option<i32> {
         &self.offset
     }
-
-    // helper method to convert from a string to offset in minutes
-    fn offset_minutes(s: &str, range: Range) -> IonSchemaResult<i32> {
-        let int = s
-            .parse::<i32>()
-            .map_err(|e| invalid_schema_error_raw(format!("invalid timestamp offset {}", s)))?;
-        if !range.contains(&(int as i64).into()) {
-            return invalid_schema_error(format!("invalid timestamp offset {}", int));
-        }
-        Ok(int)
-    }
 }
 
 impl TryFrom<&str> for TimestampOffset {
@@ -237,32 +226,27 @@ impl TryFrom<&str> for TimestampOffset {
                     "`timestamp_offset` values must be of the form \"[+|-]hh:mm\"",
                 );
             }
-            let sign = match string_value.chars().next().unwrap() {
-                '-' => -1,
-                '+' => 1,
+            // convert string offset value into an i32 value of offset in minutes
+            let h = &string_value[1..3];
+            let m = &string_value[4..6];
+            let sign = match &string_value[..1] {
+                "-" => -1,
+                "+" => 1,
                 _ => {
                     return invalid_schema_error(format!(
-                        "Unrecognized `timestamp_offset` sign '{}'",
-                        string_value.chars().next().unwrap()
+                        "unrecognized `timestamp_offset` sign '{}'",
+                        &string_value[..1]
                     ))
                 }
             };
-            // translate to offset in +/- minutes
-            let hours = TimestampOffset::offset_minutes(
-                string_value.get(1..3).unwrap(),
-                Range::NonNegativeInteger(RangeImpl::new(
-                    RangeBoundaryValue::Value(0, RangeBoundaryType::Inclusive),
-                    RangeBoundaryValue::Value(23, RangeBoundaryType::Inclusive),
-                )?),
-            )?;
-            let minutes = TimestampOffset::offset_minutes(
-                string_value.get(4..6).unwrap(),
-                Range::NonNegativeInteger(RangeImpl::new(
-                    RangeBoundaryValue::Value(0, RangeBoundaryType::Inclusive),
-                    RangeBoundaryValue::Value(59, RangeBoundaryType::Inclusive),
-                )?),
-            )?;
-            Ok(TimestampOffset::new(Some(sign * (hours * 60 + minutes))))
+            match (h.parse::<i32>(), m.parse::<i32>()) {
+                (Ok(hours), Ok(minutes))
+                    if (-23..24).contains(&hours) && (0..60).contains(&minutes) =>
+                {
+                    Ok(TimestampOffset::new(Some(sign * (hours * 60 + minutes))))
+                }
+                _ => invalid_schema_error(format!("invalid timestamp offset {}", string_value)),
+            }
         }
     }
 }
@@ -270,5 +254,19 @@ impl TryFrom<&str> for TimestampOffset {
 impl From<Option<i32>> for TimestampOffset {
     fn from(value: Option<i32>) -> Self {
         Self { offset: value }
+    }
+}
+
+impl Display for TimestampOffset {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match &self.offset {
+            None => write!(f, "-00:00"),
+            Some(offset) => {
+                let sign = if offset < &0 { "-" } else { "+" };
+                let hours = abs(*offset) / 60;
+                let minutes = abs(*offset) - hours * 60;
+                write!(f, "{}{:02}:{:02}", sign, hours, minutes)
+            }
+        }
     }
 }

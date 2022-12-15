@@ -1903,13 +1903,16 @@ impl ConstraintValidator for TimestampOffsetConstraint {
 
         // return a Violation if the value didn't follow timestamp precision constraint
         if !valid_offsets.contains(&timestamp_value.offset().into()) {
+            let formatted_valid_offsets: Vec<String> =
+                valid_offsets.iter().map(|t| format!("{}", t)).collect();
+
             return Err(Violation::new(
                 "timestamp_offset",
                 ViolationCode::InvalidLength,
                 &format!(
-                    "expected timestamp offset from {:?} found {:?}",
-                    valid_offsets,
-                    timestamp_value.offset()
+                    "expected timestamp offset from {:?} found {}",
+                    formatted_valid_offsets,
+                    <Option<i32> as Into<TimestampOffset>>::into(timestamp_value.offset())
                 ),
             ));
         }

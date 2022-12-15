@@ -437,8 +437,8 @@ impl IslConstraint {
                     }
                     _ => {
                         return invalid_schema_error(format!(
-                            "ion type: {:?} is not supported with occurs constraint",
-                            value.ion_type()
+                            "`timestamp_offset` requires a list of offset strings, but found: {}",
+                            value
                         ))
                     }
                 };
@@ -459,17 +459,6 @@ impl IslConstraint {
                     + " does not exist",
             )),
         }
-    }
-
-    // helper method to convert from a string to offset in minutes
-    fn offset_minutes(s: &str, range: Range) -> IonSchemaResult<i32> {
-        let int = s
-            .parse::<i32>()
-            .map_err(|e| invalid_schema_error_raw(format!("invalid timestamp offset {}", s)))?;
-        if !range.contains(&(int as i64).into()) {
-            return invalid_schema_error(format!("invalid timestamp offset {}", int));
-        }
-        Ok(int)
     }
 
     // helper method for from_ion_element to get isl type references from given ion element
