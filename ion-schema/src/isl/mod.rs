@@ -350,7 +350,7 @@ mod isl_tests {
             ]
         )
     ),
-    case::timetsamp_offset_constraint(
+    case::timestamp_offset_constraint(
         load_anonymous_type(r#" // For a schema with timestamp_offset constraint as below:
                             { timestamp_offset: ["+00:00"] }
                         "#),

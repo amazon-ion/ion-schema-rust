@@ -196,21 +196,12 @@ impl Display for ValidValue {
 }
 
 /// Represent a timestamp offset
-/// Offset value is stored in minutes as i32 value and unknown offset are stored as None
-/// For example, "+07::00" wil be stored as 420
+/// Known timestamp offset value is stored in minutes as i32 value
+/// For example, "+07::00" wil be stored as `TimestampOffset::Known(420)`
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TimestampOffset {
-    offset: Option<i32>,
-}
-
-impl TimestampOffset {
-    pub fn new(offset: Option<i32>) -> Self {
-        Self { offset }
-    }
-
-    pub fn offset(&self) -> &Option<i32> {
-        &self.offset
-    }
+pub enum TimestampOffset {
+    Known(i32), // represents known timestamp offset in minutes
+    Unknown,    // represents unknown timestamp offset "-00:00"
 }
 
 impl TryFrom<&str> for TimestampOffset {
@@ -219,7 +210,7 @@ impl TryFrom<&str> for TimestampOffset {
     fn try_from(string_value: &str) -> Result<Self, Self::Error> {
         // unknown offset will be stored as None
         if string_value == "-00:00" {
-            Ok(TimestampOffset::new(None))
+            Ok(TimestampOffset::Unknown)
         } else {
             if string_value.len() != 6 || string_value.chars().nth(3).unwrap() != ':' {
                 return invalid_schema_error(
@@ -241,9 +232,9 @@ impl TryFrom<&str> for TimestampOffset {
             };
             match (h.parse::<i32>(), m.parse::<i32>()) {
                 (Ok(hours), Ok(minutes))
-                    if (-23..24).contains(&hours) && (0..60).contains(&minutes) =>
+                    if (0..24).contains(&hours) && (0..60).contains(&minutes) =>
                 {
-                    Ok(TimestampOffset::new(Some(sign * (hours * 60 + minutes))))
+                    Ok(TimestampOffset::Known(sign * (hours * 60 + minutes)))
                 }
                 _ => invalid_schema_error(format!("invalid timestamp offset {}", string_value)),
             }
@@ -253,15 +244,20 @@ impl TryFrom<&str> for TimestampOffset {
 
 impl From<Option<i32>> for TimestampOffset {
     fn from(value: Option<i32>) -> Self {
-        Self { offset: value }
+        use TimestampOffset::*;
+        match value {
+            None => Unknown,
+            Some(offset_in_minutes) => Known(offset_in_minutes),
+        }
     }
 }
 
 impl Display for TimestampOffset {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match &self.offset {
-            None => write!(f, "-00:00"),
-            Some(offset) => {
+        use TimestampOffset::*;
+        match &self {
+            Unknown => write!(f, "-00:00"),
+            Known(offset) => {
                 let sign = if offset < &0 { "-" } else { "+" };
                 let hours = abs(*offset) / 60;
                 let minutes = abs(*offset) - hours * 60;
