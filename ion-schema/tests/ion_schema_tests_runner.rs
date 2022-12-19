@@ -20,54 +20,64 @@ const TEST_ROOT_DIR: &str = "../ion-schema-tests/";
 // `test-resources` don't support to provide a skip-list of test files
 const SKIP_LIST: &[&str] = &[
     "ion-schema-tests/constraints/all_of/validation.isl",
+    "ion-schema-tests/constraints/any_of/validation.isl",
+    "ion-schema-tests/constraints/byte_length/validation.isl",
+    "ion-schema-tests/constraints/codepoint_length/validation.isl",
+    "ion-schema-tests/constraints/container_length/validation.isl",
+    "ion-schema-tests/constraints/contains/validation.isl",
+    "ion-schema-tests/constraints/contains/various_values.isl",
+    "ion-schema-tests/constraints/content/validation_closed.isl",
+    "ion-schema-tests/constraints/content/validation_mixed.isl",
+    "ion-schema-tests/constraints/element/validation_inline_import.isl",
+    "ion-schema-tests/constraints/element/validation_int.isl",
+    "ion-schema-tests/constraints/element/validation_named_type.isl",
     "ion-schema-tests/constraints/fields/validation_base.isl",
     "ion-schema-tests/constraints/fields/validation_complex.isl",
     "ion-schema-tests/constraints/fields/validation_inlined_type.isl",
     "ion-schema-tests/constraints/fields/validation_nested.isl",
-    "ion-schema-tests/constraints/any_of/validation.isl",
     "ion-schema-tests/constraints/one_of/validation.isl",
-    "ion-schema-tests/constraints/type/validation.isl",
-    "ion-schema-tests/constraints/content/validation_closed.isl",
-    "ion-schema-tests/constraints/content/validation_mixed.isl",
-    "ion-schema-tests/constraints/contains/validation.isl",
-    "ion-schema-tests/constraints/contains/various_values.isl",
-    "ion-schema-tests/constraints/element/validation_inline_import.isl",
-    "ion-schema-tests/constraints/element/validation_int.isl",
-    "ion-schema-tests/constraints/element/validation_named_type.isl",
+    "ion-schema-tests/constraints/ordered_elements/occurs_3.isl", // https://github.com/amzn/ion-schema-rust/issues/56
+    "ion-schema-tests/constraints/ordered_elements/occurs_4.isl", // https://github.com/amzn/ion-schema-rust/issues/56
+    "ion-schema-tests/constraints/ordered_elements/validation_*.isl",
     "ion-schema-tests/constraints/precision/validation.isl",
-    "ion-schema-tests/constraints/scale/validation.isl",
     "ion-schema-tests/constraints/scale/invalid.isl",
+    "ion-schema-tests/constraints/scale/validation.isl",
+    "ion-schema-tests/constraints/timestamp_offset/validation.isl",
     "ion-schema-tests/constraints/timestamp_precision/validation.isl",
+    "ion-schema-tests/constraints/type/validation.isl",
     "ion-schema-tests/constraints/valid_values/all_types.isl",
-    "ion-schema-tests/constraints/valid_values/validation_list.isl",
     "ion-schema-tests/constraints/valid_values/validation_int_range.isl",
+    "ion-schema-tests/constraints/valid_values/validation_list.isl",
     "ion-schema-tests/constraints/valid_values/validation_list_mix_types_ranges.isl",
     "ion-schema-tests/constraints/valid_values/validation_list_timestamp_ranges.isl",
     "ion-schema-tests/constraints/valid_values/validation_ranges.isl",
     "ion-schema-tests/constraints/valid_values/validation_timestamp_range.isl",
-    "ion-schema-tests/constraints/timestamp_offset/validation.isl",
 ];
 
 #[test_resources("ion-schema-tests/core_types/*.isl")]
 #[test_resources("ion-schema-tests/constraints/all_of/*.isl")]
+#[test_resources("ion-schema-tests/constraints/annotations/*.isl")]
 #[test_resources("ion-schema-tests/constraints/any_of/*.isl")]
+#[test_resources("ion-schema-tests/constraints/byte_length/*.isl")]
+#[test_resources("ion-schema-tests/constraints/codepoint_length/*.isl")]
+#[test_resources("ion-schema-tests/constraints/container_length/*.isl")]
+#[test_resources("ion-schema-tests/constraints/contains/*.isl")]
+#[test_resources("ion-schema-tests/constraints/content/*.isl")]
+#[test_resources("ion-schema-tests/constraints/element/*.isl")]
 #[test_resources("ion-schema-tests/constraints/fields/*.isl")]
 #[test_resources("ion-schema-tests/constraints/not/invalid.isl")]
 #[test_resources("ion-schema-tests/constraints/not/nested.isl")]
 #[test_resources("ion-schema-tests/constraints/not/string.isl")]
 #[test_resources("ion-schema-tests/constraints/one_of/*.isl")]
-#[test_resources("ion-schema-tests/constraints/type/*.isl")]
-#[test_resources("ion-schema-tests/constraints/content/*.isl")]
-#[test_resources("ion-schema-tests/constraints/contains/*.isl")]
-#[test_resources("ion-schema-tests/constraints/element/*.isl")]
-#[test_resources("ion-schema-tests/constraints/annotations/*.isl")]
+#[test_resources("ion-schema-tests/constraints/ordered_elements/*.isl")]
 #[test_resources("ion-schema-tests/constraints/precision/*.isl")]
-#[test_resources("ion-schema-tests/constraints/scale/*.isl")]
-#[test_resources("ion-schema-tests/constraints/timestamp_precision/*.isl")]
-#[test_resources("ion-schema-tests/constraints/valid_values/*.isl")]
 #[test_resources("ion-schema-tests/constraints/regex/*.isl")]
-#[test_resources("ion-schema-tests/constraints/utf8_byte_length/*.isl")]
+#[test_resources("ion-schema-tests/constraints/scale/*.isl")]
 #[test_resources("ion-schema-tests/constraints/timestamp_offset/*.isl")]
+#[test_resources("ion-schema-tests/constraints/timestamp_precision/*.isl")]
+#[test_resources("ion-schema-tests/constraints/type/*.isl")]
+#[test_resources("ion-schema-tests/constraints/utf8_byte_length/*.isl")]
+#[test_resources("ion-schema-tests/constraints/valid_values/*.isl")]
 // `test_resources` breaks for test-case names containing `$` and it doesn't allow
 // to rename test-case names hence using `rstest` for `$*.isl` test files
 // For more information: https://github.com/frehberg/test-generator/issues/11
@@ -186,7 +196,7 @@ fn validation_tests(path_string: &str) {
     if let Some(schema_type) = type_ref {
         for valid_value in valid_values {
             if let Err(error) = schema_type.validate(&valid_value) {
-                failed_tests.push(format!("{} for {:?}", error, valid_value));
+                failed_tests.push(format!("{:#?} for {:?}", error, valid_value));
             }
         }
 
