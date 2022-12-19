@@ -4,7 +4,9 @@ use ion_rs::types::timestamp::Precision;
 use ion_rs::value::owned::{text_token, Element};
 use ion_rs::value::IonElement;
 use ion_rs::Timestamp;
+use num_traits::abs;
 use std::cmp::Ordering;
+use std::fmt;
 use std::fmt::{Display, Formatter};
 
 /// Represents an annotation for `annotations` constraint.
@@ -189,6 +191,78 @@ impl Display for ValidValue {
         match self {
             ValidValue::Range(range) => write!(f, "{}", range),
             ValidValue::Element(element) => write!(f, "{}", element),
+        }
+    }
+}
+
+/// Represent a timestamp offset
+/// Known timestamp offset value is stored in minutes as i32 value
+/// For example, "+07::00" wil be stored as `TimestampOffset::Known(420)`
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TimestampOffset {
+    Known(i32), // represents known timestamp offset in minutes
+    Unknown,    // represents unknown timestamp offset "-00:00"
+}
+
+impl TryFrom<&str> for TimestampOffset {
+    type Error = IonSchemaError;
+
+    fn try_from(string_value: &str) -> Result<Self, Self::Error> {
+        // unknown offset will be stored as None
+        if string_value == "-00:00" {
+            Ok(TimestampOffset::Unknown)
+        } else {
+            if string_value.len() != 6 || string_value.chars().nth(3).unwrap() != ':' {
+                return invalid_schema_error(
+                    "`timestamp_offset` values must be of the form \"[+|-]hh:mm\"",
+                );
+            }
+            // convert string offset value into an i32 value of offset in minutes
+            let h = &string_value[1..3];
+            let m = &string_value[4..6];
+            let sign = match &string_value[..1] {
+                "-" => -1,
+                "+" => 1,
+                _ => {
+                    return invalid_schema_error(format!(
+                        "unrecognized `timestamp_offset` sign '{}'",
+                        &string_value[..1]
+                    ))
+                }
+            };
+            match (h.parse::<i32>(), m.parse::<i32>()) {
+                (Ok(hours), Ok(minutes))
+                    if (0..24).contains(&hours) && (0..60).contains(&minutes) =>
+                {
+                    Ok(TimestampOffset::Known(sign * (hours * 60 + minutes)))
+                }
+                _ => invalid_schema_error(format!("invalid timestamp offset {}", string_value)),
+            }
+        }
+    }
+}
+
+impl From<Option<i32>> for TimestampOffset {
+    fn from(value: Option<i32>) -> Self {
+        use TimestampOffset::*;
+        match value {
+            None => Unknown,
+            Some(offset_in_minutes) => Known(offset_in_minutes),
+        }
+    }
+}
+
+impl Display for TimestampOffset {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        use TimestampOffset::*;
+        match &self {
+            Unknown => write!(f, "-00:00"),
+            Known(offset) => {
+                let sign = if offset < &0 { "-" } else { "+" };
+                let hours = abs(*offset) / 60;
+                let minutes = abs(*offset) - hours * 60;
+                write!(f, "{}{:02}:{:02}", sign, hours, minutes)
+            }
         }
     }
 }

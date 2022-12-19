@@ -670,6 +670,17 @@ mod type_definition_tests {
             ).unwrap(),
             Constraint::type_constraint(34)
         ])
+    ),
+    case::timestamp_offset_constraint(
+        /* For a schema with timestamp_offset constraint as below:
+            { timestamp_offset: ["-00:00"] }
+        */
+        IslType::anonymous(
+            [IslConstraint::timestamp_offset(vec!["-00:00".try_into().unwrap()])]
+        ),
+        TypeDefinition::anonymous([Constraint::timestamp_offset(vec!["-00:00".try_into().unwrap()]),
+            Constraint::type_constraint(34)
+        ])
     )
     )]
     fn isl_type_to_type_definition(isl_type: IslType, type_def: TypeDefinition) {

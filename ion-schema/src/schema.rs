@@ -286,6 +286,12 @@ mod schema_tests {
                     type:: { name: regex_type, regex: "[abc]" }
                  "#).into_iter(),
         1 // this includes named type regex_type
+    ),
+    case::timestamp_offset_constraint(
+        load(r#" // For a schema with timestamp_offset constraint as below:
+                        type:: { name: timestamp_offset_type, timestamp_offset: ["+07:00", "+08:00", "+08:45", "+09:00"] }
+                     "#).into_iter(),
+        1 // this includes named type regex_type
     )
     )]
     fn owned_elements_to_schema<I: Iterator<Item = Element>>(
@@ -1078,6 +1084,25 @@ mod schema_tests {
                             type::{ name: regex_type, regex: "ab|cd|ef" }
                     "#),
             "regex_type"
+        ),
+        case::timestamp_offset_constraint(
+            load(r#"
+                      2000T
+                      2000-01-01T00:00:00-00:00   // unknown local offset
+                      2000-01-01T00:00:00Z        // UTC
+                      2000-01-01T00:00:00+00:00   // UTC
+                      2000-01-01T00:00:00+01:00
+                      2000-01-01T00:00:00-01:01
+                    "#),
+            load(r#"
+                      2000-01-01T00:00:00-01:00   
+                      2000-01-01T00:00:00+01:01  
+                      2000-01-01T00:00:00+07:00
+                    "#),
+            load_schema_from_text(r#" // For a schema with timestamp_offset constraint as below:
+                            type::{ name: timestamp_offset_type, timestamp_offset: ["-00:00", "+00:00", "+01:00", "-01:01"] }
+                    "#),
+            "timestamp_offset_type"
         ),
     )]
     fn type_validation(

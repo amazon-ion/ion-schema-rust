@@ -350,6 +350,14 @@ mod isl_tests {
             ]
         )
     ),
+    case::timestamp_offset_constraint(
+        load_anonymous_type(r#" // For a schema with timestamp_offset constraint as below:
+                            { timestamp_offset: ["+00:00"] }
+                        "#),
+        IslType::anonymous(
+        [IslConstraint::timestamp_offset(vec!["+00:00".try_into().unwrap()])]
+    )
+    )
     )]
     fn owned_struct_to_isl_type(isl_type1: IslType, isl_type2: IslType) {
         // assert if both the IslType are same in terms of constraints and name

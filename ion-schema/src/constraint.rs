@@ -1,7 +1,7 @@
 use crate::isl::isl_constraint::{IslConstraint, IslRegexConstraint};
 use crate::isl::isl_range::{Range, RangeImpl};
 use crate::isl::isl_type_reference::IslTypeRef;
-use crate::isl::util::{Annotation, TimestampPrecision, ValidValue};
+use crate::isl::util::{Annotation, TimestampOffset, TimestampPrecision, ValidValue};
 use crate::result::{
     invalid_schema_error, invalid_schema_error_raw, IonSchemaError, IonSchemaResult,
     ValidationResult,
@@ -50,6 +50,7 @@ pub enum Constraint {
     Precision(PrecisionConstraint),
     Regex(RegexConstraint),
     Scale(ScaleConstraint),
+    TimestampOffset(TimestampOffsetConstraint),
     TimestampPrecision(TimestampPrecisionConstraint),
     Type(TypeConstraint),
     Utf8ByteLength(Utf8ByteLengthConstraint),
@@ -158,6 +159,11 @@ impl Constraint {
         Constraint::TimestampPrecision(TimestampPrecisionConstraint::new(
             Range::TimestampPrecision(precision),
         ))
+    }
+
+    /// Creates an [Constraint::TimestampOffset] using the offset list specified in it
+    pub fn timestamp_offset(offsets: Vec<TimestampOffset>) -> Constraint {
+        Constraint::TimestampOffset(TimestampOffsetConstraint::new(offsets))
     }
 
     /// Creates a [Constraint::Utf8ByteLength] from a [Range] specifying a length range.
@@ -312,6 +318,9 @@ impl Constraint {
             IslConstraint::Scale(scale_range) => Ok(Constraint::Scale(ScaleConstraint::new(
                 scale_range.to_owned(),
             ))),
+            IslConstraint::TimestampOffset(timestamp_offset) => Ok(Constraint::TimestampOffset(
+                TimestampOffsetConstraint::new(timestamp_offset.valid_offsets().to_vec()),
+            )),
             IslConstraint::TimestampPrecision(timestamp_precision_range) => {
                 Ok(Constraint::TimestampPrecision(
                     TimestampPrecisionConstraint::new(timestamp_precision_range.to_owned()),
@@ -360,6 +369,9 @@ impl Constraint {
             Constraint::Precision(precision) => precision.validate(value, type_store),
             Constraint::Regex(regex) => regex.validate(value, type_store),
             Constraint::Scale(scale) => scale.validate(value, type_store),
+            Constraint::TimestampOffset(timestamp_offset) => {
+                timestamp_offset.validate(value, type_store)
+            }
             Constraint::TimestampPrecision(timestamp_precision) => {
                 timestamp_precision.validate(value, type_store)
             }
@@ -1853,6 +1865,54 @@ impl ConstraintValidator for Utf8ByteLengthConstraint {
                 &format!(
                     "expected utf8 byte length {:?} found {}",
                     length_range, size
+                ),
+            ));
+        }
+
+        Ok(())
+    }
+}
+
+/// Implements Ion Schema's `timestamp_offset` constraint
+/// [timestamp_offset]: https://amzn.github.io/ion-schema/docs/isl-1-0/spec#timestamp_offset
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimestampOffsetConstraint {
+    valid_offsets: Vec<TimestampOffset>,
+}
+
+impl TimestampOffsetConstraint {
+    pub fn new(valid_offsets: Vec<TimestampOffset>) -> Self {
+        Self { valid_offsets }
+    }
+
+    pub fn valid_offsets(&self) -> &Vec<TimestampOffset> {
+        &self.valid_offsets
+    }
+}
+
+impl ConstraintValidator for TimestampOffsetConstraint {
+    fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
+        // get timestamp value
+        let timestamp_value = value
+            .expect_element_of_type(&[IonType::Timestamp], "timestamp_offset")?
+            .as_timestamp()
+            .unwrap();
+
+        // get isl timestamp precision as a range
+        let valid_offsets: &Vec<TimestampOffset> = self.valid_offsets();
+
+        // return a Violation if the value didn't follow timestamp precision constraint
+        if !valid_offsets.contains(&timestamp_value.offset().into()) {
+            let formatted_valid_offsets: Vec<String> =
+                valid_offsets.iter().map(|t| format!("{}", t)).collect();
+
+            return Err(Violation::new(
+                "timestamp_offset",
+                ViolationCode::InvalidLength,
+                &format!(
+                    "expected timestamp offset from {:?} found {}",
+                    formatted_valid_offsets,
+                    <Option<i32> as Into<TimestampOffset>>::into(timestamp_value.offset())
                 ),
             ));
         }
