@@ -757,7 +757,7 @@ impl ConstraintValidator for OrderedElementsConstraint {
                 Some(sequence) => {
                     let itr: Box<dyn Iterator<Item = &Element>> = Box::new(sequence.iter());
                     itr.peekable()
-                },
+                }
             },
             IonSchemaElement::Document(document) => {
                 let itr: Box<dyn Iterator<Item = &Element>> = Box::new(document.iter());
