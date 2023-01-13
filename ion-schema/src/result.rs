@@ -40,6 +40,26 @@ pub enum IonSchemaError {
     },
 }
 
+// io::Error does not implement PartialEq, which precludes us from simply deriving an implementation.
+impl PartialEq for IonSchemaError {
+    fn eq(&self, other: &Self) -> bool {
+        use IonSchemaError::*;
+        match (self, other) {
+            // We can compare the io::Errors' ErrorKinds, offering a weak definition of equality.
+            (IoError { source: s1 }, IoError { source: s2 }) => s1.kind() == s2.kind(),
+            (
+                UnresolvableSchemaError { description: s1 },
+                UnresolvableSchemaError { description: s2 },
+            ) => s1 == s2,
+            (InvalidSchemaError { description: s1 }, InvalidSchemaError { description: s2 }) => {
+                s1 == s2
+            }
+            (IonError { source: s1 }, IonError { source: s2 }) => s1 == s2,
+            _ => false,
+        }
+    }
+}
+
 /// A convenience method for creating an IonSchemaResult containing an IonSchemaError::UnresolvableSchemaError
 /// with the provided description text.
 pub fn unresolvable_schema_error<T, S: AsRef<str>>(description: S) -> IonSchemaResult<T> {

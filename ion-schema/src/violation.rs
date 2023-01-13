@@ -3,7 +3,7 @@ use std::fmt::Formatter;
 use thiserror::Error;
 
 /// Represents [Violation] found during validation with detailed error message, error code and the constraint for which the validation failed
-#[derive(Debug, Clone, Error)]
+#[derive(Debug, Clone, PartialEq, Error)]
 pub struct Violation {
     constraint: String,  // represents the constraint that created this violation
     code: ViolationCode, // represents an error code that indicates the type of the violation
@@ -47,7 +47,7 @@ impl fmt::Display for Violation {
 }
 
 /// Represents violation code that indicates the type of the violation
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ViolationCode {
     AllTypesNotMatched,
     AnnotationMismatched,
