@@ -147,9 +147,7 @@ pub fn validate(ion: &str, schema: &str, schema_type: &str) -> SchemaValidationR
                 "".to_string(),
                 ion.to_string(),
                 true,
-                format!(
-                    "Type definition: {schema_type} does not exist in this schema"
-                ),
+                format!("Type definition: {schema_type} does not exist in this schema"),
             )
         }
     };

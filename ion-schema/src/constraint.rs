@@ -689,9 +689,7 @@ impl OrderedElementsConstraint {
                 return Err(Violation::new(
                     "ordered_elements",
                     ViolationCode::TypeMismatched,
-                    &format!(
-                        "Expected {occurs_range} of type {type_def}: found {count}"
-                    ),
+                    &format!("Expected {occurs_range} of type {type_def}: found {count}"),
                 ));
             }
         }
@@ -719,9 +717,7 @@ impl OrderedElementsConstraint {
             return Err(Violation::new(
                 "ordered_elements",
                 ViolationCode::TypeMismatched,
-                &format!(
-                    "Expected {occurs_range} of type {type_def}: found {count}"
-                ),
+                &format!("Expected {occurs_range} of type {type_def}: found {count}"),
             ));
         }
 
@@ -844,9 +840,7 @@ impl ConstraintValidator for FieldsConstraint {
                     violations.push(Violation::new(
                         "fields",
                         ViolationCode::InvalidOpenContent,
-                        &format!(
-                            "Found open content in the struct: {field_name}: {value}"
-                        ),
+                        &format!("Found open content in the struct: {field_name}: {value}"),
                     ));
                 }
             }
@@ -1421,9 +1415,7 @@ impl ConstraintValidator for PrecisionConstraint {
             return Err(Violation::new(
                 "precision",
                 ViolationCode::InvalidLength,
-                &format!(
-                    "expected precision {precision_range} found {value_precision}"
-                ),
+                &format!("expected precision {precision_range} found {value_precision}"),
             ));
         }
 

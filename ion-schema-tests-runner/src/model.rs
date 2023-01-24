@@ -102,9 +102,7 @@ impl TryFrom<Element> for TestCaseVec {
                     })
                 }
             } else {
-                return Err(format!(
-                    "Malformed test case - unknown test type: {value}"
-                ));
+                return Err(format!("Malformed test case - unknown test type: {value}"));
             }
         } else if test_case_struct.get("type").is_some()
             && (test_case_struct.get("should_accept_as_valid").is_some()

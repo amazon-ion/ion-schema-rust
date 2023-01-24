@@ -433,8 +433,8 @@ impl IslConstraint {
                     }
                     _ => {
                         return invalid_schema_error(format!(
-                            "`timestamp_offset` requires a list of offset strings, but found: {value}"
-                        ))
+                        "`timestamp_offset` requires a list of offset strings, but found: {value}"
+                    ))
                     }
                 };
                 Ok(IslConstraint::TimestampOffset(
