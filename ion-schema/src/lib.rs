@@ -98,7 +98,7 @@ impl IonSchemaElement {
                 Err(Violation::new(
                     constraint_name,
                     ViolationCode::TypeMismatched,
-                    &format!("expected {:?} but found document", types),
+                    &format!("expected {types:?} but found document"),
                 ))
             }
         }
@@ -109,12 +109,12 @@ impl Display for IonSchemaElement {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
             IonSchemaElement::SingleElement(element) => {
-                write!(f, "{}", element)
+                write!(f, "{element}")
             }
             IonSchemaElement::Document(document) => {
                 write!(f, "/* Ion document */ ")?;
                 for value in document {
-                    write!(f, "{} ", value)?;
+                    write!(f, "{value} ")?;
                 }
                 write!(f, "/* end */")
             }

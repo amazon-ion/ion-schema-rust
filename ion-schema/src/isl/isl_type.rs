@@ -138,7 +138,7 @@ impl IslTypeImpl {
         // set the isl type name for any error that is returned while parsing its constraints
         let isl_type_name = match type_name.to_owned() {
             Some(name) => name,
-            None => format!("{:?}", ion_struct),
+            None => format!("{ion_struct:?}"),
         };
 
         // parses all the constraints inside a Type

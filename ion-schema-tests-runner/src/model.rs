@@ -41,7 +41,7 @@ impl TryFrom<Element> for TestCaseVec {
     type Error = String;
     fn try_from(value: Element) -> Result<Self, Self::Error> {
         let test_case_struct = match value.as_struct() {
-            None => Err(format!("Malformed test case: {}", value)),
+            None => Err(format!("Malformed test case: {value}")),
             Some(struct_) => Ok(struct_),
         }?;
 
@@ -103,8 +103,7 @@ impl TryFrom<Element> for TestCaseVec {
                 }
             } else {
                 return Err(format!(
-                    "Malformed test case - unknown test type: {}",
-                    value
+                    "Malformed test case - unknown test type: {value}"
                 ));
             }
         } else if test_case_struct.get("type").is_some()

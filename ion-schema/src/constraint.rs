@@ -424,7 +424,7 @@ impl ConstraintValidator for AllOfConstraint {
             return Err(Violation::with_violations(
                 "all_of",
                 ViolationCode::AllTypesNotMatched,
-                &format!(
+                format!(
                     "value matches {} types, expected {}",
                     valid_types.len(),
                     self.type_ids.len()
@@ -535,7 +535,7 @@ impl ConstraintValidator for OneOfConstraint {
             _ => Err(Violation::with_violations(
                 "one_of",
                 ViolationCode::MoreThanOneTypeMatched,
-                &format!("value matches {} types, expected 1", total_valid_types),
+                format!("value matches {total_valid_types} types, expected 1"),
                 violations,
             )),
         }
@@ -690,8 +690,7 @@ impl OrderedElementsConstraint {
                     "ordered_elements",
                     ViolationCode::TypeMismatched,
                     &format!(
-                        "Expected {} of type {}: found {}",
-                        occurs_range, type_def, count
+                        "Expected {occurs_range} of type {type_def}: found {count}"
                     ),
                 ));
             }
@@ -721,8 +720,7 @@ impl OrderedElementsConstraint {
                 "ordered_elements",
                 ViolationCode::TypeMismatched,
                 &format!(
-                    "Expected {} of type {}: found {}",
-                    occurs_range, type_def, count
+                    "Expected {occurs_range} of type {type_def}: found {count}"
                 ),
             ));
         }
@@ -743,10 +741,10 @@ impl ConstraintValidator for OrderedElementsConstraint {
                     return Err(Violation::with_violations(
                         "ordered_elements",
                         ViolationCode::TypeMismatched,
-                        &format!(
+                        format!(
                             "expected list/sexp ion found {}",
                             if element.is_null() {
-                                format!("{}", element)
+                                format!("{element}")
                             } else {
                                 format!("{}", element.ion_type())
                             }
@@ -781,7 +779,7 @@ impl ConstraintValidator for OrderedElementsConstraint {
                 "ordered_elements",
                 ViolationCode::TypeMismatched,
                 // unwrap as we already verified with peek that there is a value
-                &format!("Unexpected type found {}", values_iter.next().unwrap()),
+                format!("Unexpected type found {}", values_iter.next().unwrap()),
                 violations,
             ))
         } else {
@@ -847,8 +845,7 @@ impl ConstraintValidator for FieldsConstraint {
                         "fields",
                         ViolationCode::InvalidOpenContent,
                         &format!(
-                            "Found open content in the struct: {}: {}",
-                            field_name, value
+                            "Found open content in the struct: {field_name}: {value}"
                         ),
                     ));
                 }
@@ -928,7 +925,7 @@ impl ConstraintValidator for ContainsConstraint {
                             &format!(
                                 "expected list/sexp found {}",
                                 if element.is_null() {
-                                    format!("{}", element)
+                                    format!("{element}")
                                 } else {
                                     format!("{}", element.ion_type())
                                 }
@@ -957,7 +954,7 @@ impl ConstraintValidator for ContainsConstraint {
             return Err(Violation::new(
                 "contains",
                 ViolationCode::MissingValue,
-                &format!("{} has missing value(s): {:?}", value, missing_values),
+                &format!("{value} has missing value(s): {missing_values:?}"),
             ));
         }
 
@@ -992,7 +989,7 @@ impl ConstraintValidator for ContainerLengthConstraint {
                     return Err(Violation::new(
                         "container_length",
                         ViolationCode::TypeMismatched,
-                        &format!("expected a container found {}", element),
+                        &format!("expected a container found {element}"),
                     ));
                 }
 
@@ -1025,7 +1022,7 @@ impl ConstraintValidator for ContainerLengthConstraint {
             return Err(Violation::new(
                 "container_length",
                 ViolationCode::InvalidLength,
-                &format!("expected container length {} found {}", length_range, size),
+                &format!("expected container length {length_range} found {size}"),
             ));
         }
 
@@ -1067,7 +1064,7 @@ impl ConstraintValidator for ByteLengthConstraint {
             return Err(Violation::new(
                 "byte_length",
                 ViolationCode::InvalidLength,
-                &format!("expected byte length {} found {}", length_range, size),
+                &format!("expected byte length {length_range} found {size}"),
             ));
         }
 
@@ -1110,7 +1107,7 @@ impl ConstraintValidator for CodepointLengthConstraint {
             return Err(Violation::new(
                 "codepoint_length",
                 ViolationCode::InvalidLength,
-                &format!("expected codepoint length {} found {}", length_range, size),
+                &format!("expected codepoint length {length_range} found {size}"),
             ));
         }
 
@@ -1157,7 +1154,7 @@ impl ConstraintValidator for ElementConstraint {
                     return Err(Violation::new(
                         "element",
                         ViolationCode::TypeMismatched,
-                        &format!("expected a container but found {}", element),
+                        &format!("expected a container but found {element}"),
                     ));
                 }
 
@@ -1299,7 +1296,7 @@ impl AnnotationsConstraint {
                 "annotations",
                 ViolationCode::AnnotationMismatched,
                 // unwrap as we already verified with peek that there is a value
-                &format!(
+                format!(
                     "Unexpected annotations found {}",
                     value_annotations.next().unwrap()
                 ),
@@ -1338,7 +1335,7 @@ impl AnnotationsConstraint {
             return Err(Violation::with_violations(
                 "annotations",
                 ViolationCode::MissingAnnotation,
-                &format!("missing annotation(s): {:?}", missing_annotations),
+                format!("missing annotation(s): {missing_annotations:?}"),
                 violations,
             ));
         }
@@ -1425,8 +1422,7 @@ impl ConstraintValidator for PrecisionConstraint {
                 "precision",
                 ViolationCode::InvalidLength,
                 &format!(
-                    "expected precision {} found {}",
-                    precision_range, value_precision
+                    "expected precision {precision_range} found {value_precision}"
                 ),
             ));
         }
@@ -1469,7 +1465,7 @@ impl ConstraintValidator for ScaleConstraint {
             return Err(Violation::new(
                 "scale",
                 ViolationCode::InvalidLength,
-                &format!("expected scale {} found {}", scale_range, value_scale),
+                &format!("expected scale {scale_range} found {value_scale}"),
             ));
         }
 
@@ -1554,10 +1550,10 @@ impl Display for ValidValuesConstraint {
         write!(f, "[ ")?;
         let mut itr = self.valid_values.iter();
         if let Some(item) = itr.next() {
-            write!(f, "{}", item)?;
+            write!(f, "{item}")?;
         }
         for item in itr {
-            write!(f, ", {}", item)?;
+            write!(f, ", {item}")?;
         }
         write!(f, " ]")
     }
@@ -1647,7 +1643,7 @@ impl RegexConstraint {
                     sb.push(ch);
                     if let Some(ch) = si.next() {
                         if ch == '?' {
-                            return invalid_schema_error(format!("invalid character {}", ch));
+                            return invalid_schema_error(format!("invalid character {ch}"));
                         }
                         sb.push(ch)
                     }
@@ -1666,8 +1662,7 @@ impl RegexConstraint {
                             'S' => sb.push_str("[^ \\f\\n\\r\\t]"),
                             _ => {
                                 return invalid_schema_error(format!(
-                                    "invalid escape character {}",
-                                    ch,
+                                    "invalid escape character {ch}",
                                 ))
                             }
                         }
@@ -1702,8 +1697,7 @@ impl RegexConstraint {
                             // as user is specifying a new char class
                             _ => {
                                 return invalid_schema_error(format!(
-                                    "invalid sequence '\\{}' in character class",
-                                    ch2
+                                    "invalid sequence '\\{ch2}' in character class"
                                 ))
                             }
                         }
@@ -1743,7 +1737,7 @@ impl RegexConstraint {
                                 complete = true;
                                 break;
                             }
-                            _ => return invalid_schema_error(format!("invalid character {}", ch)),
+                            _ => return invalid_schema_error(format!("invalid character {ch}")),
                         }
                     }
 
@@ -1756,9 +1750,9 @@ impl RegexConstraint {
             if sb.len() > initial_length {
                 if let Some(ch) = si.peek().cloned() {
                     match ch {
-                        '?' => return invalid_schema_error(format!("invalid character {}", ch)),
+                        '?' => return invalid_schema_error(format!("invalid character {ch}")),
 
-                        '+' => return invalid_schema_error(format!("invalid character {}", ch)),
+                        '+' => return invalid_schema_error(format!("invalid character {ch}")),
                         _ => {}
                     }
                 }
@@ -1859,7 +1853,7 @@ impl ConstraintValidator for Utf8ByteLengthConstraint {
             return Err(Violation::new(
                 "utf8_byte_length",
                 ViolationCode::InvalidLength,
-                &format!("expected utf8 byte length {} found {}", length_range, size),
+                &format!("expected utf8 byte length {length_range} found {size}"),
             ));
         }
 
@@ -1898,7 +1892,7 @@ impl ConstraintValidator for TimestampOffsetConstraint {
         // return a Violation if the value didn't follow timestamp precision constraint
         if !valid_offsets.contains(&timestamp_value.offset().into()) {
             let formatted_valid_offsets: Vec<String> =
-                valid_offsets.iter().map(|t| format!("{}", t)).collect();
+                valid_offsets.iter().map(|t| format!("{t}")).collect();
 
             return Err(Violation::new(
                 "timestamp_offset",

@@ -157,7 +157,7 @@ impl TypeValidator for BuiltInTypeDefinition {
                             return Err(Violation::new(
                                 "type_constraint",
                                 ViolationCode::InvalidNull,
-                                &format!("expected type {:?} doesn't allow null", ion_type),
+                                &format!("expected type {ion_type:?} doesn't allow null"),
                             ));
                         }
                         if element.ion_type() != *ion_type {
@@ -177,7 +177,7 @@ impl TypeValidator for BuiltInTypeDefinition {
                     IonSchemaElement::Document(document) => Err(Violation::new(
                         "type_constraint",
                         ViolationCode::TypeMismatched,
-                        &format!("expected type {:?}, found document", ion_type),
+                        &format!("expected type {ion_type:?}, found document"),
                     )),
                 }
             }
@@ -207,8 +207,8 @@ impl TypeValidator for BuiltInTypeDefinition {
 impl Display for BuiltInTypeDefinition {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match &self {
-            BuiltInTypeDefinition::Atomic(ion_type, _) => write!(f, "{}", ion_type),
-            BuiltInTypeDefinition::Derived(type_def) => write!(f, "{}", type_def),
+            BuiltInTypeDefinition::Atomic(ion_type, _) => write!(f, "{ion_type}"),
+            BuiltInTypeDefinition::Derived(type_def) => write!(f, "{type_def}"),
         }
     }
 }
@@ -273,13 +273,13 @@ impl Display for TypeDefinition {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match &self {
             TypeDefinition::Named(named_type_def) => {
-                write!(f, "{}", named_type_def)
+                write!(f, "{named_type_def}")
             }
             TypeDefinition::Anonymous(anonymous_type_def) => {
-                write!(f, "{}", anonymous_type_def)
+                write!(f, "{anonymous_type_def}")
             }
             TypeDefinition::BuiltIn(builtin_type_def) => {
-                write!(f, "{}", builtin_type_def)
+                write!(f, "{builtin_type_def}")
             }
         }
     }
@@ -506,7 +506,7 @@ impl Display for TypeDefinitionImpl {
             Some(type_name) => type_name.to_owned(),
         };
 
-        write!(f, "{}", type_def_name)
+        write!(f, "{type_def_name}")
     }
 }
 

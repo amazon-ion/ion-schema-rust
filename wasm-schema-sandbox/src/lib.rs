@@ -148,8 +148,7 @@ pub fn validate(ion: &str, schema: &str, schema_type: &str) -> SchemaValidationR
                 ion.to_string(),
                 true,
                 format!(
-                    "Type definition: {} does not exist in this schema",
-                    schema_type
+                    "Type definition: {schema_type} does not exist in this schema"
                 ),
             )
         }
@@ -157,7 +156,7 @@ pub fn validate(ion: &str, schema: &str, schema_type: &str) -> SchemaValidationR
 
     log!(
         "{}",
-        format!("got type definition for: {} successfully!", schema_type)
+        format!("got type definition for: {schema_type} successfully!")
     );
 
     // get Element from given ion text
@@ -171,7 +170,7 @@ pub fn validate(ion: &str, schema: &str, schema_type: &str) -> SchemaValidationR
                 "".to_string(),
                 ion.to_string(),
                 true,
-                format!("Can not parse given Ion value: {} for validation", ion),
+                format!("Can not parse given Ion value: {ion} for validation"),
             )
         }
     };
@@ -186,7 +185,7 @@ pub fn validate(ion: &str, schema: &str, schema_type: &str) -> SchemaValidationR
     let violation = match &result {
         Ok(_) => "".to_string(),
         Err(violation) => {
-            format!("{:#?}", violation)
+            format!("{violation:#?}")
         }
     };
 
@@ -195,7 +194,7 @@ pub fn validate(ion: &str, schema: &str, schema_type: &str) -> SchemaValidationR
     let result: SchemaValidationResult = SchemaValidationResult::new(
         result.is_ok(),
         violation,
-        format!("{}", value),
+        format!("{value}"),
         false,
         "".to_string(),
     );

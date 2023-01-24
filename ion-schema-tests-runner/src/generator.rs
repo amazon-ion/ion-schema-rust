@@ -91,8 +91,8 @@ fn generate_test_cases_for_file(ctx: Context) -> TokenStream {
     let schema_id = match ctx.current_dir.strip_prefix(ctx.root_dir) {
         Ok(p) => p
             .to_str()
-            .unwrap_or_else(|| panic!("Path cannot be converted to a string: {:?}", p)),
-        Err(e) => panic!("Path is not in the root {} – {}", path_string, e),
+            .unwrap_or_else(|| panic!("Path cannot be converted to a string: {p:?}")),
+        Err(e) => panic!("Path is not in the root {path_string} – {e}"),
     };
 
     let mut test_case_tokens: Vec<TokenStream> = Vec::new();
@@ -118,16 +118,16 @@ fn generate_test_cases_for_file(ctx: Context) -> TokenStream {
 
     // get the schema content from given schema file path
     let ion_content = fs::read(ctx.current_dir.as_path())
-        .unwrap_or_else(|e| panic!("Unable to read {path_string} – {}", e));
+        .unwrap_or_else(|e| panic!("Unable to read {path_string} – {e}"));
     let schema_content = element_reader()
         .read_all(&ion_content)
-        .unwrap_or_else(|e| panic!("Error in {path_string} – {:?}", e));
+        .unwrap_or_else(|e| panic!("Error in {path_string} – {e:?}"));
 
     for element in schema_content {
         if element.has_annotation("$test") {
             let test_cases: TestCaseVec = element
                 .try_into()
-                .unwrap_or_else(|e| panic!("Error in {path_string} - {}", e));
+                .unwrap_or_else(|e| panic!("Error in {path_string} - {e}"));
 
             for test_case in test_cases.iter() {
                 let test_case = test_case.clone();

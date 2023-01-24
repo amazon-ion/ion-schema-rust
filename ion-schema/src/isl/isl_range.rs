@@ -235,15 +235,13 @@ impl Range {
                 if v >= min_value {
                     match v.try_into() {
                         Err(_) => invalid_schema_error(format!(
-                            "Expected non negative integer greater than {} for range boundary values, found {}",
-                            min_value, v
+                            "Expected non negative integer greater than {min_value} for range boundary values, found {v}"
                         )),
                         Ok(non_negative_int_value) => Ok(non_negative_int_value),
                     }
                 } else {
                     invalid_schema_error(format!(
-                        "Expected non negative integer greater than {} for range boundary values, found {}",
-                        min_value, v
+                        "Expected non negative integer greater than {min_value} for range boundary values, found {v}"
                     ))
                 }
             }
@@ -255,15 +253,13 @@ impl Range {
                     if v >= &BigInt::from(min_value) {
                         match v.try_into() {
                             Err(_) => invalid_schema_error(format!(
-                                "Expected non negative integer greater than {} for range boundary values, found {}",
-                                min_value,v
+                                "Expected non negative integer greater than {min_value} for range boundary values, found {v}"
                             )),
                             Ok(non_negative_int_value) => Ok(non_negative_int_value),
                         }
                     } else {
                         invalid_schema_error(format!(
-                            "Expected non negative integer greater than {} for range boundary values, found {}",
-                            min_value, v
+                            "Expected non negative integer greater than {min_value} for range boundary values, found {v}"
                         ))
                     }
                 }
@@ -363,15 +359,15 @@ impl From<NumberRange> for Range {
 impl Display for Range {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         match &self {
-            Range::Integer(integer) => write!(f, "{}", integer),
+            Range::Integer(integer) => write!(f, "{integer}"),
             Range::NonNegativeInteger(non_negative_integer) => {
-                write!(f, "{}", non_negative_integer)
+                write!(f, "{non_negative_integer}")
             }
-            Range::TimestampPrecision(timestamp_precision) => write!(f, "{}", timestamp_precision),
-            Range::Timestamp(timestamp) => write!(f, "{}", timestamp),
-            Range::Decimal(decimal) => write!(f, "{}", decimal),
-            Range::Float(float) => write!(f, "{}", float),
-            Range::Number(number) => write!(f, "{}", number),
+            Range::TimestampPrecision(timestamp_precision) => write!(f, "{timestamp_precision}"),
+            Range::Timestamp(timestamp) => write!(f, "{timestamp}"),
+            Range::Decimal(decimal) => write!(f, "{decimal}"),
+            Range::Float(float) => write!(f, "{float}"),
+            Range::Number(number) => write!(f, "{number}"),
         }
     }
 }
@@ -770,8 +766,7 @@ impl TypedRangeBoundaryValue {
                     range_boundary_type,
                 ))),
                 _ => invalid_schema_error(format!(
-                    "{:?} ranges can not be constructed for decimal boundary values",
-                    range_type
+                    "{range_type:?} ranges can not be constructed for decimal boundary values"
                 )),
             },
             IonType::Float => match range_type {
@@ -786,8 +781,7 @@ impl TypedRangeBoundaryValue {
                     range_boundary_type,
                 ))),
                 _ => invalid_schema_error(format!(
-                    "{:?} ranges can not be constructed for float boundary values",
-                    range_type
+                    "{range_type:?} ranges can not be constructed for float boundary values"
                 )),
             },
             IonType::Timestamp => match range_type {
@@ -798,8 +792,7 @@ impl TypedRangeBoundaryValue {
                     )),
                 ),
                 _ => invalid_schema_error(format!(
-                    "{:?} ranges can not be constructed for timestamp boundary values",
-                    range_type
+                    "{range_type:?} ranges can not be constructed for timestamp boundary values"
                 )),
             },
             _ => invalid_schema_error(format!(
@@ -870,7 +863,7 @@ impl<T: Display> Display for RangeBoundaryValue<T> {
                 Max => "max".to_string(),
                 Min => "min".to_string(),
                 Value(value, range_boundary_type) => {
-                    format!("{}{}", range_boundary_type, value)
+                    format!("{range_boundary_type}{value}")
                 }
             }
         )
@@ -939,7 +932,7 @@ impl TryFrom<f64> for Number {
                 PRECISION = f64::MANTISSA_DIGITS as usize
             ))
             .map_err(|err| {
-                invalid_schema_error_raw(format!("Cannot convert f64 to BigDecimal for {}", value))
+                invalid_schema_error_raw(format!("Cannot convert f64 to BigDecimal for {value}"))
             })?,
         })
     }
