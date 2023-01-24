@@ -60,8 +60,6 @@ impl PartialEq for IonSchemaError {
     }
 }
 
-impl Eq for IonSchemaError {}
-
 /// A convenience method for creating an IonSchemaResult containing an IonSchemaError::UnresolvableSchemaError
 /// with the provided description text.
 pub fn unresolvable_schema_error<T, S: AsRef<str>>(description: S) -> IonSchemaResult<T> {
