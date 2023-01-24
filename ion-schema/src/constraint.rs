@@ -721,7 +721,7 @@ impl OrderedElementsConstraint {
                 "ordered_elements",
                 ViolationCode::TypeMismatched,
                 &format!(
-                    "Expected {} of type {:?}: found {}",
+                    "Expected {} of type {}: found {}",
                     occurs_range, type_def, count
                 ),
             ));
@@ -781,7 +781,7 @@ impl ConstraintValidator for OrderedElementsConstraint {
                 "ordered_elements",
                 ViolationCode::TypeMismatched,
                 // unwrap as we already verified with peek that there is a value
-                &format!("Unexpected type found {:?}", values_iter.next().unwrap()),
+                &format!("Unexpected type found {}", values_iter.next().unwrap()),
                 violations,
             ))
         } else {
@@ -1300,7 +1300,7 @@ impl AnnotationsConstraint {
                 ViolationCode::AnnotationMismatched,
                 // unwrap as we already verified with peek that there is a value
                 &format!(
-                    "Unexpected annotations found {:?}",
+                    "Unexpected annotations found {}",
                     value_annotations.next().unwrap()
                 ),
                 violations,

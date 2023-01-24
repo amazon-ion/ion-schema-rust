@@ -21,10 +21,10 @@ impl Violation {
         }
     }
 
-    pub fn with_violations<A: AsRef<str>>(
+    pub fn with_violations<A: AsRef<str>, B: AsRef<str>>(
         constraint: A,
         code: ViolationCode,
-        message: A,
+        message: B,
         violations: Vec<Violation>,
     ) -> Self {
         Self {

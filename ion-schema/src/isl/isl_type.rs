@@ -60,15 +60,15 @@ pub struct IslTypeImpl {
     name: Option<String>,
     constraints: Vec<IslConstraint>,
     // Represents the ISL type struct in string format for anonymous type definition
-    // For named type definition, this will be `None`
-    pub(crate) isl_type_struct: Option<String>,
+    // For named type definition & programmatically created type definition, this will be `None`
+    pub(crate) isl_type_struct: Option<Element>,
 }
 
 impl IslTypeImpl {
     pub fn new(
         name: Option<String>,
         constraints: Vec<IslConstraint>,
-        isl_type_struct: Option<String>,
+        isl_type_struct: Option<Element>,
     ) -> Self {
         Self {
             name,
@@ -164,7 +164,7 @@ impl IslTypeImpl {
         Ok(IslTypeImpl::new(
             type_name,
             constraints,
-            Some(format!("{}", ion)),
+            Some(ion.to_owned()),
         ))
     }
 }
