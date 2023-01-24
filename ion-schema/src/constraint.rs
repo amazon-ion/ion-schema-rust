@@ -690,7 +690,7 @@ impl OrderedElementsConstraint {
                     "ordered_elements",
                     ViolationCode::TypeMismatched,
                     &format!(
-                        "Expected {:?} of type {:?}: found {}",
+                        "Expected {} of type {}: found {}",
                         occurs_range, type_def, count
                     ),
                 ));
@@ -721,7 +721,7 @@ impl OrderedElementsConstraint {
                 "ordered_elements",
                 ViolationCode::TypeMismatched,
                 &format!(
-                    "Expected {:?} of type {:?}: found {}",
+                    "Expected {} of type {:?}: found {}",
                     occurs_range, type_def, count
                 ),
             ));
@@ -746,7 +746,7 @@ impl ConstraintValidator for OrderedElementsConstraint {
                         &format!(
                             "expected list/sexp ion found {}",
                             if element.is_null() {
-                                format!("{:?}", element)
+                                format!("{}", element)
                             } else {
                                 format!("{}", element.ion_type())
                             }
@@ -847,7 +847,7 @@ impl ConstraintValidator for FieldsConstraint {
                         "fields",
                         ViolationCode::InvalidOpenContent,
                         &format!(
-                            "Found open content in the struct: {:?}: {:?}",
+                            "Found open content in the struct: {}: {}",
                             field_name, value
                         ),
                     ));
@@ -869,7 +869,7 @@ impl ConstraintValidator for FieldsConstraint {
                     "fields",
                     ViolationCode::TypeMismatched,
                     &format!(
-                        "Expected {:?} of field {:?}: found {}",
+                        "Expected {} of field {}: found {}",
                         occurs_range,
                         field_name,
                         values.len()
@@ -928,7 +928,7 @@ impl ConstraintValidator for ContainsConstraint {
                             &format!(
                                 "expected list/sexp found {}",
                                 if element.is_null() {
-                                    format!("{:?}", element)
+                                    format!("{}", element)
                                 } else {
                                     format!("{}", element.ion_type())
                                 }
@@ -957,7 +957,7 @@ impl ConstraintValidator for ContainsConstraint {
             return Err(Violation::new(
                 "contains",
                 ViolationCode::MissingValue,
-                &format!("{:?} has missing value(s): {:?}", value, missing_values),
+                &format!("{} has missing value(s): {:?}", value, missing_values),
             ));
         }
 
@@ -992,7 +992,7 @@ impl ConstraintValidator for ContainerLengthConstraint {
                     return Err(Violation::new(
                         "container_length",
                         ViolationCode::TypeMismatched,
-                        &format!("expected a container found {:?}", element),
+                        &format!("expected a container found {}", element),
                     ));
                 }
 
@@ -1025,10 +1025,7 @@ impl ConstraintValidator for ContainerLengthConstraint {
             return Err(Violation::new(
                 "container_length",
                 ViolationCode::InvalidLength,
-                &format!(
-                    "expected container length {:?} found {}",
-                    length_range, size
-                ),
+                &format!("expected container length {} found {}", length_range, size),
             ));
         }
 
@@ -1070,7 +1067,7 @@ impl ConstraintValidator for ByteLengthConstraint {
             return Err(Violation::new(
                 "byte_length",
                 ViolationCode::InvalidLength,
-                &format!("expected byte length {:?} found {}", length_range, size),
+                &format!("expected byte length {} found {}", length_range, size),
             ));
         }
 
@@ -1113,10 +1110,7 @@ impl ConstraintValidator for CodepointLengthConstraint {
             return Err(Violation::new(
                 "codepoint_length",
                 ViolationCode::InvalidLength,
-                &format!(
-                    "expected codepoint length {:?} found {}",
-                    length_range, size
-                ),
+                &format!("expected codepoint length {} found {}", length_range, size),
             ));
         }
 
@@ -1163,7 +1157,7 @@ impl ConstraintValidator for ElementConstraint {
                     return Err(Violation::new(
                         "element",
                         ViolationCode::TypeMismatched,
-                        &format!("expected a container but found {:?}", element),
+                        &format!("expected a container but found {}", element),
                     ));
                 }
 
@@ -1431,7 +1425,7 @@ impl ConstraintValidator for PrecisionConstraint {
                 "precision",
                 ViolationCode::InvalidLength,
                 &format!(
-                    "expected precision {:?} found {}",
+                    "expected precision {} found {}",
                     precision_range, value_precision
                 ),
             ));
@@ -1475,7 +1469,7 @@ impl ConstraintValidator for ScaleConstraint {
             return Err(Violation::new(
                 "scale",
                 ViolationCode::InvalidLength,
-                &format!("expected scale {:?} found {}", scale_range, value_scale),
+                &format!("expected scale {} found {}", scale_range, value_scale),
             ));
         }
 
@@ -1519,7 +1513,7 @@ impl ConstraintValidator for TimestampPrecisionConstraint {
                 "precision",
                 ViolationCode::InvalidLength,
                 &format!(
-                    "expected precision {:?} found {:?}",
+                    "expected precision {} found {:?}",
                     precision_range,
                     timestamp_value.precision()
                 ),
@@ -1865,10 +1859,7 @@ impl ConstraintValidator for Utf8ByteLengthConstraint {
             return Err(Violation::new(
                 "utf8_byte_length",
                 ViolationCode::InvalidLength,
-                &format!(
-                    "expected utf8 byte length {:?} found {}",
-                    length_range, size
-                ),
+                &format!("expected utf8 byte length {} found {}", length_range, size),
             ));
         }
 
