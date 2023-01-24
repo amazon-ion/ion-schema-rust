@@ -29,7 +29,7 @@ pub mod result;
 pub mod schema;
 pub mod system;
 pub mod types;
-mod violation;
+pub mod violation;
 
 /// Re-export of the ion-rs dependency that is part of our public API.
 pub mod external {
