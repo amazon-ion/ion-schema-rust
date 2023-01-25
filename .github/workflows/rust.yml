@@ -12,6 +12,8 @@ jobs:
     strategy:
       matrix:
         os: [ ubuntu-latest, windows-latest, macos-latest ]
+    permissions:
+      checks: write
 
     steps:
       - uses: actions/checkout@v1
