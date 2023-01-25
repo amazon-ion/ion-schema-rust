@@ -32,7 +32,7 @@ impl IslTypeRef {
 
     /// Creates a [IslTypeRef::Anonymous] using the [IonType] referenced inside it
     pub fn anonymous<A: Into<Vec<IslConstraint>>>(constraints: A) -> IslTypeRef {
-        IslTypeRef::Anonymous(IslTypeImpl::new(None, constraints.into()))
+        IslTypeRef::Anonymous(IslTypeImpl::new(None, constraints.into(), None))
     }
 
     /// Provides a string representing a definition of a nullable built in type reference

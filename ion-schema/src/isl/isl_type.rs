@@ -14,12 +14,16 @@ pub enum IslType {
 impl IslType {
     /// Creates a [IslType::Named] using the [IslConstraint] defined within it
     pub fn named<A: Into<String>, B: Into<Vec<IslConstraint>>>(name: A, constraints: B) -> IslType {
-        IslType::Named(IslTypeImpl::new(Some(name.into()), constraints.into()))
+        IslType::Named(IslTypeImpl::new(
+            Some(name.into()),
+            constraints.into(),
+            None,
+        ))
     }
 
     /// Creates a [IslType::Anonymous] using the [IslConstraint] defined within it
     pub fn anonymous<A: Into<Vec<IslConstraint>>>(constraints: A) -> IslType {
-        IslType::Anonymous(IslTypeImpl::new(None, constraints.into()))
+        IslType::Anonymous(IslTypeImpl::new(None, constraints.into(), None))
     }
 
     /// Provides a name if the ISL type is named type definition
@@ -55,11 +59,22 @@ impl IslType {
 pub struct IslTypeImpl {
     name: Option<String>,
     constraints: Vec<IslConstraint>,
+    // Represents the ISL type struct in string format for anonymous type definition
+    // For named type definition & programmatically created type definition, this will be `None`
+    pub(crate) isl_type_struct: Option<Element>,
 }
 
 impl IslTypeImpl {
-    pub fn new(name: Option<String>, constraints: Vec<IslConstraint>) -> Self {
-        Self { name, constraints }
+    pub fn new(
+        name: Option<String>,
+        constraints: Vec<IslConstraint>,
+        isl_type_struct: Option<Element>,
+    ) -> Self {
+        Self {
+            name,
+            constraints,
+            isl_type_struct,
+        }
     }
 
     pub fn name(&self) -> &Option<String> {
@@ -123,7 +138,7 @@ impl IslTypeImpl {
         // set the isl type name for any error that is returned while parsing its constraints
         let isl_type_name = match type_name.to_owned() {
             Some(name) => name,
-            None => format!("{:?}", ion_struct),
+            None => format!("{ion_struct:?}"),
         };
 
         // parses all the constraints inside a Type
@@ -146,7 +161,11 @@ impl IslTypeImpl {
             )?;
             constraints.push(constraint);
         }
-        Ok(IslTypeImpl::new(type_name, constraints))
+        Ok(IslTypeImpl::new(
+            type_name,
+            constraints,
+            Some(ion.to_owned()),
+        ))
     }
 }
 

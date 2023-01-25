@@ -643,8 +643,8 @@ impl TypeStore {
     ) -> TypeId {
         let builtin_type_name = match builtin_type_definition {
             BuiltInTypeDefinition::Atomic(ion_type, is_nullable) => match is_nullable {
-                Nullability::Nullable => format!("${}", ion_type),
-                Nullability::NotNullable => format!("{}", ion_type),
+                Nullability::Nullable => format!("${ion_type}"),
+                Nullability::NotNullable => format!("{ion_type}"),
             },
             BuiltInTypeDefinition::Derived(other_type) => other_type.name().to_owned().unwrap(),
         };
@@ -773,8 +773,7 @@ impl Resolver {
                 // This implementation only supports Ion Schema 1.0
                 if value.as_str() != Some(r"$ion_schema_1_0") {
                     return invalid_schema_error(format!(
-                        "Unsupported Ion Schema version: {}",
-                        value
+                        "Unsupported Ion Schema version: {value}"
                     ));
                 }
             }

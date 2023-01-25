@@ -9,6 +9,7 @@ use crate::IonSchemaElement;
 use ion_rs::value::owned::{text_token, Element};
 use ion_rs::value::{Builder, IonElement};
 use ion_rs::IonType;
+use std::fmt::{Display, Formatter};
 use std::rc::Rc;
 
 /// Provides validation for [`TypeDefinition`]
@@ -134,6 +135,7 @@ impl BuiltInTypeDefinition {
         let builtin_type_def = BuiltInTypeDefinition::Derived(TypeDefinitionImpl::new(
             type_name.to_owned(),
             constraints,
+            None,
         ));
         Ok(builtin_type_def)
     }
@@ -155,7 +157,7 @@ impl TypeValidator for BuiltInTypeDefinition {
                             return Err(Violation::new(
                                 "type_constraint",
                                 ViolationCode::InvalidNull,
-                                &format!("expected type {:?} doesn't allow null", ion_type),
+                                &format!("expected type {ion_type:?} doesn't allow null"),
                             ));
                         }
                         if element.ion_type() != *ion_type {
@@ -175,7 +177,7 @@ impl TypeValidator for BuiltInTypeDefinition {
                     IonSchemaElement::Document(document) => Err(Violation::new(
                         "type_constraint",
                         ViolationCode::TypeMismatched,
-                        &format!("expected type {:?}, found document", ion_type),
+                        &format!("expected type {ion_type:?}, found document"),
                     )),
                 }
             }
@@ -202,6 +204,15 @@ impl TypeValidator for BuiltInTypeDefinition {
     }
 }
 
+impl Display for BuiltInTypeDefinition {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            BuiltInTypeDefinition::Atomic(ion_type, _) => write!(f, "{ion_type}"),
+            BuiltInTypeDefinition::Derived(type_def) => write!(f, "{type_def}"),
+        }
+    }
+}
+
 /// Represents a [`TypeDefinition`] which stores a resolved ISL type using [`TypeStore`]
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeDefinition {
@@ -219,12 +230,13 @@ impl TypeDefinition {
         TypeDefinition::Named(TypeDefinitionImpl::new(
             Some(name.into()),
             constraints.into(),
+            None,
         ))
     }
 
     /// Creates an anonymous [`TypeDefinition`] using the [`IslConstraint`] defined within it
     pub fn anonymous<A: Into<Vec<Constraint>>>(constraints: A) -> TypeDefinition {
-        TypeDefinition::Anonymous(TypeDefinitionImpl::new(None, constraints.into()))
+        TypeDefinition::Anonymous(TypeDefinitionImpl::new(None, constraints.into(), None))
     }
 
     /// Provides the underlying constraints of [`TypeDefinitionImpl`]
@@ -254,6 +266,22 @@ impl TypeDefinition {
             return Range::optional();
         }
         Range::required()
+    }
+}
+
+impl Display for TypeDefinition {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            TypeDefinition::Named(named_type_def) => {
+                write!(f, "{named_type_def}")
+            }
+            TypeDefinition::Anonymous(anonymous_type_def) => {
+                write!(f, "{anonymous_type_def}")
+            }
+            TypeDefinition::BuiltIn(builtin_type_def) => {
+                write!(f, "{builtin_type_def}")
+            }
+        }
     }
 }
 
@@ -291,14 +319,21 @@ pub struct TypeDefinitionImpl {
     // ```
     // For above example, `bar` will be saved as deferred type definition until we resolve the definition of `bar`
     is_deferred_type_def: bool,
+    // Represents the ISL type struct in string format, this will be used for violation messages
+    isl_type_struct: Option<Element>,
 }
 
 impl TypeDefinitionImpl {
-    pub fn new(name: Option<String>, constraints: Vec<Constraint>) -> Self {
+    pub fn new(
+        name: Option<String>,
+        constraints: Vec<Constraint>,
+        isl_type_struct: Option<Element>,
+    ) -> Self {
         Self {
             name,
             constraints,
             is_deferred_type_def: false,
+            isl_type_struct,
         }
     }
 
@@ -307,6 +342,7 @@ impl TypeDefinitionImpl {
             name: Some(name),
             constraints: vec![],
             is_deferred_type_def: true,
+            isl_type_struct: None,
         }
     }
 
@@ -319,6 +355,7 @@ impl TypeDefinitionImpl {
             name: Some(alias),
             constraints: self.constraints,
             is_deferred_type_def: self.is_deferred_type_def,
+            isl_type_struct: None,
         }
     }
 
@@ -368,12 +405,16 @@ impl TypeDefinitionImpl {
             constraints.push(constraint);
         }
 
+        let isl_struct = isl_type.isl_type_struct.as_ref();
         // add `type: any` as a default type constraint if there is no type constraint found
         if !found_type_constraint {
             // set the isl type name for any error that is returned while parsing its constraints
             let isl_type_name = match type_name.to_owned() {
                 Some(name) => name,
-                None => "".to_owned(),
+                None => match isl_struct {
+                    None => "".to_owned(),
+                    Some(isl_type_struct) => format!("{isl_type_struct}"),
+                },
             };
 
             let isl_constraint = IslConstraint::from_ion_element(
@@ -391,7 +432,11 @@ impl TypeDefinitionImpl {
             constraints.push(constraint);
         }
 
-        let type_def = TypeDefinitionImpl::new(type_name.to_owned(), constraints);
+        let type_def = TypeDefinitionImpl::new(
+            type_name.to_owned(),
+            constraints,
+            isl_type.isl_type_struct.to_owned(),
+        );
 
         // actual type id is the type id with respect to type store length
         let actual_type_id;
@@ -431,8 +476,8 @@ impl TypeValidator for TypeDefinitionImpl {
     fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
         let mut violations: Vec<Violation> = vec![];
         let type_name = match self.name() {
-            None => "",
-            Some(name) => name,
+            None => format!("{}", self.isl_type_struct.as_ref().unwrap()),
+            Some(name) => name.to_owned(),
         };
         for constraint in self.constraints() {
             if let Err(violation) = constraint.validate(value, type_store) {
@@ -448,6 +493,20 @@ impl TypeValidator for TypeDefinitionImpl {
             "value didn't satisfy type constraint(s)",
             violations,
         ))
+    }
+}
+
+impl Display for TypeDefinitionImpl {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let type_def_name = match &self.name {
+            None => match &self.isl_type_struct {
+                None => "".to_owned(),
+                Some(type_name) => format!("{type_name}"),
+            },
+            Some(type_name) => type_name.to_owned(),
+        };
+
+        write!(f, "{type_def_name}")
     }
 }
 

@@ -267,8 +267,7 @@ impl IslConstraint {
                 if let Some(closed) = value.as_sym().unwrap().text() {
                     if closed != "closed" {
                         return Err(invalid_schema_error_raw(format!(
-                            "content constraint was a {} instead of a symbol `closed`",
-                            closed
+                            "content constraint was a {closed} instead of a symbol `closed`"
                         )));
                     }
                 }
@@ -329,8 +328,7 @@ impl IslConstraint {
                             "required" => Range::required(),
                             _ => {
                                 return invalid_schema_error(format!(
-                                    "only optional and required symbols are supported with occurs constraint, found {}",
-                                    sym
+                                    "only optional and required symbols are supported with occurs constraint, found {sym}"
                                 ))
                             }
                         }
@@ -414,15 +412,13 @@ impl IslConstraint {
 
                                 if e.ion_type() != IonType::String {
                                     return invalid_schema_error(format!(
-                                    "`timestamp_offset` values must be non-null strings, found {}",
-                                    e
+                                    "`timestamp_offset` values must be non-null strings, found {e}"
                                 ));
                                 }
 
                                 if e.annotations().next().is_some() {
                                     return invalid_schema_error(format!(
-                                        "`timestamp_offset` values may not be annotated, found {}",
-                                        e
+                                        "`timestamp_offset` values may not be annotated, found {e}"
                                     ));
                                 }
 
@@ -437,9 +433,8 @@ impl IslConstraint {
                     }
                     _ => {
                         return invalid_schema_error(format!(
-                            "`timestamp_offset` requires a list of offset strings, but found: {}",
-                            value
-                        ))
+                        "`timestamp_offset` requires a list of offset strings, but found: {value}"
+                    ))
                     }
                 };
                 Ok(IslConstraint::TimestampOffset(
@@ -470,8 +465,7 @@ impl IslConstraint {
         //TODO: create a method/macro for this ion type check which can be reused
         if value.is_null() {
             return Err(invalid_schema_error_raw(format!(
-                "{} constraint was a null instead of a list",
-                constraint_name
+                "{constraint_name} constraint was a null instead of a list"
             )));
         }
         if value.ion_type() != IonType::List {

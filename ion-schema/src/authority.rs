@@ -133,8 +133,7 @@ impl DocumentAuthority for MapDocumentAuthority {
         // if ion content exists for the given id  in the map then return ion content as Elements
         let ion_content = self.ion_content_by_id.get(id).ok_or_else(|| {
             unresolvable_schema_error_raw(format!(
-                "MapDocumentAuthority does not contain schema with id: {}",
-                id
+                "MapDocumentAuthority does not contain schema with id: {id}"
             ))
         })?;
         let iterator = element_reader().iterate_over(ion_content.as_bytes())?;

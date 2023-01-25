@@ -98,8 +98,7 @@ impl TryFrom<&str> for TimestampPrecision {
             "nanosecond" => TimestampPrecision::Nanosecond,
             _ => {
                 return invalid_schema_error(format!(
-                    "Invalid timestamp precision specified {}",
-                    value
+                    "Invalid timestamp precision specified {value}"
                 ))
             }
         })
@@ -189,8 +188,8 @@ impl TryFrom<&Element> for ValidValue {
 impl Display for ValidValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
-            ValidValue::Range(range) => write!(f, "{}", range),
-            ValidValue::Element(element) => write!(f, "{}", element),
+            ValidValue::Range(range) => write!(f, "{range}"),
+            ValidValue::Element(element) => write!(f, "{element}"),
         }
     }
 }
@@ -236,7 +235,7 @@ impl TryFrom<&str> for TimestampOffset {
                 {
                     Ok(TimestampOffset::Known(sign * (hours * 60 + minutes)))
                 }
-                _ => invalid_schema_error(format!("invalid timestamp offset {}", string_value)),
+                _ => invalid_schema_error(format!("invalid timestamp offset {string_value}")),
             }
         }
     }
@@ -261,7 +260,7 @@ impl Display for TimestampOffset {
                 let sign = if offset < &0 { "-" } else { "+" };
                 let hours = abs(*offset) / 60;
                 let minutes = abs(*offset) - hours * 60;
-                write!(f, "{}{:02}:{:02}", sign, hours, minutes)
+                write!(f, "{sign}{hours:02}:{minutes:02}")
             }
         }
     }
