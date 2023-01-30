@@ -384,7 +384,7 @@ impl Constraint {
 }
 
 /// Implements an `all_of` constraint of Ion Schema
-/// [all_of]: https://amzn.github.io/ion-schema/docs/spec.html#all_of
+/// [all_of]: https://amazon-ion.github.io/ion-schema/docs/spec.html#all_of
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AllOfConstraint {
     type_ids: Vec<TypeId>,
@@ -437,7 +437,7 @@ impl ConstraintValidator for AllOfConstraint {
 }
 
 /// Implements an `any_of` constraint of Ion Schema
-/// [any_of]: https://amzn.github.io/ion-schema/docs/spec.html#any_of
+/// [any_of]: https://amazon-ion.github.io/ion-schema/docs/spec.html#any_of
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AnyOfConstraint {
     type_ids: Vec<TypeId>,
@@ -487,7 +487,7 @@ impl ConstraintValidator for AnyOfConstraint {
 }
 
 /// Implements an `one_of` constraint of Ion Schema
-/// [one_of]: https://amzn.github.io/ion-schema/docs/spec.html#one_of
+/// [one_of]: https://amazon-ion.github.io/ion-schema/docs/spec.html#one_of
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OneOfConstraint {
     type_ids: Vec<TypeId>,
@@ -543,7 +543,7 @@ impl ConstraintValidator for OneOfConstraint {
 }
 
 /// Implements a `not` constraint
-/// [type]: https://amzn.github.io/ion-schema/docs/spec.html#not
+/// [type]: https://amazon-ion.github.io/ion-schema/docs/spec.html#not
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NotConstraint {
     type_id: TypeId,
@@ -585,7 +585,7 @@ impl ConstraintValidator for NotConstraint {
 }
 
 /// Implements a `type` constraint
-/// [type]: https://amzn.github.io/ion-schema/docs/spec.html#type
+/// [type]: https://amazon-ion.github.io/ion-schema/docs/spec.html#type
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypeConstraint {
     type_id: TypeId,
@@ -616,7 +616,7 @@ impl ConstraintValidator for TypeConstraint {
 }
 
 /// Implements an `occurs` constraint of Ion Schema
-/// [occurs]: https://amzn.github.io/ion-schema/docs/spec.html#type-definitions
+/// [occurs]: https://amazon-ion.github.io/ion-schema/docs/spec.html#type-definitions
 #[derive(Debug, Clone, PartialEq)]
 pub struct OccursConstraint {
     occurs_range: Range,
@@ -643,7 +643,7 @@ impl ConstraintValidator for OccursConstraint {
 }
 
 /// Implements an `ordered_elements` constraint of Ion Schema
-/// [ordered_elements]: https://amzn.github.io/ion-schema/docs/spec.html#ordered_elements
+/// [ordered_elements]: https://amazon-ion.github.io/ion-schema/docs/spec.html#ordered_elements
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OrderedElementsConstraint {
     type_ids: Vec<TypeId>,
@@ -785,7 +785,7 @@ impl ConstraintValidator for OrderedElementsConstraint {
 }
 
 /// Implements an `fields` constraint of Ion Schema
-/// [fields]: https://amzn.github.io/ion-schema/docs/spec.html#fields
+/// [fields]: https://amazon-ion.github.io/ion-schema/docs/spec.html#fields
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FieldsConstraint {
     fields: HashMap<String, TypeId>,
@@ -891,11 +891,11 @@ impl ConstraintValidator for FieldsConstraint {
 }
 
 /// Implements Ion Schema's `contains` constraint
-/// [contains]: https://amzn.github.io/ion-schema/docs/spec.html#contains
+/// [contains]: https://amazon-ion.github.io/ion-schema/docs/spec.html#contains
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContainsConstraint {
     // TODO: convert this into a HashSet once we have an implementation of Hash for Element in ion-rust
-    // Reference ion-rust issue: https://github.com/amzn/ion-rust/issues/220
+    // Reference ion-rust issue: https://github.com/amazon-ion/ion-rust/issues/220
     values: Vec<Element>,
 }
 
@@ -957,7 +957,7 @@ impl ConstraintValidator for ContainsConstraint {
 }
 
 /// Implements an `container_length` constraint of Ion Schema
-/// [container_length]: https://amzn.github.io/ion-schema/docs/spec.html#container_length
+/// [container_length]: https://amazon-ion.github.io/ion-schema/docs/spec.html#container_length
 #[derive(Debug, Clone, PartialEq)]
 pub struct ContainerLengthConstraint {
     length_range: Range,
@@ -1025,7 +1025,7 @@ impl ConstraintValidator for ContainerLengthConstraint {
 }
 
 /// Implements Ion Schema's `byte_length` constraint
-/// [byte_length]: https://amzn.github.io/ion-schema/docs/spec.html#byte_length
+/// [byte_length]: https://amazon-ion.github.io/ion-schema/docs/spec.html#byte_length
 #[derive(Debug, Clone, PartialEq)]
 pub struct ByteLengthConstraint {
     length_range: Range,
@@ -1067,7 +1067,7 @@ impl ConstraintValidator for ByteLengthConstraint {
 }
 
 /// Implements an `codepoint_length` constraint of Ion Schema
-/// [codepoint_length]: https://amzn.github.io/ion-schema/docs/spec.html#codepoint_length
+/// [codepoint_length]: https://amazon-ion.github.io/ion-schema/docs/spec.html#codepoint_length
 #[derive(Debug, Clone, PartialEq)]
 pub struct CodepointLengthConstraint {
     length_range: Range,
@@ -1110,7 +1110,7 @@ impl ConstraintValidator for CodepointLengthConstraint {
 }
 
 /// Implements the `element` constraint
-/// [element]: https://amzn.github.io/ion-schema/docs/spec.html#element
+/// [element]: https://amazon-ion.github.io/ion-schema/docs/spec.html#element
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ElementConstraint {
     type_id: TypeId,
@@ -1207,7 +1207,7 @@ impl ConstraintValidator for ElementConstraint {
 }
 
 /// Implements the `annotations` constraint
-/// [annotations]: https://amzn.github.io/ion-schema/docs/spec.html#annotations
+/// [annotations]: https://amazon-ion.github.io/ion-schema/docs/spec.html#annotations
 // The `required` annotation provided on the list of annotations is not represented here,
 // requirement of an annotation is represented in the annotation itself by the field `is_required` of `Annotation` struct.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1382,7 +1382,7 @@ impl ConstraintValidator for AnnotationsConstraint {
 }
 
 /// Implements Ion Schema's `precision` constraint
-/// [precision]: https://amzn.github.io/ion-schema/docs/spec.html#precision
+/// [precision]: https://amazon-ion.github.io/ion-schema/docs/spec.html#precision
 #[derive(Debug, Clone, PartialEq)]
 pub struct PrecisionConstraint {
     precision_range: Range,
@@ -1424,7 +1424,7 @@ impl ConstraintValidator for PrecisionConstraint {
 }
 
 /// Implements Ion Schema's `scale` constraint
-/// [scale]: https://amzn.github.io/ion-schema/docs/spec.html#scale
+/// [scale]: https://amazon-ion.github.io/ion-schema/docs/spec.html#scale
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScaleConstraint {
     scale_range: Range,
@@ -1466,7 +1466,7 @@ impl ConstraintValidator for ScaleConstraint {
 }
 
 /// Implements Ion Schema's `timestamp_precision` constraint
-/// [timestamp_precision]: https://amzn.github.io/ion-schema/docs/spec.html#timestamp_precision
+/// [timestamp_precision]: https://amazon-ion.github.io/ion-schema/docs/spec.html#timestamp_precision
 #[derive(Debug, Clone, PartialEq)]
 pub struct TimestampPrecisionConstraint {
     timestamp_precision_range: Range,
@@ -1513,7 +1513,7 @@ impl ConstraintValidator for TimestampPrecisionConstraint {
 }
 
 /// Implements Ion Schema's `valid_values` constraint
-/// [valid_values]: https://amzn.github.io/ion-schema/docs/spec.html#valid_values
+/// [valid_values]: https://amazon-ion.github.io/ion-schema/docs/spec.html#valid_values
 #[derive(Debug, Clone, PartialEq)]
 pub struct ValidValuesConstraint {
     valid_values: Vec<ValidValue>,
@@ -1600,7 +1600,7 @@ impl ConstraintValidator for ValidValuesConstraint {
 }
 
 /// Implements Ion Schema's `regex` constraint
-/// [regex]: https://amzn.github.io/ion-schema/docs/spec.html#regex
+/// [regex]: https://amazon-ion.github.io/ion-schema/docs/spec.html#regex
 #[derive(Debug, Clone)]
 pub struct RegexConstraint {
     expression: Regex,
@@ -1618,7 +1618,7 @@ impl RegexConstraint {
     }
 
     /// Converts given string to a pattern based on regex features supported by Ion Schema Specification
-    /// For more information: `<https://amzn.github.io/ion-schema/docs/spec.html#regex>`
+    /// For more information: `<https://amazon-ion.github.io/ion-schema/docs/spec.html#regex>`
     fn convert_to_pattern(expression: String) -> IonSchemaResult<String> {
         let mut sb = String::new();
         let mut si = expression.as_str().chars().peekable();
@@ -1660,7 +1660,7 @@ impl RegexConstraint {
                         }
                     }
                 }
-                // TODO: remove below match statement once we have fixed issue: https://github.com/amzn/ion-rust/issues/399
+                // TODO: remove below match statement once we have fixed issue: https://github.com/amazon-ion/ion-rust/issues/399
                 '\r' => sb.push('\n'), // Replace '\r' with '\n'
                 _ => sb.push(ch),
             }
@@ -1812,7 +1812,7 @@ impl PartialEq for RegexConstraint {
 }
 
 /// Implements Ion Schema's `utf8_byte_length` constraint
-/// [utf8_byte_length]: https://amzn.github.io/ion-schema/docs/isl-1-0/spec#utf8_byte_length
+/// [utf8_byte_length]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#utf8_byte_length
 #[derive(Debug, Clone, PartialEq)]
 pub struct Utf8ByteLengthConstraint {
     length_range: Range,
@@ -1854,7 +1854,7 @@ impl ConstraintValidator for Utf8ByteLengthConstraint {
 }
 
 /// Implements Ion Schema's `timestamp_offset` constraint
-/// [timestamp_offset]: https://amzn.github.io/ion-schema/docs/isl-1-0/spec#timestamp_offset
+/// [timestamp_offset]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#timestamp_offset
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TimestampOffsetConstraint {
     valid_offsets: Vec<TimestampOffset>,

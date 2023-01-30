@@ -13,7 +13,7 @@ use ion_rs::IonType;
 
 /// Provides an internal representation of a schema type reference.
 /// The type reference grammar is defined in the [Ion Schema Spec]
-/// [Ion Schema spec]: `<https://amzn.github.io/ion-schema/docs/spec.html#grammar>`
+/// [Ion Schema spec]: `<https://amazon-ion.github.io/ion-schema/docs/spec.html#grammar>`
 #[derive(Debug, Clone, PartialEq)]
 pub enum IslTypeRef {
     /// Represents a reference to a named type (including aliases and built-in types)

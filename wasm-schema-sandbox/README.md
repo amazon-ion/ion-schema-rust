@@ -1,6 +1,6 @@
 # Ion schema sandbox (Experimental package)
 
-Ion schema sandbox is a tool to validate an Ion value against a [schema](https://amzn.github.io/ion-schema/docs/spec/isl-1-0-spec.html) provided by user.
+Ion schema sandbox is a tool to validate an Ion value against a [schema](https://amazon-ion.github.io/ion-schema/docs/spec/isl-1-0-spec.html) provided by user.
 
 _**Please note, at this stage the code within this package is considered experimental and should not be used for production.**_
 
@@ -17,7 +17,7 @@ npm --version
 ```
 3. The easiest way to clone the `wasm-schema-sandbox` repository is to run the following command:
 ```bash
-git clone --recursive https://github.com/amzn/ion-schema-rust.git
+git clone --recursive https://github.com/amazon-ion/ion-schema-rust.git
 ```
 4. Enter the `wasm-schema-sandbox` root directory:
 ```bash
