@@ -514,7 +514,7 @@ impl IslConstraint {
 }
 
 /// Represents the `annotations` constraint
-/// `annotations`: `<https://amzn.github.io/ion-schema/docs/spec.html#annotations>`
+/// `annotations`: `<https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#annotations>`
 // The `required` annotation provided on the list of annotations is not represented here,
 // requirement of an annotation is represented in the annotation itself by the field `is_required` of `Annotation` struct.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -565,7 +565,7 @@ impl TryFrom<&Element> for IslAnnotationsConstraint {
 }
 
 /// Represents the `valid_values` constraint
-/// `valid_values`: `<https://amzn.github.io/ion-schema/docs/spec.html#annotations>`
+/// `valid_values`: `<https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#annotations>`
 #[derive(Debug, Clone, PartialEq)]
 pub struct IslValidValuesConstraint {
     valid_values: Vec<ValidValue>,
@@ -624,7 +624,7 @@ impl TryFrom<&Element> for IslValidValuesConstraint {
 }
 
 /// Represents the `regex` constraint
-/// `regex`: `<https://amzn.github.io/ion-schema/docs/spec.html#regex>`
+/// `regex`: `<https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#regex>`
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IslRegexConstraint {
     case_insensitive: bool,
@@ -655,7 +655,7 @@ impl IslRegexConstraint {
 }
 
 /// Represents the `timestamp_offset` constraint
-/// `timestamp_offset`: `<https://amzn.github.io/ion-schema/docs/isl-1-0/spec#timestamp_offset>`
+/// `timestamp_offset`: `<https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#timestamp_offset>`
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IslTimestampOffsetConstraint {
     valid_offsets: Vec<TimestampOffset>,

@@ -2,8 +2,8 @@
 name = "ion-schema"
 authors = ["Amazon Ion Team <ion-team@amazon.com>"]
 description = "Implementation of Amazon Ion Schema"
-homepage = "https://github.com/amzn/ion-schema-rust"
-repository = "https://github.com/amzn/ion-schema-rust"
+homepage = "https://github.com/amazon-ion/ion-schema-rust"
+repository = "https://github.com/amazon-ion/ion-schema-rust"
 license = "Apache-2.0"
 readme = "README.md"
 keywords = ["ion", "schema"]

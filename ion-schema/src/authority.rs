@@ -7,7 +7,7 @@
 //! * [`FileSystemDocumentAuthority`] : Attempts to resolve schema ids to files relative to a basePath.
 //! * [`MapDocumentAuthority`] : Attempts to resolve schema ids to ion elements using the map of (id, ion content).
 //!
-//! [Ion Schema spec]: https://amzn.github.io/ion-schema/docs/spec.html#schema-authorities
+//! [Ion Schema spec]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#schema-authorities
 //!
 //! ## Example usage of `authority` module to create a [`DocumentAuthority`]:
 //! ```

@@ -13,7 +13,7 @@ use std::fmt::{Display, Formatter};
 /// Grammar: <ANNOTATION> ::= <SYMBOL>
 ///                | required::<SYMBOL>
 ///                | optional::<SYMBOL>
-/// `annotations`: `<https://amzn.github.io/ion-schema/docs/spec.html#annotations>`
+/// `annotations`: `<https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#annotations>`
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Annotation {
     value: String,
@@ -159,7 +159,7 @@ impl Display for TimestampPrecision {
 /// Grammar: <VALID_VALUE> ::= <VALUE>
 ///                | <RANGE<TIMESTAMP>>
 ///                | <RANGE<NUMBER>>
-/// `valid_values`: `<https://amzn.github.io/ion-schema/docs/spec.html#valid_values>`
+/// `valid_values`: `<https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#valid_values>`
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValidValue {
     Range(Range),

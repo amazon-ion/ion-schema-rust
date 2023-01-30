@@ -1,12 +1,12 @@
 # Amazon Ion Schema Rust
 [![Crate](https://img.shields.io/crates/v/ion-schema.svg)](https://crates.io/crates/ion-schema)
 [![Docs](https://docs.rs/ion-schema/badge.svg)](https://docs.rs/ion-schema/latest/ion_schema/)
-[![License](https://img.shields.io/hexpm/l/plug.svg)](https://github.com/amzn/ion-schema-rust/blob/main/LICENSE)
-[![Rust](https://github.com/amzn/ion-schema-rust/workflows/CI%20Build/badge.svg)](https://github.com/amzn/ion-schema-rust/actions?query=workflow%3A%22CI+Build%22)
+[![License](https://img.shields.io/hexpm/l/plug.svg)](https://github.com/amazon-ion/ion-schema-rust/blob/main/LICENSE)
+[![Rust](https://github.com/amazon-ion/ion-schema-rust/workflows/CI%20Build/badge.svg)](https://github.com/amazon-ion/ion-schema-rust/actions?query=workflow%3A%22CI+Build%22)
 
-An implementation of [Amazon Ion Schema](http://amzn.github.io/ion-schema) in Rust.
+An implementation of [Amazon Ion Schema](https://amazon-ion.github.io/ion-schema) in Rust.
 
-If you want to try out a web tool to validate your Ion values using `ion-schema-rust`, please visit: https://amzn.github.io/ion-schema/sandbox
+If you want to try out a web tool to validate your Ion values using `ion-schema-rust`, please visit: https://amazon-ion.github.io/ion-schema/sandbox
 
 **This package is considered experimental, under active/early development, and the API is subject to change.**
 
@@ -117,7 +117,7 @@ Violation {
 }
 ```
 
-For more getting started examples, please visit: https://amzn.github.io/ion-schema/docs/cookbook/ion-schema-rust-getting-started
+For more getting started examples, please visit: https://amazon-ion.github.io/ion-schema/docs/cookbook/ion-schema-rust-getting-started
 
 ## Development
 
@@ -129,7 +129,7 @@ The easiest way to clone the `ion-schema-rust` repository and initialize its sub
 is to run the following command:
 
 ```bash
-$ git clone --recursive https://github.com/amzn/ion-schema-rust.git ion-schema-rust
+$ git clone --recursive https://github.com/amazon-ion/ion-schema-rust.git ion-schema-rust
 ```
 
 Alternatively, the submodule may be initialized independently from the clone

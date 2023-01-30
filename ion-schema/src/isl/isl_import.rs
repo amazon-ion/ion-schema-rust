@@ -3,7 +3,7 @@ use ion_rs::value::owned::Element;
 use ion_rs::value::{IonElement, IonStruct};
 
 /// Represents an import in an ISL schema.
-/// For more information: `<https://amzn.github.io/ion-schema/docs/spec.html#imports>`
+/// For more information: `<https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#imports>`
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IslImport {
     Schema(String),

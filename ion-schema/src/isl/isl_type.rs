@@ -170,7 +170,7 @@ impl IslTypeImpl {
 }
 
 // OwnedStruct doesn't preserve field order hence the PartialEq won't work properly for unordered constraints
-// Related issue: https://github.com/amzn/ion-rust/issues/200
+// Related issue: https://github.com/amazon-ion/ion-rust/issues/200
 impl PartialEq for IslTypeImpl {
     fn eq(&self, other: &Self) -> bool {
         self.constraints.len() == other.constraints.len()
