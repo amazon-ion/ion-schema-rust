@@ -45,7 +45,7 @@ pub type NumberRange = RangeImpl<Number>;
 ///                | <NUMBER>
 ///                | <TIMESTAMP>
 ///                | <TIMESTAMP_PRECISION_VALUE>
-/// For more information on [Range]: <https://amazon-ion.github.io/ion-schema/docs/spec.html#constraints>
+/// For more information on [Range]: <https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#constraints>
 // this is a wrapper around the RangeImpl generic implementation of ranges
 #[derive(Debug, Clone, PartialEq)]
 pub enum Range {
@@ -228,7 +228,7 @@ impl Range {
         range_type: &RangeType,
     ) -> IonSchemaResult<usize> {
         // minimum precision must be greater than or equal to 1
-        // for more information: https://amazon-ion.github.io/ion-schema/docs/spec.html#precision
+        // for more information: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#precision
         let min_value = i64::from(range_type == &RangeType::Precision);
         match value.as_i64() {
             Some(v) => {

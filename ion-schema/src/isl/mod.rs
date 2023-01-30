@@ -13,7 +13,7 @@
 //! This stores `IslTypeRef`s for the given ISL constraint.
 //!
 //! * `isl_type_reference` module provides a schema type reference.
-//! The type reference grammar is defined in the [Ion Schema Spec]: `<https://amazon-ion.github.io/ion-schema/docs/spec.html#grammar>`
+//! The type reference grammar is defined in the [Ion Schema Spec]: `<https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#grammar>`
 //!
 //! ## Example usage of `isl` module to create an `IslType`:
 //! ```
@@ -86,10 +86,10 @@ pub mod util;
 #[derive(Debug, Clone)]
 pub struct IslSchema {
     // Represents all the IslImports inside the schema file.
-    // For more information: https://amazon-ion.github.io/ion-schema/docs/spec.html#imports
+    // For more information: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#imports
     imports: Vec<IslImport>,
     // Represents all the IslType defined in this schema file.
-    // For more information: https://amazon-ion.github.io/ion-schema/docs/spec.html#type-definitions
+    // For more information: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#type-definitions
     types: Vec<IslType>,
     // Represents all the inline IslImportTypes in this schema file.
     inline_imported_types: Vec<IslImportType>,

@@ -427,7 +427,7 @@ impl PendingTypes {
 }
 
 /// Represents an array of BuiltIn derived ISL types
-/// for more information: https://amazon-ion.github.io/ion-schema/docs/spec.html#type-system
+/// for more information: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#type-system
 static DERIVED_ISL_TYPES: [&str; 10] = [
     "type::{ name: lob, one_of: [ blob, clob ] }",
     "type::{ name: number, one_of: [ decimal, float, int ] }",
@@ -475,7 +475,7 @@ impl Default for TypeStore {
 
 impl TypeStore {
     /// Preloads all [builtin isl types] into the TypeStore
-    /// [builtin isl types]: https://amazon-ion.github.io/ion-schema/docs/spec.html#type-system
+    /// [builtin isl types]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#type-system
     /// TODO: add document builtin type
     pub(crate) fn preload(&mut self) -> IonSchemaResult<()> {
         // add all ion types to the type store
