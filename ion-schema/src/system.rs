@@ -954,14 +954,11 @@ impl Resolver {
 
         for authority in &self.authorities {
             return match authority.elements(id) {
-                Err(error) => match error {
-                    IonSchemaError::IoError { source } => match source.kind() {
-                        ErrorKind::NotFound => continue,
-                        _ => Err(IonSchemaError::IoError { source }),
-                    },
-                    _ => Err(error),
-                },
                 Ok(schema_content) => self.isl_schema_from_elements(schema_content.into_iter(), id),
+                Err(IonSchemaError::IoError { source: e }) if e.kind() == ErrorKind::NotFound => {
+                    continue
+                }
+                Err(error) => Err(error),
             };
         }
         unresolvable_schema_error("Unable to load ISL model: ".to_owned() + id)

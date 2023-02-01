@@ -86,15 +86,28 @@ pub mod util;
 /// Provides an internal representation of an schema file
 #[derive(Debug, Clone)]
 pub struct IslSchema {
-    // Represents all the IslImports inside the schema file.
-    // For more information: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#imports
+    /// Represents all the IslImports inside the schema file.
+    /// For more information: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#imports
     imports: Vec<IslImport>,
-    // Represents all the IslType defined in this schema file.
-    // For more information: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#type-definitions
+    /// Represents all the IslType defined in this schema file.
+    /// For more information: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#type-definitions
     types: Vec<IslType>,
-    // Represents all the inline IslImportTypes in this schema file.
+    /// Represents all the inline IslImportTypes in this schema file.
     inline_imported_types: Vec<IslImportType>,
-    // Represents open content as `Element`s
+    /// Represents open content as `Element`s
+    /// Note: This doesn't preserve the information about where the open content is placed in the schema file.
+    /// e.g. This method doesn't differentiate between following schemas with open content:
+    /// ```ion
+    /// $foo
+    /// $bar
+    /// type::{ name: foo, codepoint_length: 1 }
+    /// ```
+    ///
+    /// ```ion
+    /// type::{ name: foo, codepoint_length: 1 }
+    /// $foo
+    /// $bar
+    /// ```
     open_content: Vec<Element>,
 }
 

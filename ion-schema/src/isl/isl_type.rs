@@ -96,13 +96,8 @@ impl IslTypeImpl {
     pub fn open_content(&self) -> Vec<(String, Element)> {
         let mut open_content = vec![];
         for constraint in &self.constraints {
-            match constraint {
-                IslConstraint::Unknown(constraint_name, element) => {
-                    open_content.push((constraint_name.to_owned(), element.to_owned()))
-                }
-                _ => {
-                    // no op
-                }
+            if let IslConstraint::Unknown(constraint_name, element) = constraint {
+                open_content.push((constraint_name.to_owned(), element.to_owned()))
             }
         }
         open_content
