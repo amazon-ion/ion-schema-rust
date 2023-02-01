@@ -74,6 +74,7 @@
 
 use crate::isl::isl_import::{IslImport, IslImportType};
 use crate::isl::isl_type::IslType;
+use ion_rs::value::owned::Element;
 
 pub mod isl_constraint;
 pub mod isl_import;
@@ -93,6 +94,8 @@ pub struct IslSchema {
     types: Vec<IslType>,
     // Represents all the inline IslImportTypes in this schema file.
     inline_imported_types: Vec<IslImportType>,
+    // Represents open content as `Element`s
+    open_content: Vec<Element>,
 }
 
 impl IslSchema {
@@ -100,11 +103,13 @@ impl IslSchema {
         imports: Vec<IslImport>,
         types: Vec<IslType>,
         inline_imports: Vec<IslImportType>,
+        open_content: Vec<Element>,
     ) -> Self {
         Self {
             imports,
             types,
             inline_imported_types: inline_imports,
+            open_content,
         }
     }
 
@@ -118,6 +123,12 @@ impl IslSchema {
 
     pub fn inline_imported_types(&self) -> &[IslImportType] {
         &self.inline_imported_types
+    }
+
+    /// Provides top level open content for given schema
+    /// For open content defined within type definitions use IslType#open_content()
+    pub fn open_content(&self) -> &Vec<Element> {
+        &self.open_content
     }
 }
 
@@ -170,6 +181,29 @@ mod isl_tests {
             )
             .unwrap(),
         )
+    }
+
+    #[test]
+    fn test_open_content_for_type_def() -> IonSchemaResult<()> {
+        let type_def = load_named_type(
+            r#" 
+                // type definition with open content
+                type:: { 
+                    name: my_int, 
+                    type: int,
+                    unknown_constraint: "this is an open content field value"
+                }
+            "#,
+        );
+
+        assert_eq!(
+            type_def.open_content(),
+            vec![(
+                "unknown_constraint".to_owned(),
+                element_reader().read_one(r#""this is an open content field value""#.as_bytes())?
+            )]
+        );
+        Ok(())
     }
 
     #[rstest(

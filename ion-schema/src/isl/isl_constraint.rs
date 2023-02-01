@@ -35,6 +35,7 @@ pub enum IslConstraint {
     TimestampOffset(IslTimestampOffsetConstraint),
     TimestampPrecision(Range),
     Type(IslTypeRef),
+    Unknown(String, Element), // Unknown constraint is used to store open contents
     Utf8ByteLength(Range),
     ValidValues(IslValidValuesConstraint),
 }
@@ -446,12 +447,9 @@ impl IslConstraint {
                 RangeType::NonNegativeInteger,
             )?)),
             "valid_values" => Ok(IslConstraint::ValidValues(value.try_into()?)),
-            _ => Err(invalid_schema_error_raw(
-                "Type: ".to_owned()
-                    + type_name
-                    + " can not be built as constraint: "
-                    + constraint_name
-                    + " does not exist",
+            _ => Ok(IslConstraint::Unknown(
+                constraint_name.to_string(),
+                value.to_owned(),
             )),
         }
     }

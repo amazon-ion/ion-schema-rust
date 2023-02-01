@@ -758,6 +758,7 @@ impl Resolver {
         let mut isl_imports: Vec<IslImport> = vec![];
         let mut isl_types: Vec<IslType> = vec![];
         let mut isl_inline_imports: Vec<IslImportType> = vec![];
+        let mut open_content = vec![];
 
         let mut found_header = false;
         let mut found_footer = false;
@@ -810,6 +811,8 @@ impl Resolver {
             else if annotations.contains(&&text_token("schema_footer")) {
                 found_footer = true;
             } else {
+                // open content
+                open_content.push(value);
                 continue;
             }
         }
@@ -818,7 +821,12 @@ impl Resolver {
             return invalid_schema_error("For any schema while a header and footer are both optional, a footer is required if a header is present (and vice-versa).");
         }
 
-        Ok(IslSchema::new(isl_imports, isl_types, isl_inline_imports))
+        Ok(IslSchema::new(
+            isl_imports,
+            isl_types,
+            isl_inline_imports,
+            open_content,
+        ))
     }
 
     /// Converts given ISL representation into a [`Schema`]
@@ -930,6 +938,34 @@ impl Resolver {
         }
         unresolvable_schema_error("Unable to load schema: ".to_owned() + id)
     }
+
+    /// Loads an [`IslSchema`] using authorities and type_store
+    // If we are loading the root schema then this will be set to `None` ( i.e. in the beginning when
+    // this method is called from the load_schema method of schema_system it is set to `None`)
+    // Otherwise if we are loading an import of the schema then this will be set to `Some(isl_import)`
+    // to be loaded (i.e. Inside schema_from_elements while loading imports this will be set to
+    // `Some(isl_import)`)
+    fn load_isl_schema<A: AsRef<str>>(
+        &mut self,
+        id: A,
+        load_isl_import: Option<&IslImport>,
+    ) -> IonSchemaResult<IslSchema> {
+        let id: &str = id.as_ref();
+
+        for authority in &self.authorities {
+            return match authority.elements(id) {
+                Err(error) => match error {
+                    IonSchemaError::IoError { source } => match source.kind() {
+                        ErrorKind::NotFound => continue,
+                        _ => Err(IonSchemaError::IoError { source }),
+                    },
+                    _ => Err(error),
+                },
+                Ok(schema_content) => self.isl_schema_from_elements(schema_content.into_iter(), id),
+            };
+        }
+        unresolvable_schema_error("Unable to load ISL model: ".to_owned() + id)
+    }
 }
 
 /// Provides functions for instantiating instances of [`Schema`].
@@ -951,6 +987,13 @@ impl SchemaSystem {
     pub fn load_schema<A: AsRef<str>>(&mut self, id: A) -> IonSchemaResult<Rc<Schema>> {
         self.resolver
             .load_schema(id, &mut TypeStore::default(), None)
+    }
+
+    /// Requests each of the provided [`DocumentAuthority`]s, in order, to get ISL model for the
+    /// requested schema id until one successfully resolves it.
+    /// If an authority throws an exception, resolution silently proceeds to the next authority.
+    pub fn load_isl_schema<A: AsRef<str>>(&mut self, id: A) -> IonSchemaResult<IslSchema> {
+        self.resolver.load_isl_schema(id, None)
     }
 
     /// Returns authorities associated with this [`SchemaSystem`]
@@ -1748,5 +1791,51 @@ mod schema_system_tests {
         // verify if the schema return error for unsupported ISL version marker
         let schema = schema_system.load_schema("sample.isl");
         assert!(schema.is_err());
+    }
+
+    #[test]
+    fn open_content_test() -> IonSchemaResult<()> {
+        // map with (id, ion content)
+        let map_authority = [(
+            "sample.isl",
+            r#"
+                schema_header::{}
+                
+                type::{
+                  name: my_type,
+                  type: string,
+                }
+                
+                open_content_1::{
+                    unknown_constraint: "this is an open content struct"
+                }
+                
+                open_content_2::{
+                    unknown_constraint: "this is an open content struct"
+                }
+                
+                schema_footer::{}
+            "#,
+        )];
+        let mut schema_system =
+            SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
+        let schema = schema_system.load_isl_schema("sample.isl")?;
+        let expected_open_content = element_reader().read_all(
+            r#"
+                open_content_1::{
+                    unknown_constraint: "this is an open content struct"
+                }
+                
+                open_content_2::{
+                    unknown_constraint: "this is an open content struct"
+                }
+            "#
+            .as_bytes(),
+        )?;
+
+        // verify the open content that is retrieved from the ISL model is same as the expected open content
+        assert_eq!(&schema.open_content().len(), &2);
+        assert_eq!(schema.open_content(), &expected_open_content);
+        Ok(())
     }
 }
