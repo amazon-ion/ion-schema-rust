@@ -103,7 +103,7 @@ impl IslTypeImpl {
         open_content
     }
 
-    pub fn is_open_content_allowed(&self) -> bool {
+    pub(crate) fn is_open_content_allowed(&self) -> bool {
         let mut open_content = true;
         if self.constraints.contains(&IslConstraint::ContentClosed) {
             open_content = false;
