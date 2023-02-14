@@ -400,7 +400,7 @@ impl TypeDefinitionImpl {
                 isl_constraint,
                 type_store,
                 pending_types,
-                isl_type.open_content(),
+                isl_type.is_open_content_allowed(),
             )?;
             constraints.push(constraint);
         }

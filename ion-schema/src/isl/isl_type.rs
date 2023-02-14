@@ -44,7 +44,15 @@ impl IslType {
     }
 
     /// Verifies if the [IslType] allows open content or not
-    pub fn open_content(&self) -> bool {
+    pub fn is_open_content_allowed(&self) -> bool {
+        match &self {
+            IslType::Named(named_type) => named_type.is_open_content_allowed(),
+            IslType::Anonymous(anonymous_type) => anonymous_type.is_open_content_allowed(),
+        }
+    }
+
+    /// Provides open content that is there in the type definition
+    pub fn open_content(&self) -> Vec<(String, Element)> {
         match &self {
             IslType::Named(named_type) => named_type.open_content(),
             IslType::Anonymous(anonymous_type) => anonymous_type.open_content(),
@@ -85,7 +93,17 @@ impl IslTypeImpl {
         &self.constraints
     }
 
-    pub fn open_content(&self) -> bool {
+    pub fn open_content(&self) -> Vec<(String, Element)> {
+        let mut open_content = vec![];
+        for constraint in &self.constraints {
+            if let IslConstraint::Unknown(constraint_name, element) = constraint {
+                open_content.push((constraint_name.to_owned(), element.to_owned()))
+            }
+        }
+        open_content
+    }
+
+    pub(crate) fn is_open_content_allowed(&self) -> bool {
         let mut open_content = true;
         if self.constraints.contains(&IslConstraint::ContentClosed) {
             open_content = false;

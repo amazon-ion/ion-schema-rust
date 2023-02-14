@@ -53,6 +53,7 @@ pub enum Constraint {
     TimestampOffset(TimestampOffsetConstraint),
     TimestampPrecision(TimestampPrecisionConstraint),
     Type(TypeConstraint),
+    Unknown(String, Element),
     Utf8ByteLength(Utf8ByteLengthConstraint),
     ValidValues(ValidValuesConstraint),
 }
@@ -334,6 +335,10 @@ impl Constraint {
                     valid_values: valid_values.values().to_owned(),
                 }))
             }
+            IslConstraint::Unknown(constraint_name, element) => Ok(Constraint::Unknown(
+                constraint_name.to_owned(),
+                element.to_owned(),
+            )),
         }
     }
 
@@ -379,6 +384,11 @@ impl Constraint {
                 utf8_byte_length.validate(value, type_store)
             }
             Constraint::ValidValues(valid_values) => valid_values.validate(value, type_store),
+            Constraint::Unknown(_, _) => {
+                // No op
+                // `Unknown` represents open content which can be ignored for validation
+                Ok(())
+            }
         }
     }
 }

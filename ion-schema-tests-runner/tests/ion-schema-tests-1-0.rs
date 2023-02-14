@@ -16,7 +16,6 @@ ion_schema_tests!(
         "constraints::scale::invalid::scale_must_be_an_integer_or_range__10_",
         "constraints::scale::invalid::scale_must_be_an_integer_or_range__11_",
         "constraints::scale::invalid::scale_must_be_an_integer_or_range__04_",
-        "constraints::unknown_constraint::",
         "constraints::valid_values::all_types::value_should_be_invalid_for_type_valid_values_all_types__04_",
         "schema::import::diamond_import::should_be_a_valid_schema",
         "schema::import::diamond_import::value_should_be_valid_for_type_diamond_import",
