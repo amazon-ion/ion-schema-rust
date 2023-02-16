@@ -16,10 +16,10 @@ impl fmt::Debug for IonPathElement {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self {
             IonPathElement::IndexedElement { index } => {
-                write!(f, "{}", index)
+                write!(f, "{index}")
             }
             IonPathElement::Field { name } => {
-                write!(f, ".{}", name)
+                write!(f, ".{name}")
             }
         }
     }
@@ -29,10 +29,10 @@ impl fmt::Display for IonPathElement {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match &self {
             IonPathElement::IndexedElement { index } => {
-                write!(f, "[{}]", index)
+                write!(f, "[{index}]")
             }
             IonPathElement::Field { name } => {
-                write!(f, ".{}", name)
+                write!(f, ".{name}")
             }
         }
     }
@@ -73,7 +73,7 @@ impl fmt::Debug for IonPath {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "./",)?;
         for parent in &self.parents {
-            write!(f, "{}", parent)?;
+            write!(f, "{parent}")?;
         }
         Ok(())
     }
@@ -83,7 +83,7 @@ impl fmt::Display for IonPath {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "./",)?;
         for parent in &self.parents {
-            write!(f, "{}", parent)?;
+            write!(f, "{parent}")?;
         }
         Ok(())
     }
