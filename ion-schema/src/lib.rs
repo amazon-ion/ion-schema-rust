@@ -2,6 +2,7 @@
 #![allow(dead_code, unused_variables)]
 
 use crate::external::ion_rs::IonType;
+use crate::ion_path::IonPath;
 use crate::violation::{Violation, ViolationCode};
 use ion_rs::value::owned::Element;
 use ion_rs::value::reader::{element_reader, ElementReader};
@@ -24,6 +25,7 @@ macro_rules! try_to {
 pub mod authority;
 mod constraint;
 mod import;
+mod ion_path;
 pub mod isl;
 pub mod result;
 pub mod schema;
@@ -78,6 +80,7 @@ impl IonSchemaElement {
         &self,
         types: &[IonType],
         constraint_name: &str,
+        ion_path: &mut IonPath,
     ) -> Result<&Element, Violation> {
         match self {
             IonSchemaElement::SingleElement(element) => {
@@ -87,7 +90,8 @@ impl IonSchemaElement {
                     return Err(Violation::new(
                         constraint_name,
                         ViolationCode::TypeMismatched,
-                        &format!("expected {:?} but found {}", types, element.ion_type()),
+                        format!("expected {:?} but found {}", types, element.ion_type()),
+                        ion_path,
                     ));
                 }
                 // If it's an Element of an expected type, return a ref to it.
@@ -98,7 +102,8 @@ impl IonSchemaElement {
                 Err(Violation::new(
                     constraint_name,
                     ViolationCode::TypeMismatched,
-                    &format!("expected {types:?} but found document"),
+                    format!("expected {types:?} but found document"),
+                    ion_path,
                 ))
             }
         }

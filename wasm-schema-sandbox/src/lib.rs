@@ -183,6 +183,7 @@ pub fn validate(ion: &str, schema: &str, schema_type: &str) -> SchemaValidationR
     let violation = match &result {
         Ok(_) => "".to_string(),
         Err(violation) => {
+            //TODO: Once we have a Display implementation with proper indentation for nested violations change the following
             format!("{violation:#?}")
         }
     };
