@@ -1,4 +1,5 @@
 use crate::constraint::Constraint;
+use crate::ion_path::IonPath;
 use crate::isl::isl_constraint::IslConstraint;
 use crate::isl::isl_range::Range;
 use crate::isl::isl_type::IslTypeImpl;
@@ -16,11 +17,21 @@ use std::rc::Rc;
 pub trait TypeValidator {
     /// If the specified value violates one or more of this type's constraints,
     /// returns `false`, otherwise `true`
-    fn is_valid(&self, value: &IonSchemaElement, type_store: &TypeStore) -> bool;
+    fn is_valid(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> bool;
 
     /// Returns `Err(violation)` with details as to which constraints were violated,
     /// otherwise returns `Ok(())` indicating no violations were found during the validation
-    fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult;
+    fn validate(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> ValidationResult;
 }
 
 // Provides a public facing schema type which has a reference to TypeStore
@@ -91,7 +102,7 @@ impl TypeRef {
         // convert given IonSchemaElement to an Element
         let schema_element: IonSchemaElement = value.into();
 
-        type_def.validate(&schema_element, &self.type_store)
+        type_def.validate(&schema_element, &self.type_store, &mut IonPath::default())
     }
 }
 
@@ -142,12 +153,22 @@ impl BuiltInTypeDefinition {
 }
 
 impl TypeValidator for BuiltInTypeDefinition {
-    fn is_valid(&self, value: &IonSchemaElement, type_store: &TypeStore) -> bool {
-        let violation = self.validate(value, type_store);
+    fn is_valid(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> bool {
+        let violation = self.validate(value, type_store, ion_path);
         violation.is_ok()
     }
 
-    fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
+    fn validate(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> ValidationResult {
         match &self {
             BuiltInTypeDefinition::Atomic(ion_type, is_nullable) => {
                 // atomic types doesn't include document type
@@ -157,18 +178,20 @@ impl TypeValidator for BuiltInTypeDefinition {
                             return Err(Violation::new(
                                 "type_constraint",
                                 ViolationCode::InvalidNull,
-                                &format!("expected type {ion_type:?} doesn't allow null"),
+                                format!("expected type {ion_type:?} doesn't allow null"),
+                                ion_path,
                             ));
                         }
                         if element.ion_type() != *ion_type {
                             return Err(Violation::new(
                                 "type_constraint",
                                 ViolationCode::TypeMismatched,
-                                &format!(
+                                format!(
                                     "expected type {:?}, found {:?}",
                                     ion_type,
                                     element.ion_type()
                                 ),
+                                ion_path,
                             ));
                         }
 
@@ -177,7 +200,8 @@ impl TypeValidator for BuiltInTypeDefinition {
                     IonSchemaElement::Document(document) => Err(Violation::new(
                         "type_constraint",
                         ViolationCode::TypeMismatched,
-                        &format!("expected type {ion_type:?}, found document"),
+                        format!("expected type {ion_type:?}, found document"),
+                        ion_path,
                     )),
                 }
             }
@@ -189,16 +213,17 @@ impl TypeValidator for BuiltInTypeDefinition {
                         return Err(Violation::new(
                             "type_constraint",
                             ViolationCode::TypeMismatched,
-                            &format!(
+                            format!(
                                 "expected type document found {:?}",
                                 value.as_element().unwrap().ion_type()
                             ),
+                            ion_path,
                         ));
                     }
                     return Ok(());
                 }
                 // if it is not a document type do validation using the type definition
-                other_type.validate(value, type_store)
+                other_type.validate(value, type_store, ion_path)
             }
         }
     }
@@ -286,16 +311,30 @@ impl Display for TypeDefinition {
 }
 
 impl TypeValidator for TypeDefinition {
-    fn is_valid(&self, value: &IonSchemaElement, type_store: &TypeStore) -> bool {
-        let violation = self.validate(value, type_store);
+    fn is_valid(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> bool {
+        let violation = self.validate(value, type_store, ion_path);
         violation.is_ok()
     }
 
-    fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
+    fn validate(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> ValidationResult {
         match self {
-            TypeDefinition::Named(named_type) => named_type.validate(value, type_store),
-            TypeDefinition::Anonymous(anonymous_type) => anonymous_type.validate(value, type_store),
-            TypeDefinition::BuiltIn(built_in_type) => built_in_type.validate(value, type_store),
+            TypeDefinition::Named(named_type) => named_type.validate(value, type_store, ion_path),
+            TypeDefinition::Anonymous(anonymous_type) => {
+                anonymous_type.validate(value, type_store, ion_path)
+            }
+            TypeDefinition::BuiltIn(built_in_type) => {
+                built_in_type.validate(value, type_store, ion_path)
+            }
         }
     }
 }
@@ -468,19 +507,29 @@ impl PartialEq for TypeDefinitionImpl {
 }
 
 impl TypeValidator for TypeDefinitionImpl {
-    fn is_valid(&self, value: &IonSchemaElement, type_store: &TypeStore) -> bool {
-        let violation = self.validate(value, type_store);
+    fn is_valid(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> bool {
+        let violation = self.validate(value, type_store, ion_path);
         violation.is_ok()
     }
 
-    fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
+    fn validate(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> ValidationResult {
         let mut violations: Vec<Violation> = vec![];
         let type_name = match self.name() {
             None => format!("{}", self.isl_type_struct.as_ref().unwrap()),
             Some(name) => name.to_owned(),
         };
         for constraint in self.constraints() {
-            if let Err(violation) = constraint.validate(value, type_store) {
+            if let Err(violation) = constraint.validate(value, type_store, ion_path) {
                 violations.push(violation);
             }
         }
@@ -491,6 +540,7 @@ impl TypeValidator for TypeDefinitionImpl {
             type_name,
             ViolationCode::TypeConstraintsUnsatisfied,
             "value didn't satisfy type constraint(s)",
+            ion_path,
             violations,
         ))
     }

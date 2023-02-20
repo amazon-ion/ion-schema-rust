@@ -1,3 +1,4 @@
+use crate::ion_path::IonPath;
 use std::fmt;
 use std::fmt::Formatter;
 use thiserror::Error;
@@ -8,15 +9,22 @@ pub struct Violation {
     constraint: String,  // represents the constraint that created this violation
     code: ViolationCode, // represents an error code that indicates the type of the violation
     message: String,     // represents the detailed error message for this violation
+    ion_path: IonPath,   // represents the path to Ion value for which violation occurred
     violations: Vec<Violation>,
 }
 
 impl Violation {
-    pub fn new<A: AsRef<str>>(constraint: A, code: ViolationCode, message: A) -> Self {
+    pub fn new<A: AsRef<str>, B: AsRef<str>>(
+        constraint: A,
+        code: ViolationCode,
+        message: B,
+        ion_path: &mut IonPath,
+    ) -> Self {
         Self {
             constraint: constraint.as_ref().to_owned(),
             code,
             message: message.as_ref().to_owned(),
+            ion_path: ion_path.to_owned(),
             violations: vec![],
         }
     }
@@ -25,12 +33,14 @@ impl Violation {
         constraint: A,
         code: ViolationCode,
         message: B,
+        ion_path: &mut IonPath,
         violations: Vec<Violation>,
     ) -> Self {
         Self {
             constraint: constraint.as_ref().to_owned(),
             code,
             message: message.as_ref().to_owned(),
+            ion_path: ion_path.to_owned(),
             violations,
         }
     }
@@ -40,6 +50,7 @@ impl Violation {
     }
 }
 
+// TODO: Implement Violation with proper indentation for the nested tree of violations
 impl fmt::Display for Violation {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "A validation error occurred: {}", self.message)

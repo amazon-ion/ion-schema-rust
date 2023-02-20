@@ -1,3 +1,4 @@
+use crate::ion_path::{IonPath, IonPathElement};
 use crate::isl::isl_constraint::{IslConstraint, IslRegexConstraint};
 use crate::isl::isl_range::{Range, RangeImpl};
 use crate::isl::isl_type_reference::IslTypeRef;
@@ -26,7 +27,12 @@ pub trait ConstraintValidator {
     /// adding [Violation]s and/or [ViolationChild]ren to `Err(violation)`
     /// if the constraint is violated.
     /// Otherwise, if the value passes the validation against the constraint then returns `Ok(())`.
-    fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult;
+    fn validate(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> ValidationResult;
 }
 
 /// Defines schema Constraints
@@ -342,16 +348,25 @@ impl Constraint {
         }
     }
 
-    pub fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
+    pub fn validate(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> ValidationResult {
         match self {
-            Constraint::AllOf(all_of) => all_of.validate(value, type_store),
-            Constraint::Annotations(annotations) => annotations.validate(value, type_store),
-            Constraint::AnyOf(any_of) => any_of.validate(value, type_store),
-            Constraint::ByteLength(byte_length) => byte_length.validate(value, type_store),
-            Constraint::CodepointLength(codepoint_length) => {
-                codepoint_length.validate(value, type_store)
+            Constraint::AllOf(all_of) => all_of.validate(value, type_store, ion_path),
+            Constraint::Annotations(annotations) => {
+                annotations.validate(value, type_store, ion_path)
             }
-            Constraint::Contains(contains) => contains.validate(value, type_store),
+            Constraint::AnyOf(any_of) => any_of.validate(value, type_store, ion_path),
+            Constraint::ByteLength(byte_length) => {
+                byte_length.validate(value, type_store, ion_path)
+            }
+            Constraint::CodepointLength(codepoint_length) => {
+                codepoint_length.validate(value, type_store, ion_path)
+            }
+            Constraint::Contains(contains) => contains.validate(value, type_store, ion_path),
             Constraint::ContentClosed => {
                 // No op
                 // `content: closed` does not work as a constraint by its own, it needs to be used with other container constraints
@@ -360,30 +375,34 @@ impl Constraint {
                 Ok(())
             }
             Constraint::ContainerLength(container_length) => {
-                container_length.validate(value, type_store)
+                container_length.validate(value, type_store, ion_path)
             }
-            Constraint::Element(element) => element.validate(value, type_store),
-            Constraint::Fields(fields) => fields.validate(value, type_store),
-            Constraint::Not(not) => not.validate(value, type_store),
-            Constraint::OneOf(one_of) => one_of.validate(value, type_store),
-            Constraint::Type(type_constraint) => type_constraint.validate(value, type_store),
-            Constraint::Occurs(occurs) => occurs.validate(value, type_store),
+            Constraint::Element(element) => element.validate(value, type_store, ion_path),
+            Constraint::Fields(fields) => fields.validate(value, type_store, ion_path),
+            Constraint::Not(not) => not.validate(value, type_store, ion_path),
+            Constraint::OneOf(one_of) => one_of.validate(value, type_store, ion_path),
+            Constraint::Type(type_constraint) => {
+                type_constraint.validate(value, type_store, ion_path)
+            }
+            Constraint::Occurs(occurs) => occurs.validate(value, type_store, ion_path),
             Constraint::OrderedElements(ordered_elements) => {
-                ordered_elements.validate(value, type_store)
+                ordered_elements.validate(value, type_store, ion_path)
             }
-            Constraint::Precision(precision) => precision.validate(value, type_store),
-            Constraint::Regex(regex) => regex.validate(value, type_store),
-            Constraint::Scale(scale) => scale.validate(value, type_store),
+            Constraint::Precision(precision) => precision.validate(value, type_store, ion_path),
+            Constraint::Regex(regex) => regex.validate(value, type_store, ion_path),
+            Constraint::Scale(scale) => scale.validate(value, type_store, ion_path),
             Constraint::TimestampOffset(timestamp_offset) => {
-                timestamp_offset.validate(value, type_store)
+                timestamp_offset.validate(value, type_store, ion_path)
             }
             Constraint::TimestampPrecision(timestamp_precision) => {
-                timestamp_precision.validate(value, type_store)
+                timestamp_precision.validate(value, type_store, ion_path)
             }
             Constraint::Utf8ByteLength(utf8_byte_length) => {
-                utf8_byte_length.validate(value, type_store)
+                utf8_byte_length.validate(value, type_store, ion_path)
             }
-            Constraint::ValidValues(valid_values) => valid_values.validate(value, type_store),
+            Constraint::ValidValues(valid_values) => {
+                valid_values.validate(value, type_store, ion_path)
+            }
             Constraint::Unknown(_, _) => {
                 // No op
                 // `Unknown` represents open content which can be ignored for validation
@@ -420,12 +439,17 @@ impl AllOfConstraint {
 }
 
 impl ConstraintValidator for AllOfConstraint {
-    fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
+    fn validate(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> ValidationResult {
         let mut violations: Vec<Violation> = vec![];
         let mut valid_types = vec![];
         for type_id in &self.type_ids {
             let type_def = type_store.get_type_by_id(*type_id).unwrap();
-            match type_def.validate(value, type_store) {
+            match type_def.validate(value, type_store, ion_path) {
                 Ok(_) => valid_types.push(type_id),
                 Err(violation) => violations.push(violation),
             }
@@ -439,6 +463,7 @@ impl ConstraintValidator for AllOfConstraint {
                     valid_types.len(),
                     self.type_ids.len()
                 ),
+                ion_path,
                 violations,
             ));
         }
@@ -473,12 +498,17 @@ impl AnyOfConstraint {
 }
 
 impl ConstraintValidator for AnyOfConstraint {
-    fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
+    fn validate(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> ValidationResult {
         let mut violations: Vec<Violation> = vec![];
         let mut valid_types = vec![];
         for type_id in &self.type_ids {
             let type_def = type_store.get_type_by_id(*type_id).unwrap();
-            match type_def.validate(value, type_store) {
+            match type_def.validate(value, type_store, ion_path) {
                 Ok(_) => valid_types.push(type_id),
                 Err(violation) => violations.push(violation),
             }
@@ -489,6 +519,7 @@ impl ConstraintValidator for AnyOfConstraint {
                 "any_of",
                 ViolationCode::NoTypesMatched,
                 "value matches none of the types",
+                ion_path,
                 violations,
             ));
         }
@@ -523,12 +554,17 @@ impl OneOfConstraint {
 }
 
 impl ConstraintValidator for OneOfConstraint {
-    fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
+    fn validate(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> ValidationResult {
         let mut violations: Vec<Violation> = vec![];
         let mut valid_types = vec![];
         for type_id in &self.type_ids {
             let type_def = type_store.get_type_by_id(*type_id).unwrap();
-            match type_def.validate(value, type_store) {
+            match type_def.validate(value, type_store, ion_path) {
                 Ok(_) => valid_types.push(type_id),
                 Err(violation) => violations.push(violation),
             }
@@ -539,6 +575,7 @@ impl ConstraintValidator for OneOfConstraint {
                 "one_of",
                 ViolationCode::NoTypesMatched,
                 "value matches none of the types",
+                ion_path,
                 violations,
             )),
             1 => Ok(()),
@@ -546,6 +583,7 @@ impl ConstraintValidator for OneOfConstraint {
                 "one_of",
                 ViolationCode::MoreThanOneTypeMatched,
                 format!("value matches {total_valid_types} types, expected 1"),
+                ion_path,
                 violations,
             )),
         }
@@ -577,9 +615,14 @@ impl NotConstraint {
 }
 
 impl ConstraintValidator for NotConstraint {
-    fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
+    fn validate(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> ValidationResult {
         let type_def = type_store.get_type_by_id(self.type_id).unwrap();
-        let violation = type_def.validate(value, type_store);
+        let violation = type_def.validate(value, type_store, ion_path);
         match violation {
             Err(violation) => Ok(()),
             Ok(_) => {
@@ -588,6 +631,7 @@ impl ConstraintValidator for NotConstraint {
                     "not",
                     ViolationCode::TypeMatched,
                     "value unexpectedly matches type",
+                    ion_path,
                 ))
             }
         }
@@ -619,9 +663,14 @@ impl TypeConstraint {
 }
 
 impl ConstraintValidator for TypeConstraint {
-    fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
+    fn validate(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> ValidationResult {
         let type_def = type_store.get_type_by_id(self.type_id).unwrap();
-        type_def.validate(value, type_store)
+        type_def.validate(value, type_store, ion_path)
     }
 }
 
@@ -643,7 +692,12 @@ impl OccursConstraint {
 }
 
 impl ConstraintValidator for OccursConstraint {
-    fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
+    fn validate(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> ValidationResult {
         // No op
         // `occurs` does not work as a constraint by its own, it needs to be used with other constraints
         // e.g. `ordered_elements`, `fields`, etc.
@@ -682,26 +736,35 @@ impl OrderedElementsConstraint {
         type_def: &TypeDefinition,
         values_iter: &mut Peekable<Box<dyn Iterator<Item = &Element> + 'a>>,
         type_store: &TypeStore,
+        ion_path: &mut IonPath,
     ) -> ValidationResult {
         let occurs_range: Range = type_def.get_occurs_constraint("ordered_elements");
 
         // use this counter to keep track of valid values for given type_def
         let mut count: i64 = 0;
+        // use this index to keep track of Ion path for violation
+        let mut index = 0;
 
         // consume elements to reach the minimum required values for this type
         while let Some(value) = values_iter.next_if(|v| !occurs_range.contains(&count.into())) {
             let schema_element: IonSchemaElement = value.into();
 
-            if type_def.is_valid(&schema_element, type_store) {
+            ion_path.push(IonPathElement::Index(index));
+
+            if type_def.is_valid(&schema_element, type_store, ion_path) {
                 count += 1;
             } else {
                 // there's not enough values of this expected type
                 return Err(Violation::new(
                     "ordered_elements",
                     ViolationCode::TypeMismatched,
-                    &format!("Expected {occurs_range} of type {type_def}: found {count}"),
+                    format!("Expected {occurs_range} of type {type_def}: found {count}"),
+                    ion_path,
                 ));
             }
+
+            ion_path.pop();
+            index += 1;
         }
 
         // greedily take as many values as we can of this type without going out
@@ -710,7 +773,7 @@ impl OrderedElementsConstraint {
             // don't consume it until we know it's valid for the type
             if let Some(value) = values_iter.peek() {
                 let schema_element: IonSchemaElement = (*value).into();
-                if type_def.is_valid(&schema_element, type_store) {
+                if type_def.is_valid(&schema_element, type_store, ion_path) {
                     let _ = values_iter.next(); // consume it as it is valid
                     count += 1;
                 } else {
@@ -727,7 +790,8 @@ impl OrderedElementsConstraint {
             return Err(Violation::new(
                 "ordered_elements",
                 ViolationCode::TypeMismatched,
-                &format!("Expected {occurs_range} of type {type_def}: found {count}"),
+                format!("Expected {occurs_range} of type {type_def}: found {count}"),
+                ion_path,
             ));
         }
 
@@ -737,7 +801,12 @@ impl OrderedElementsConstraint {
 }
 
 impl ConstraintValidator for OrderedElementsConstraint {
-    fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
+    fn validate(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> ValidationResult {
         let violations: Vec<Violation> = vec![];
 
         // Create a peekable iterator for given sequence
@@ -755,6 +824,7 @@ impl ConstraintValidator for OrderedElementsConstraint {
                                 format!("{}", element.ion_type())
                             }
                         ),
+                        ion_path,
                         violations,
                     ));
                 }
@@ -775,6 +845,7 @@ impl ConstraintValidator for OrderedElementsConstraint {
                 type_def,
                 &mut values_iter,
                 type_store,
+                ion_path,
             )?;
         }
 
@@ -786,6 +857,7 @@ impl ConstraintValidator for OrderedElementsConstraint {
                 ViolationCode::TypeMismatched,
                 // unwrap as we already verified with peek that there is a value
                 format!("Unexpected type found {}", values_iter.next().unwrap()),
+                ion_path,
                 violations,
             ))
         } else {
@@ -834,12 +906,17 @@ impl FieldsConstraint {
 }
 
 impl ConstraintValidator for FieldsConstraint {
-    fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
+    fn validate(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> ValidationResult {
         let mut violations: Vec<Violation> = vec![];
 
         // get struct value
         let ion_struct = value
-            .expect_element_of_type(&[IonType::Struct], "fields")?
+            .expect_element_of_type(&[IonType::Struct], "fields", ion_path)?
             .as_struct()
             .unwrap();
 
@@ -850,7 +927,8 @@ impl ConstraintValidator for FieldsConstraint {
                     violations.push(Violation::new(
                         "fields",
                         ViolationCode::InvalidOpenContent,
-                        &format!("Found open content in the struct: {field_name}: {value}"),
+                        format!("Found open content in the struct: {field_name}: {value}"),
+                        ion_path,
                     ));
                 }
             }
@@ -860,6 +938,9 @@ impl ConstraintValidator for FieldsConstraint {
         for (field_name, type_id) in &self.fields {
             let type_def = type_store.get_type_by_id(*type_id).unwrap();
             let values: Vec<&Element> = ion_struct.get_all(field_name).collect();
+
+            // add parent value for current field in ion path
+            ion_path.push(IonPathElement::Field(field_name.to_owned()));
 
             // perform occurs validation for type_def for all values of the given field_name
             let occurs_range: Range = type_def.get_occurs_constraint("fields");
@@ -875,16 +956,20 @@ impl ConstraintValidator for FieldsConstraint {
                         field_name,
                         values.len()
                     ),
+                    ion_path,
                 ));
             }
 
             // verify if all the values for this field name are valid according to type_def
             for value in values {
                 let schema_element: IonSchemaElement = value.into();
-                if let Err(violation) = type_def.validate(&schema_element, type_store) {
+                if let Err(violation) = type_def.validate(&schema_element, type_store, ion_path) {
                     violations.push(violation);
                 }
             }
+
+            // remove current field from list of parents
+            ion_path.pop();
         }
 
         // return error if there were any violation found during validation
@@ -893,6 +978,7 @@ impl ConstraintValidator for FieldsConstraint {
                 "fields",
                 ViolationCode::FieldsNotMatched,
                 "value didn't satisfy fields constraint",
+                ion_path,
                 violations,
             ));
         }
@@ -916,7 +1002,12 @@ impl ContainsConstraint {
 }
 
 impl ConstraintValidator for ContainsConstraint {
-    fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
+    fn validate(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> ValidationResult {
         // Create a peekable iterator for given sequence
         let values: Vec<Element> = match &value {
             IonSchemaElement::SingleElement(element) => {
@@ -934,6 +1025,7 @@ impl ConstraintValidator for ContainsConstraint {
                                     format!("{}", element.ion_type())
                                 }
                             ),
+                            ion_path,
                         ));
                     }
                     Some(ion_sequence) => ion_sequence.iter().map(|a| a.to_owned()).collect(),
@@ -958,7 +1050,8 @@ impl ConstraintValidator for ContainsConstraint {
             return Err(Violation::new(
                 "contains",
                 ViolationCode::MissingValue,
-                &format!("{value} has missing value(s): {missing_values:?}"),
+                format!("{value} has missing value(s): {missing_values:?}"),
+                ion_path,
             ));
         }
 
@@ -984,7 +1077,12 @@ impl ContainerLengthConstraint {
 }
 
 impl ConstraintValidator for ContainerLengthConstraint {
-    fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
+    fn validate(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> ValidationResult {
         // get the size of given value container
         let size = match value {
             IonSchemaElement::SingleElement(element) => {
@@ -993,7 +1091,8 @@ impl ConstraintValidator for ContainerLengthConstraint {
                     return Err(Violation::new(
                         "container_length",
                         ViolationCode::TypeMismatched,
-                        &format!("expected a container found {element}"),
+                        format!("expected a container found {element}"),
+                        ion_path,
                     ));
                 }
 
@@ -1007,10 +1106,11 @@ impl ConstraintValidator for ContainerLengthConstraint {
                         return Err(Violation::new(
                             "container_length",
                             ViolationCode::TypeMismatched,
-                            &format!(
+                            format!(
                                 "expected a container (a list/sexp/struct) but found {}",
                                 element.ion_type()
                             ),
+                            ion_path,
                         ));
                     }
                 }
@@ -1026,7 +1126,8 @@ impl ConstraintValidator for ContainerLengthConstraint {
             return Err(Violation::new(
                 "container_length",
                 ViolationCode::InvalidLength,
-                &format!("expected container length {length_range} found {size}"),
+                format!("expected container length {length_range} found {size}"),
+                ion_path,
             ));
         }
 
@@ -1052,10 +1153,15 @@ impl ByteLengthConstraint {
 }
 
 impl ConstraintValidator for ByteLengthConstraint {
-    fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
+    fn validate(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> ValidationResult {
         // get the size of given bytes
         let size = value
-            .expect_element_of_type(&[IonType::Blob, IonType::Clob], "byte_length")?
+            .expect_element_of_type(&[IonType::Blob, IonType::Clob], "byte_length", ion_path)?
             .as_bytes()
             .unwrap()
             .len();
@@ -1068,7 +1174,8 @@ impl ConstraintValidator for ByteLengthConstraint {
             return Err(Violation::new(
                 "byte_length",
                 ViolationCode::InvalidLength,
-                &format!("expected byte length {length_range} found {size}"),
+                format!("expected byte length {length_range} found {size}"),
+                ion_path,
             ));
         }
 
@@ -1094,10 +1201,19 @@ impl CodepointLengthConstraint {
 }
 
 impl ConstraintValidator for CodepointLengthConstraint {
-    fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
+    fn validate(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> ValidationResult {
         // get the size of given string/symbol Unicode codepoints
         let size = value
-            .expect_element_of_type(&[IonType::String, IonType::Symbol], "codepoint_length")?
+            .expect_element_of_type(
+                &[IonType::String, IonType::Symbol],
+                "codepoint_length",
+                ion_path,
+            )?
             .as_str()
             .unwrap()
             .chars()
@@ -1111,7 +1227,8 @@ impl ConstraintValidator for CodepointLengthConstraint {
             return Err(Violation::new(
                 "codepoint_length",
                 ViolationCode::InvalidLength,
-                &format!("expected codepoint length {length_range} found {size}"),
+                format!("expected codepoint length {length_range} found {size}"),
+                ion_path,
             ));
         }
 
@@ -1144,7 +1261,12 @@ impl ElementConstraint {
 }
 
 impl ConstraintValidator for ElementConstraint {
-    fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
+    fn validate(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> ValidationResult {
         let mut violations: Vec<Violation> = vec![];
 
         // this type_id was validated while creating `ElementConstraint` hence the unwrap here is safe
@@ -1158,26 +1280,36 @@ impl ConstraintValidator for ElementConstraint {
                     return Err(Violation::new(
                         "element",
                         ViolationCode::TypeMismatched,
-                        &format!("expected a container but found {element}"),
+                        format!("expected a container but found {element}"),
+                        ion_path,
                     ));
                 }
 
                 // validate each element of the given value container
                 match element.ion_type() {
                     IonType::List | IonType::SExpression => {
-                        for val in element.as_sequence().unwrap().iter() {
+                        for (index, val) in element.as_sequence().unwrap().iter().enumerate() {
+                            ion_path.push(IonPathElement::Index(index));
                             let schema_element: IonSchemaElement = val.into();
-                            if let Err(violation) = type_def.validate(&schema_element, type_store) {
+                            if let Err(violation) =
+                                type_def.validate(&schema_element, type_store, ion_path)
+                            {
                                 violations.push(violation);
                             }
+                            ion_path.pop();
                         }
                     }
                     IonType::Struct => {
                         for (field_name, val) in element.as_struct().unwrap().iter() {
+                            ion_path
+                                .push(IonPathElement::Field(field_name.text().unwrap().to_owned()));
                             let schema_element: IonSchemaElement = val.into();
-                            if let Err(violation) = type_def.validate(&schema_element, type_store) {
+                            if let Err(violation) =
+                                type_def.validate(&schema_element, type_store, ion_path)
+                            {
                                 violations.push(violation);
                             }
+                            ion_path.pop();
                         }
                     }
                     _ => {
@@ -1185,21 +1317,25 @@ impl ConstraintValidator for ElementConstraint {
                         return Err(Violation::new(
                             "element",
                             ViolationCode::TypeMismatched,
-                            &format!(
+                            format!(
                                 "expected a container (a list/sexp/struct) but found {}",
                                 element.ion_type()
                             ),
+                            ion_path,
                         ));
                     }
                 }
             }
             IonSchemaElement::Document(document) => {
-                for val in document {
+                for (index, val) in document.iter().enumerate() {
+                    ion_path.push(IonPathElement::Index(index));
                     let schema_element: IonSchemaElement = val.into();
 
-                    if let Err(violation) = type_def.validate(&schema_element, type_store) {
+                    if let Err(violation) = type_def.validate(&schema_element, type_store, ion_path)
+                    {
                         violations.push(violation);
                     }
+                    ion_path.pop();
                 }
             }
         }
@@ -1209,6 +1345,7 @@ impl ConstraintValidator for ElementConstraint {
                 "element",
                 ViolationCode::ElementMismatched,
                 "one or more elements don't satisfy element constraint",
+                ion_path,
                 violations,
             ));
         }
@@ -1260,6 +1397,7 @@ impl AnnotationsConstraint {
         value: &Element,
         type_store: &TypeStore,
         violations: Vec<Violation>,
+        ion_path: &mut IonPath,
     ) -> ValidationResult {
         let mut value_annotations = value
             .annotations()
@@ -1279,6 +1417,7 @@ impl AnnotationsConstraint {
                             "annotations",
                             ViolationCode::AnnotationMismatched,
                             "annotations don't match expectations",
+                            ion_path,
                         ));
                     }
                 } else if expected_annotation.value() == actual_annotation {
@@ -1290,6 +1429,7 @@ impl AnnotationsConstraint {
                     "annotations",
                     ViolationCode::AnnotationMismatched,
                     "annotations don't match expectations",
+                    ion_path,
                 ));
             }
         }
@@ -1304,6 +1444,7 @@ impl AnnotationsConstraint {
                     "Unexpected annotations found {}",
                     value_annotations.next().unwrap()
                 ),
+                ion_path,
                 violations,
             ));
         }
@@ -1316,6 +1457,7 @@ impl AnnotationsConstraint {
         value: &Element,
         type_store: &TypeStore,
         violations: Vec<Violation>,
+        ion_path: &mut IonPath,
     ) -> ValidationResult {
         // This will be used by a violation to to return all the missing annotations
         let mut missing_annotations: Vec<&Annotation> = vec![];
@@ -1340,6 +1482,7 @@ impl AnnotationsConstraint {
                 "annotations",
                 ViolationCode::MissingAnnotation,
                 format!("missing annotation(s): {missing_annotations:?}"),
+                ion_path,
                 violations,
             ));
         }
@@ -1357,6 +1500,7 @@ impl AnnotationsConstraint {
                 "annotations",
                 ViolationCode::UnexpectedAnnotation,
                 "found one or more unexpected annotations",
+                ion_path,
                 violations,
             ));
         }
@@ -1366,18 +1510,24 @@ impl AnnotationsConstraint {
 }
 
 impl ConstraintValidator for AnnotationsConstraint {
-    fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
+    fn validate(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> ValidationResult {
         let violations: Vec<Violation> = vec![];
 
         match value {
             IonSchemaElement::SingleElement(element) => {
                 // validate annotations that have list-level `ordered` annotation
                 if self.is_ordered {
-                    return self.validate_ordered_annotations(element, type_store, violations);
+                    return self
+                        .validate_ordered_annotations(element, type_store, violations, ion_path);
                 }
 
                 // validate annotations that does not have list-level `ordered` annotation
-                self.validate_unordered_annotations(element, type_store, violations)
+                self.validate_unordered_annotations(element, type_store, violations, ion_path)
             }
             IonSchemaElement::Document(document) => {
                 // document type can not have annotations
@@ -1385,6 +1535,7 @@ impl ConstraintValidator for AnnotationsConstraint {
                     "annotations",
                     ViolationCode::AnnotationMismatched,
                     "annotations constraint is not applicable for document type",
+                    ion_path,
                 ))
             }
         }
@@ -1409,10 +1560,15 @@ impl PrecisionConstraint {
 }
 
 impl ConstraintValidator for PrecisionConstraint {
-    fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
+    fn validate(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> ValidationResult {
         // get precision of decimal value
         let value_precision = value
-            .expect_element_of_type(&[IonType::Decimal], "precision")?
+            .expect_element_of_type(&[IonType::Decimal], "precision", ion_path)?
             .as_decimal()
             .unwrap()
             .precision();
@@ -1425,7 +1581,8 @@ impl ConstraintValidator for PrecisionConstraint {
             return Err(Violation::new(
                 "precision",
                 ViolationCode::InvalidLength,
-                &format!("expected precision {precision_range} found {value_precision}"),
+                format!("expected precision {precision_range} found {value_precision}"),
+                ion_path,
             ));
         }
 
@@ -1451,10 +1608,15 @@ impl ScaleConstraint {
 }
 
 impl ConstraintValidator for ScaleConstraint {
-    fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
+    fn validate(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> ValidationResult {
         // get scale of decimal value
         let value_scale = value
-            .expect_element_of_type(&[IonType::Decimal], "precision")?
+            .expect_element_of_type(&[IonType::Decimal], "precision", ion_path)?
             .as_decimal()
             .unwrap()
             .scale();
@@ -1467,7 +1629,8 @@ impl ConstraintValidator for ScaleConstraint {
             return Err(Violation::new(
                 "scale",
                 ViolationCode::InvalidLength,
-                &format!("expected scale {scale_range} found {value_scale}"),
+                format!("expected scale {scale_range} found {value_scale}"),
+                ion_path,
             ));
         }
 
@@ -1495,10 +1658,15 @@ impl TimestampPrecisionConstraint {
 }
 
 impl ConstraintValidator for TimestampPrecisionConstraint {
-    fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
+    fn validate(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> ValidationResult {
         // get timestamp value
         let timestamp_value = value
-            .expect_element_of_type(&[IonType::Timestamp], "timestamp_precision")?
+            .expect_element_of_type(&[IonType::Timestamp], "timestamp_precision", ion_path)?
             .as_timestamp()
             .unwrap();
 
@@ -1510,11 +1678,12 @@ impl ConstraintValidator for TimestampPrecisionConstraint {
             return Err(Violation::new(
                 "precision",
                 ViolationCode::InvalidLength,
-                &format!(
+                format!(
                     "expected precision {} found {:?}",
                     precision_range,
                     timestamp_value.precision()
                 ),
+                ion_path,
             ));
         }
 
@@ -1562,7 +1731,12 @@ impl Display for ValidValuesConstraint {
 }
 
 impl ConstraintValidator for ValidValuesConstraint {
-    fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
+    fn validate(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> ValidationResult {
         match value {
             IonSchemaElement::SingleElement(value) => {
                 for valid_value in &self.valid_values {
@@ -1591,19 +1765,21 @@ impl ConstraintValidator for ValidValuesConstraint {
                 Err(Violation::new(
                     "valid_values",
                     ViolationCode::InvalidValue,
-                    &format!(
+                    format!(
                         "expected valid_values to be from {}, found {}",
                         &self, value
                     ),
+                    ion_path,
                 ))
             }
             IonSchemaElement::Document(document) => Err(Violation::new(
                 "valid_values",
                 ViolationCode::InvalidValue,
-                &format!(
+                format!(
                     "expected valid_values to be from {}, found {}",
                     &self, value
                 ),
+                ion_path,
             )),
         }
     }
@@ -1766,10 +1942,15 @@ impl RegexConstraint {
 }
 
 impl ConstraintValidator for RegexConstraint {
-    fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
+    fn validate(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> ValidationResult {
         // get string value and return violation if its not a string or symbol type
         let string_value = value
-            .expect_element_of_type(&[IonType::String, IonType::Symbol], "regex")?
+            .expect_element_of_type(&[IonType::String, IonType::Symbol], "regex", ion_path)?
             .as_str()
             .unwrap();
 
@@ -1783,7 +1964,8 @@ impl ConstraintValidator for RegexConstraint {
             return Err(Violation::new(
                 "regex",
                 ViolationCode::RegexMismatched,
-                &format!("{} doesn't match regex {}", value, self.expression),
+                format!("{} doesn't match regex {}", value, self.expression),
+                ion_path,
             ));
         }
 
@@ -1839,10 +2021,19 @@ impl Utf8ByteLengthConstraint {
 }
 
 impl ConstraintValidator for Utf8ByteLengthConstraint {
-    fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
+    fn validate(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> ValidationResult {
         // get the size of given bytes
         let size = value
-            .expect_element_of_type(&[IonType::String, IonType::Symbol], "utf8_byte_length")?
+            .expect_element_of_type(
+                &[IonType::String, IonType::Symbol],
+                "utf8_byte_length",
+                ion_path,
+            )?
             .as_str()
             .unwrap()
             .len();
@@ -1855,7 +2046,8 @@ impl ConstraintValidator for Utf8ByteLengthConstraint {
             return Err(Violation::new(
                 "utf8_byte_length",
                 ViolationCode::InvalidLength,
-                &format!("expected utf8 byte length {length_range} found {size}"),
+                format!("expected utf8 byte length {length_range} found {size}"),
+                ion_path,
             ));
         }
 
@@ -1881,10 +2073,15 @@ impl TimestampOffsetConstraint {
 }
 
 impl ConstraintValidator for TimestampOffsetConstraint {
-    fn validate(&self, value: &IonSchemaElement, type_store: &TypeStore) -> ValidationResult {
+    fn validate(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> ValidationResult {
         // get timestamp value
         let timestamp_value = value
-            .expect_element_of_type(&[IonType::Timestamp], "timestamp_offset")?
+            .expect_element_of_type(&[IonType::Timestamp], "timestamp_offset", ion_path)?
             .as_timestamp()
             .unwrap();
 
@@ -1899,11 +2096,12 @@ impl ConstraintValidator for TimestampOffsetConstraint {
             return Err(Violation::new(
                 "timestamp_offset",
                 ViolationCode::InvalidLength,
-                &format!(
+                format!(
                     "expected timestamp offset from {:?} found {}",
                     formatted_valid_offsets,
                     <Option<i32> as Into<TimestampOffset>>::into(timestamp_value.offset())
                 ),
+                ion_path,
             ));
         }
 
