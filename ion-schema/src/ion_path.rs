@@ -2,12 +2,13 @@ use ion_rs::value::owned::Element;
 use ion_rs::value::Builder;
 use ion_rs::Symbol;
 use std::fmt;
-use std::fmt::Formatter;
+use std::fmt::{Debug, Formatter};
 
-#[derive(Clone, PartialEq)]
+/// Represents a single element in Ion Path which is either an index value or a field name depending on its parent container type
+#[derive(Clone, PartialEq, PartialOrd)]
 pub enum IonPathElement {
-    IndexedElement { index: usize },
-    Field { name: String },
+    Index(usize),
+    Field(String),
 }
 
 // TODO: This can be removed once we have a complete Display for violation
@@ -15,11 +16,11 @@ pub enum IonPathElement {
 impl fmt::Debug for IonPathElement {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self {
-            IonPathElement::IndexedElement { index } => {
-                write!(f, "{index}")
+            IonPathElement::Index(index) => {
+                write!(f, "{}", Element::from(*index as i64))
             }
-            IonPathElement::Field { name } => {
-                write!(f, ".{name}")
+            IonPathElement::Field(name) => {
+                write!(f, "{}", Element::from(Symbol::from(name.as_str())))
             }
         }
     }
@@ -27,39 +28,54 @@ impl fmt::Debug for IonPathElement {
 
 impl fmt::Display for IonPathElement {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match &self {
-            IonPathElement::IndexedElement { index } => {
-                write!(f, "[{index}]")
-            }
-            IonPathElement::Field { name } => {
-                write!(f, ".{name}")
-            }
-        }
+        Debug::fmt(&self, f)
     }
 }
 
-#[derive(Default, Clone, PartialEq)]
+/// Represents an IonPath associated with given Ion value for which the violation occurred.
+/// IonPath consists of IonPathElements where each element could either be an index value or a field name.
+///
+/// Note: IonPath is Displayed as an SExpression where each element of SExpression is either an index value or a field name.
+///
+/// Example of IonPath for an Ion value is as following:
+/// ```ion
+/// {
+///     greetings: [ "hello", "hi", "hey" ]
+/// }
+/// ```
+///
+/// For an Ion value given as above if the violation occurred for Ion value "hi" then the associated
+/// IonPath would be as below:
+/// ```ion
+/// ( greetings 1 ) // here 1 represents the index of "hi" in the Ion list value
+/// ```
+///
+/// For the same Ion value the IonPath associated with list value ["hello", "hi", "hey"]  would be as following:
+/// ```ion
+/// ( greetings ) // where `greetings` represents the field name for the list value
+/// ```
+#[derive(Default, Clone, PartialEq, PartialOrd)]
 pub struct IonPath {
-    parents: Vec<IonPathElement>,
+    ion_path_elements: Vec<IonPathElement>,
 }
 
 impl IonPath {
-    pub fn add_parent(&mut self, parent: IonPathElement) {
-        self.parents.push(parent);
+    pub fn push(&mut self, parent: IonPathElement) {
+        self.ion_path_elements.push(parent);
     }
 
-    pub fn remove_last_parent(&mut self) -> Option<IonPathElement> {
-        self.parents.pop()
+    pub fn pop(&mut self) -> Option<IonPathElement> {
+        self.ion_path_elements.pop()
     }
 }
 
-impl Into<Element> for IonPath {
-    fn into(self) -> Element {
+impl From<IonPath> for Element {
+    fn from(value: IonPath) -> Element {
         let mut ion_path = vec![];
-        for parent in &self.parents {
+        for parent in &value.ion_path_elements {
             let element = match parent {
-                IonPathElement::IndexedElement { index } => Element::from(*index as i64),
-                IonPathElement::Field { name } => Element::from(Symbol::from(name.as_str())),
+                IonPathElement::Index(index) => Element::from(*index as i64),
+                IonPathElement::Field(name) => Element::from(Symbol::from(name.as_str())),
             };
             ion_path.push(element);
         }
@@ -71,20 +87,13 @@ impl Into<Element> for IonPath {
 // This is currently used by schema sandbox to print nested violations
 impl fmt::Debug for IonPath {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "./",)?;
-        for parent in &self.parents {
-            write!(f, "{parent}")?;
-        }
-        Ok(())
+        let ion_path_sexp: Element = self.to_owned().into();
+        write!(f, "{ion_path_sexp}")
     }
 }
 
 impl fmt::Display for IonPath {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "./",)?;
-        for parent in &self.parents {
-            write!(f, "{parent}")?;
-        }
-        Ok(())
+        Debug::fmt(&self, f)
     }
 }

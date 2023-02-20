@@ -511,9 +511,9 @@ impl TypeValidator for TypeDefinitionImpl {
         &self,
         value: &IonSchemaElement,
         type_store: &TypeStore,
-        ion_pah: &mut IonPath,
+        ion_path: &mut IonPath,
     ) -> bool {
-        let violation = self.validate(value, type_store, ion_pah);
+        let violation = self.validate(value, type_store, ion_path);
         violation.is_ok()
     }
 

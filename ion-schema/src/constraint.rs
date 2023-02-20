@@ -743,13 +743,13 @@ impl OrderedElementsConstraint {
         // use this counter to keep track of valid values for given type_def
         let mut count: i64 = 0;
         // use this index to keep track of Ion path for violation
-        let mut idx = 0;
+        let mut index = 0;
 
         // consume elements to reach the minimum required values for this type
         while let Some(value) = values_iter.next_if(|v| !occurs_range.contains(&count.into())) {
             let schema_element: IonSchemaElement = value.into();
 
-            ion_path.add_parent(IonPathElement::IndexedElement { index: idx });
+            ion_path.push(IonPathElement::Index(index));
 
             if type_def.is_valid(&schema_element, type_store, ion_path) {
                 count += 1;
@@ -763,8 +763,8 @@ impl OrderedElementsConstraint {
                 ));
             }
 
-            ion_path.remove_last_parent();
-            idx += 1;
+            ion_path.pop();
+            index += 1;
         }
 
         // greedily take as many values as we can of this type without going out
@@ -940,9 +940,7 @@ impl ConstraintValidator for FieldsConstraint {
             let values: Vec<&Element> = ion_struct.get_all(field_name).collect();
 
             // add parent value for current field in ion path
-            ion_path.add_parent(IonPathElement::Field {
-                name: field_name.to_owned(),
-            });
+            ion_path.push(IonPathElement::Field(field_name.to_owned()));
 
             // perform occurs validation for type_def for all values of the given field_name
             let occurs_range: Range = type_def.get_occurs_constraint("fields");
@@ -971,7 +969,7 @@ impl ConstraintValidator for FieldsConstraint {
             }
 
             // remove current field from list of parents
-            ion_path.remove_last_parent();
+            ion_path.pop();
         }
 
         // return error if there were any violation found during validation
@@ -1290,29 +1288,28 @@ impl ConstraintValidator for ElementConstraint {
                 // validate each element of the given value container
                 match element.ion_type() {
                     IonType::List | IonType::SExpression => {
-                        for (idx, val) in element.as_sequence().unwrap().iter().enumerate() {
-                            ion_path.add_parent(IonPathElement::IndexedElement { index: idx });
+                        for (index, val) in element.as_sequence().unwrap().iter().enumerate() {
+                            ion_path.push(IonPathElement::Index(index));
                             let schema_element: IonSchemaElement = val.into();
                             if let Err(violation) =
                                 type_def.validate(&schema_element, type_store, ion_path)
                             {
                                 violations.push(violation);
                             }
-                            ion_path.remove_last_parent();
+                            ion_path.pop();
                         }
                     }
                     IonType::Struct => {
                         for (field_name, val) in element.as_struct().unwrap().iter() {
-                            ion_path.add_parent(IonPathElement::Field {
-                                name: field_name.text().unwrap().to_owned(),
-                            });
+                            ion_path
+                                .push(IonPathElement::Field(field_name.text().unwrap().to_owned()));
                             let schema_element: IonSchemaElement = val.into();
                             if let Err(violation) =
                                 type_def.validate(&schema_element, type_store, ion_path)
                             {
                                 violations.push(violation);
                             }
-                            ion_path.remove_last_parent();
+                            ion_path.pop();
                         }
                     }
                     _ => {
@@ -1330,15 +1327,15 @@ impl ConstraintValidator for ElementConstraint {
                 }
             }
             IonSchemaElement::Document(document) => {
-                for (idx, val) in document.iter().enumerate() {
-                    ion_path.add_parent(IonPathElement::IndexedElement { index: idx });
+                for (index, val) in document.iter().enumerate() {
+                    ion_path.push(IonPathElement::Index(index));
                     let schema_element: IonSchemaElement = val.into();
 
                     if let Err(violation) = type_def.validate(&schema_element, type_store, ion_path)
                     {
                         violations.push(violation);
                     }
-                    ion_path.remove_last_parent();
+                    ion_path.pop();
                 }
             }
         }
