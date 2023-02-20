@@ -32,27 +32,31 @@ impl fmt::Display for IonPathElement {
     }
 }
 
-/// Represents an IonPath associated with given Ion value for which the violation occurred.
-/// IonPath consists of IonPathElements where each element could either be an index value or a field name.
+/// Represents the path to the nested Ion value for which the violation occurred.
+/// An [IonPath] consists of [IonPathElement]s where each element could either be an index integer or a field name string. [IonPath]s are serialized as s-expressions.
 ///
-/// Note: IonPath is Displayed as an SExpression where each element of SExpression is either an index value or a field name.
-///
-/// Example of IonPath for an Ion value is as following:
+/// Here are some examples of serialized paths::
 /// ```ion
 /// {
 ///     greetings: [ "hello", "hi", "hey" ]
 /// }
 /// ```
 ///
-/// For an Ion value given as above if the violation occurred for Ion value "hi" then the associated
-/// IonPath would be as below:
+/// For an Ion value given as above if the violation occurred at the top level for given struct then
+/// the associated Ion Path would be as following:
 /// ```ion
-/// ( greetings 1 ) // here 1 represents the index of "hi" in the Ion list value
+/// () // this empty Ion Path suggests violation occurred at the top level
 /// ```
 ///
-/// For the same Ion value the IonPath associated with list value ["hello", "hi", "hey"]  would be as following:
+/// For the same Ion value the Ion Path associated with list value ["hello", "hi", "hey"]  would be as following:
 /// ```ion
-/// ( greetings ) // where `greetings` represents the field name for the list value
+/// ( greetings ) // this represents violation occurred at field with `greetings` as the field name for the list value
+/// ```
+///
+/// For an Ion value given as above if the violation occurred for Ion value "hi" then the associated
+/// Ion Path would be as below:
+/// ```ion
+/// ( greetings 1 ) // here 1 represents the index of "hi" in the Ion list value
 /// ```
 #[derive(Default, Clone, PartialEq, PartialOrd)]
 pub struct IonPath {
