@@ -27,6 +27,7 @@ mod constraint;
 mod import;
 mod ion_path;
 pub mod isl;
+mod nfa;
 pub mod result;
 pub mod schema;
 pub mod system;
@@ -55,7 +56,7 @@ pub mod external {
 /// // create an IonSchemaElement for document type based on vector of owned elements
 /// let document: IonSchemaElement = IonSchemaElement::Document(vec![owned_element]);
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum IonSchemaElement {
     SingleElement(Element),
     Document(Vec<Element>),
