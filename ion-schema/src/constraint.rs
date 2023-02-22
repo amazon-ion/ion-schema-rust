@@ -3,12 +3,13 @@ use crate::isl::isl_constraint::{IslConstraint, IslRegexConstraint};
 use crate::isl::isl_range::{Range, RangeImpl};
 use crate::isl::isl_type_reference::IslTypeRef;
 use crate::isl::util::{Annotation, TimestampOffset, TimestampPrecision, ValidValue};
+use crate::nfa::{NfaBuilder, NfaRun, State, END_OF_STREAM_EVENT};
 use crate::result::{
     invalid_schema_error, invalid_schema_error_raw, IonSchemaError, IonSchemaResult,
     ValidationResult,
 };
 use crate::system::{PendingTypes, TypeId, TypeStore};
-use crate::types::{TypeDefinition, TypeValidator};
+use crate::types::TypeValidator;
 use crate::violation::{Violation, ViolationCode};
 use crate::IonSchemaElement;
 use ion_rs::value::owned::Element;
@@ -19,6 +20,7 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::fmt::{Display, Formatter};
 use std::iter::Peekable;
+use std::rc::Rc;
 use std::str::Chars;
 
 /// Provides validation for schema Constraint
@@ -731,72 +733,94 @@ impl OrderedElementsConstraint {
         Ok(OrderedElementsConstraint::new(resolved_types))
     }
 
-    /// Validates a type_def for occurs constraint using values_iter
-    fn type_def_occurs_validation<'a>(
-        type_def: &TypeDefinition,
-        values_iter: &mut Peekable<Box<dyn Iterator<Item = &Element> + 'a>>,
-        type_store: &TypeStore,
-        ion_path: &mut IonPath,
-    ) -> ValidationResult {
-        let occurs_range: Range = type_def.get_occurs_constraint("ordered_elements");
+    pub fn build_nfa_from_type_ids(type_ids: &Vec<TypeId>, type_store: &TypeStore) -> NfaRun {
+        let mut nfa_builder = NfaBuilder::new();
+        // add initial state to nfa
+        nfa_builder.with_state(State::Initial);
+        let mut previous_state_was_optional = false;
 
-        // use this counter to keep track of valid values for given type_def
-        let mut count: i64 = 0;
-        // use this index to keep track of Ion path for violation
-        let mut index = 0;
+        let mut last_non_optional_state = Some(0);
 
-        // consume elements to reach the minimum required values for this type
-        while let Some(value) = values_iter.next_if(|v| !occurs_range.contains(&count.into())) {
-            let schema_element: IonSchemaElement = value.into();
+        for type_id in type_ids {
+            // for optional state add the transition to next state for previous state
+            if previous_state_was_optional {
+                nfa_builder.with_transition(
+                    nfa_builder.total_states() - 2,
+                    nfa_builder.total_states(),
+                    Some(*type_id),
+                );
+                previous_state_was_optional = false;
+            }
 
-            ion_path.push(IonPathElement::Index(index));
+            // add transition to next state
+            nfa_builder.with_transition(
+                nfa_builder.total_states() - 1,
+                nfa_builder.total_states(),
+                Some(*type_id),
+            );
 
-            if type_def.is_valid(&schema_element, type_store, ion_path) {
-                count += 1;
+            let type_def = type_store.get_type_by_id(*type_id).unwrap();
+            let occurs_range: Range = type_def.get_occurs_constraint("ordered_elements");
+
+            // unwrap here won't lead to panic as the check for non negative range was already done while parsing ordered_elements constraint
+            let (min, max) = occurs_range.non_negative_range_boundaries().unwrap();
+            nfa_builder.with_state(State::Intermediate { min, max });
+
+            if min <= 0 {
+                // if it is an optional state then set the flag to true
+                // this will be used to skip this optional state and add a transition from previous state to next state
+                previous_state_was_optional = true;
             } else {
-                // there's not enough values of this expected type
-                return Err(Violation::new(
-                    "ordered_elements",
-                    ViolationCode::TypeMismatched,
-                    format!("Expected {occurs_range} of type {type_def}: found {count}"),
-                    ion_path,
-                ));
-            }
-
-            ion_path.pop();
-            index += 1;
-        }
-
-        // greedily take as many values as we can of this type without going out
-        // of the maximum of the range
-        while Option::is_some(&values_iter.peek()) && occurs_range.contains(&(count + 1).into()) {
-            // don't consume it until we know it's valid for the type
-            if let Some(value) = values_iter.peek() {
-                let schema_element: IonSchemaElement = (*value).into();
-                if type_def.is_valid(&schema_element, type_store, ion_path) {
-                    let _ = values_iter.next(); // consume it as it is valid
-                    count += 1;
-                } else {
-                    // if the value doesn't match this type_def, then we'll break out of the while
-                    // loop and check the value against the next type_def.
-                    break;
+                // if this is a non optional state then add a transition from last non optional state to this state
+                if last_non_optional_state.is_some() {
+                    // add a transition to last non optional state for current state
+                    nfa_builder.with_transition(
+                        last_non_optional_state.unwrap(),
+                        nfa_builder.total_states() - 1,
+                        Some(*type_id),
+                    );
                 }
+                last_non_optional_state = Some(nfa_builder.total_states() - 1);
+            }
+
+            if max >= 2 {
+                // add a a transition to self for states that have  max >= 2
+                nfa_builder.with_transition(
+                    nfa_builder.total_states() - 1,
+                    nfa_builder.total_states() - 1,
+                    Some(*type_id),
+                );
             }
         }
 
-        // verify if there is no values left to validate and if it follows `occurs` constraint for this expected type
-        if Option::is_none(&values_iter.peek()) && !occurs_range.contains(&count.into()) {
-            // there's not enough values of this expected type
-            return Err(Violation::new(
-                "ordered_elements",
-                ViolationCode::TypeMismatched,
-                format!("Expected {occurs_range} of type {type_def}: found {count}"),
-                ion_path,
-            ));
+        if previous_state_was_optional {
+            nfa_builder.with_transition(
+                nfa_builder.total_states() - 2,
+                nfa_builder.total_states(),
+                None,
+            );
         }
 
-        // if the type_def validation passes all the above checks return Ok(())
-        Ok(())
+        if last_non_optional_state.is_some() {
+            // add a transition to last non optional state for final state
+            nfa_builder.with_transition(
+                last_non_optional_state.unwrap(),
+                nfa_builder.total_states(),
+                None,
+            );
+        }
+
+        // add final state transition
+        nfa_builder.with_transition(
+            nfa_builder.total_states() - 1,
+            nfa_builder.total_states(),
+            None,
+        );
+
+        // add final state
+        nfa_builder.with_state(State::Final);
+
+        NfaRun::new(Rc::new(nfa_builder.build()))
     }
 }
 
@@ -809,8 +833,7 @@ impl ConstraintValidator for OrderedElementsConstraint {
     ) -> ValidationResult {
         let violations: Vec<Violation> = vec![];
 
-        // Create a peekable iterator for given sequence
-        let mut values_iter = match &value {
+        let values = match &value {
             IonSchemaElement::SingleElement(element) => match element.as_sequence() {
                 None => {
                     return Err(Violation::with_violations(
@@ -828,41 +851,33 @@ impl ConstraintValidator for OrderedElementsConstraint {
                         violations,
                     ));
                 }
-                Some(sequence) => {
-                    let itr: Box<dyn Iterator<Item = &Element>> = Box::new(sequence.iter());
-                    itr.peekable()
-                }
+                Some(sequence) => sequence.iter().map(|a| a.to_owned()).collect(),
             },
-            IonSchemaElement::Document(document) => {
-                let itr: Box<dyn Iterator<Item = &Element>> = Box::new(document.iter());
-                itr.peekable()
-            }
+            IonSchemaElement::Document(document) => document.to_owned(),
         };
 
-        for type_id in &self.type_ids {
-            let type_def = type_store.get_type_by_id(*type_id).unwrap();
-            OrderedElementsConstraint::type_def_occurs_validation(
-                type_def,
-                &mut values_iter,
-                type_store,
-                ion_path,
-            )?;
+        // build nfa for validation
+        let mut nfa_run =
+            OrderedElementsConstraint::build_nfa_from_type_ids(&self.type_ids, type_store);
+
+        // use nfa_run for validation
+        for event in values {
+            nfa_run.visits = nfa_run.transition(Some(event.to_owned()), type_store);
         }
 
-        if Option::is_some(&values_iter.peek()) {
-            // check if there still values left at the end of sequence (list/sexp), when we have already
-            // completed visiting through all of the ordered elements type_defs
-            Err(Violation::with_violations(
+        nfa_run.visits = nfa_run.transition(END_OF_STREAM_EVENT, type_store);
+
+        if !nfa_run.has_final_state() {
+            return Err(Violation::with_violations(
                 "ordered_elements",
                 ViolationCode::TypeMismatched,
-                // unwrap as we already verified with peek that there is a value
-                format!("Unexpected type found {}", values_iter.next().unwrap()),
+                format!("one or more ordered elements didn't match"),
                 ion_path,
                 violations,
-            ))
-        } else {
-            Ok(())
+            ));
         }
+
+        Ok(())
     }
 }
 
