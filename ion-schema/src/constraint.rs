@@ -766,16 +766,16 @@ impl OrderedElementsConstraint {
             let (min, max) = occurs_range.non_negative_range_boundaries().unwrap();
             nfa_builder.with_state(State::Intermediate { min, max });
 
-            if min <= 0 {
+            if min == 0 {
                 // if it is an optional state then set the flag to true
                 // this will be used to skip this optional state and add a transition from previous state to next state
                 previous_state_was_optional = true;
             } else {
                 // if this is a non optional state then add a transition from last non optional state to this state
-                if last_non_optional_state.is_some() {
+                if let Some(start_id) = last_non_optional_state {
                     // add a transition to last non optional state for current state
                     nfa_builder.with_transition(
-                        last_non_optional_state.unwrap(),
+                        start_id,
                         nfa_builder.total_states() - 1,
                         Some(*type_id),
                     );
@@ -801,13 +801,9 @@ impl OrderedElementsConstraint {
             );
         }
 
-        if last_non_optional_state.is_some() {
+        if let Some(start_id) = last_non_optional_state {
             // add a transition to last non optional state for final state
-            nfa_builder.with_transition(
-                last_non_optional_state.unwrap(),
-                nfa_builder.total_states(),
-                None,
-            );
+            nfa_builder.with_transition(start_id, nfa_builder.total_states(), None);
         }
 
         // add final state transition
@@ -871,7 +867,7 @@ impl ConstraintValidator for OrderedElementsConstraint {
             return Err(Violation::with_violations(
                 "ordered_elements",
                 ViolationCode::TypeMismatched,
-                format!("one or more ordered elements didn't match"),
+                "one or more ordered elements didn't match",
                 ion_path,
                 violations,
             ));

@@ -54,7 +54,7 @@ impl NfaRun {
         for (transition_from_state_id, visits) in self.visits.iter() {
             let can_exit = self.nfa.states[*transition_from_state_id].can_exit(visits);
             let transition_to_states: &HashSet<Transition> =
-                self.nfa.transitions.get(&transition_from_state_id).unwrap();
+                self.nfa.transitions.get(transition_from_state_id).unwrap();
             for transition_to_state in transition_to_states {
                 let transition_to_state_id = transition_to_state.destination;
                 if transition_to_state_id == *transition_from_state_id {
@@ -112,7 +112,7 @@ impl NfaBuilder {
             .nfa
             .transitions
             .entry(start_id)
-            .or_insert_with(|| HashSet::new());
+            .or_insert_with(HashSet::new);
 
         end_states.insert(Transition {
             destination: end_id,
