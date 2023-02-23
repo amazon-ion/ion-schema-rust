@@ -733,55 +733,76 @@ impl OrderedElementsConstraint {
         Ok(OrderedElementsConstraint::new(resolved_types))
     }
 
-    pub fn build_nfa_from_type_ids(type_ids: &Vec<TypeId>, type_store: &TypeStore) -> NfaRun {
+    // Builds an NFA state machine based on given type_ids
+    // The final NFA will contains 3 types of states:
+    // * Initial - This state simply represents an initial state to start building the NFA. (Only one Initial state is allowed)
+    // * Intermediate - This state represents all the intermediate states for NFA. Each intermediate state contains a (min, max) range which represents occurrence for an event to reach that state.
+    // * Final - This state represents the final state which is only reached if the validation succeeds (Only one Final state is allowed)
+    //
+    // All the states has some transitions between them leading from one state to another or back to itself.
+    // All the intermediate states that have minimum occurrence as 0 are optional states meaning those states can lead to another state with 0 occurrence event transitions.
+    // There two special case in transitions as following:
+    // * max >= 2 -This represents transitions to self for a state. Any intermediate states with max >= 2 can transition back to itself.
+    // * max == 0 -This represents transitions skipping the optional state. Any intermediate state that has min == 0 can be skipped to transition to its next state.
+    //
+    // Here is an example of how the built NFA would look like for an `ordered_elements` constraint:
+    // ```
+    // ordered_elements: [
+    //     { type: int, occurs: optional },
+    //     number,
+    //     any
+    // ]
+    // ```
+    // NFA:
+    //                              +--------- 0 -----------+
+    //                              |                       |
+    //                              |                       V
+    // I(INITIAL) ----> S1(INTERMEDIATE(0, 1)) -- 1 --> S2(INTERMEDIATE(1, 1)) -- 1 --> S3(INTERMEDIATE(1, 1)) ----> F(FINAL)
+    //
+    // Validation:
+    // Valid input value: `[1, 2, 3]`
+    // +------------------------------+
+    // | event  | State Visits        |
+    // +------------------------------+
+    // |   -    |  I: 1               |
+    // |   1    |  S1: 1, S2: 1       |
+    // |   2    |  S2: 1, S3: 1       |
+    // |   3    |  S3: 1              |
+    // |   END  |  F: 1               |
+    // +------------------------------+
+    //
+    // Invalid input value: `[1, 2]`
+    // +------------------------------+
+    // | event  | State Visits        |
+    // +------------------------------+
+    // |   -    |  I: 1               |
+    // |   1    |  S1: 1, S2: 1       |
+    // |   2    |  S2: 1, S3: 1       |
+    // |   END  |  S3: 1              |
+    // +------------------------------+
+    // As shown above visit count for `END` doesn't have final state in it which means the value resulted to be invalid.
+    //
+    fn build_nfa_from_type_ids(type_ids: &Vec<TypeId>, type_store: &TypeStore) -> NfaRun {
         let mut nfa_builder = NfaBuilder::new();
         // add initial state to nfa
         nfa_builder.with_state(State::Initial);
-        let mut previous_state_was_optional = false;
-
-        let mut last_non_optional_state = Some(0);
 
         for type_id in type_ids {
-            // for optional state add the transition to next state for previous state
-            if previous_state_was_optional {
-                nfa_builder.with_transition(
-                    nfa_builder.total_states() - 2,
-                    nfa_builder.total_states(),
-                    Some(*type_id),
-                );
-                previous_state_was_optional = false;
-            }
+            let type_def = type_store.get_type_by_id(*type_id).unwrap();
+            let occurs_range: Range = type_def.get_occurs_constraint("ordered_elements");
+
+            // unwrap here won't lead to panic as the check for non negative range was already done while parsing ordered_elements constraint
+            let (min, max) = occurs_range.non_negative_range_boundaries().unwrap();
 
             // add transition to next state
             nfa_builder.with_transition(
                 nfa_builder.total_states() - 1,
                 nfa_builder.total_states(),
                 Some(*type_id),
+                min == 0,
             );
 
-            let type_def = type_store.get_type_by_id(*type_id).unwrap();
-            let occurs_range: Range = type_def.get_occurs_constraint("ordered_elements");
-
-            // unwrap here won't lead to panic as the check for non negative range was already done while parsing ordered_elements constraint
-            let (min, max) = occurs_range.non_negative_range_boundaries().unwrap();
             nfa_builder.with_state(State::Intermediate { min, max });
-
-            if min == 0 {
-                // if it is an optional state then set the flag to true
-                // this will be used to skip this optional state and add a transition from previous state to next state
-                previous_state_was_optional = true;
-            } else {
-                // if this is a non optional state then add a transition from last non optional state to this state
-                if let Some(start_id) = last_non_optional_state {
-                    // add a transition to last non optional state for current state
-                    nfa_builder.with_transition(
-                        start_id,
-                        nfa_builder.total_states() - 1,
-                        Some(*type_id),
-                    );
-                }
-                last_non_optional_state = Some(nfa_builder.total_states() - 1);
-            }
 
             if max >= 2 {
                 // add a a transition to self for states that have  max >= 2
@@ -789,21 +810,9 @@ impl OrderedElementsConstraint {
                     nfa_builder.total_states() - 1,
                     nfa_builder.total_states() - 1,
                     Some(*type_id),
+                    min == 0,
                 );
             }
-        }
-
-        if previous_state_was_optional {
-            nfa_builder.with_transition(
-                nfa_builder.total_states() - 2,
-                nfa_builder.total_states(),
-                None,
-            );
-        }
-
-        if let Some(start_id) = last_non_optional_state {
-            // add a transition to last non optional state for final state
-            nfa_builder.with_transition(start_id, nfa_builder.total_states(), None);
         }
 
         // add final state transition
@@ -811,6 +820,7 @@ impl OrderedElementsConstraint {
             nfa_builder.total_states() - 1,
             nfa_builder.total_states(),
             None,
+            false,
         );
 
         // add final state

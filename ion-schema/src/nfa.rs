@@ -11,20 +11,21 @@ pub(crate) const END_OF_STREAM_EVENT: Option<Event> = None;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Transition {
-    destination: usize,
+    destination: usize,      // represents destination state
+    to_optional_state: bool, // represents if destination state is an optional state or not
     type_id: Option<TypeId>, // None is used for final state transition
 }
 
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct Nfa {
-    states: Vec<State>,
-    transitions: HashMap<usize, HashSet<Transition>>,
+    pub(crate) states: Vec<State>,
+    pub(crate) transitions: HashMap<usize, HashSet<Transition>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct NfaRun {
     pub(crate) visits: HashMap<usize, usize>,
-    nfa: Rc<Nfa>,
+    pub(crate) nfa: Rc<Nfa>,
 }
 
 impl NfaRun {
@@ -55,32 +56,80 @@ impl NfaRun {
             let can_exit = self.nfa.states[*transition_from_state_id].can_exit(visits);
             let transition_to_states: &HashSet<Transition> =
                 self.nfa.transitions.get(transition_from_state_id).unwrap();
-            for transition_to_state in transition_to_states {
-                let transition_to_state_id = transition_to_state.destination;
-                if transition_to_state_id == *transition_from_state_id {
-                    if self.nfa.states[transition_to_state_id].can_reenter(&(visits + 1)) {
-                        let can_enter = self.nfa.states[transition_to_state_id].can_enter(
-                            event.to_owned(),
-                            transition_to_state.type_id,
-                            type_store,
-                        );
-                        if can_enter {
-                            new_states.insert(transition_to_state_id, visits + 1);
-                        }
-                    }
-                } else if can_exit {
+            self.to_states_transitions(
+                transition_from_state_id,
+                transition_to_states,
+                can_exit,
+                visits,
+                event.to_owned(),
+                type_store,
+                &mut new_states,
+            );
+        }
+        new_states
+    }
+
+    fn to_states_transitions(
+        &self,
+        transition_from_state_id: &usize,
+        transition_to_states: &HashSet<Transition>,
+        can_exit: bool,
+        visits: &usize,
+        event: Option<Event>,
+        type_store: &TypeStore,
+        new_states: &mut HashMap<usize, usize>,
+    ) {
+        let mut transition_to_states_for_optional_state: HashSet<Transition> = HashSet::new();
+        for transition_to_state in transition_to_states {
+            let transition_to_state_id = transition_to_state.destination;
+
+            if transition_to_state_id == *transition_from_state_id {
+                if self.nfa.states[transition_to_state_id].can_reenter(&(visits + 1)) {
                     let can_enter = self.nfa.states[transition_to_state_id].can_enter(
                         event.to_owned(),
                         transition_to_state.type_id,
                         type_store,
                     );
                     if can_enter {
-                        new_states.insert(transition_to_state_id, 1);
+                        new_states.insert(transition_to_state_id, visits + 1);
                     }
                 }
+            } else if can_exit {
+                let can_enter = self.nfa.states[transition_to_state_id].can_enter(
+                    event.to_owned(),
+                    transition_to_state.type_id,
+                    type_store,
+                );
+                if can_enter {
+                    new_states.insert(transition_to_state_id, 1);
+                }
+            }
+
+            // for optional state add transitions to next states skipping the optional state
+            if transition_to_state.to_optional_state {
+                let mut transitions = self
+                    .nfa
+                    .transitions
+                    .get(&transition_to_state_id)
+                    .unwrap()
+                    .to_owned();
+
+                // skip the optional state itself
+                transitions.remove(transition_to_state);
+
+                transition_to_states_for_optional_state.extend(transitions);
+
+                self.to_states_transitions(
+                    &transition_to_state_id,
+                    &transition_to_states_for_optional_state,
+                    can_exit,
+                    visits,
+                    event.to_owned(),
+                    type_store,
+                    new_states,
+                );
             }
         }
-        new_states
     }
 }
 
@@ -107,7 +156,13 @@ impl NfaBuilder {
         self.nfa.states.len()
     }
 
-    pub fn with_transition(&mut self, start_id: usize, end_id: usize, type_id: Option<TypeId>) {
+    pub fn with_transition(
+        &mut self,
+        start_id: usize,
+        end_id: usize,
+        type_id: Option<TypeId>,
+        to_optional_state: bool,
+    ) {
         let end_states = self
             .nfa
             .transitions
@@ -116,6 +171,7 @@ impl NfaBuilder {
 
         end_states.insert(Transition {
             destination: end_id,
+            to_optional_state,
             type_id,
         });
     }
