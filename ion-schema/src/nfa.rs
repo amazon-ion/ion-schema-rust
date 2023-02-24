@@ -6,8 +6,30 @@ use ion_rs::value::owned::Element;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-type Event = Element;
-pub(crate) const END_OF_STREAM_EVENT: Option<Event> = None;
+#[derive(Debug, Clone, PartialEq)]
+pub enum Event {
+    Value(Element),
+    EndOfStream,
+}
+
+impl Event {
+    // Note: can not use this as a From<Element> implementation as Element is not defined within this crate
+    pub(crate) fn from_elements_to_events<T: IntoIterator<Item = Element>>(iter: T) -> Vec<Event> {
+        let mut events: Vec<Event> = iter
+            .into_iter()
+            .map(|e| <Element as Into<Event>>::into(e))
+            .collect();
+        // add END_OF_STREAM at the end of events vec
+        events.push(Event::EndOfStream);
+        events
+    }
+}
+
+impl From<Element> for Event {
+    fn from(value: Element) -> Self {
+        Event::Value(value)
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Transition {
@@ -46,11 +68,7 @@ impl NfaRun {
             .any(|(id, _)| self.nfa.states[*id] == State::Final)
     }
 
-    pub fn transition(
-        &mut self,
-        event: Option<Event>,
-        type_store: &TypeStore,
-    ) -> HashMap<usize, usize> {
+    pub fn transition(&mut self, event: Event, type_store: &TypeStore) -> HashMap<usize, usize> {
         let mut new_states = HashMap::new();
         for (transition_from_state_id, visits) in self.visits.iter() {
             let can_exit = self.nfa.states[*transition_from_state_id].can_exit(visits);
@@ -75,7 +93,7 @@ impl NfaRun {
         transition_to_states: &HashSet<Transition>,
         can_exit: bool,
         visits: &usize,
-        event: Option<Event>,
+        event: Event,
         type_store: &TypeStore,
         new_states: &mut HashMap<usize, usize>,
     ) {
@@ -177,6 +195,10 @@ impl NfaBuilder {
     }
 }
 
+// The NFA contains 3 types of states:
+// * Initial - This state simply represents an initial state to start building the NFA. (Only one Initial state is allowed)
+// * Intermediate - This state represents all the intermediate states for NFA. Each intermediate state contains a (min, max) range which represents occurrence for an event to reach that state.
+// * Final - This state represents the final state which is only reached if the validation succeeds (Only one Final state is allowed)
 #[derive(Debug, Clone, PartialEq)]
 pub enum State {
     Initial,
@@ -185,19 +207,16 @@ pub enum State {
 }
 
 impl State {
-    pub fn can_enter(
-        &self,
-        event: Option<Event>,
-        type_id: Option<TypeId>,
-        type_store: &TypeStore,
-    ) -> bool {
+    pub fn can_enter(&self, event: Event, type_id: Option<TypeId>, type_store: &TypeStore) -> bool {
         match &self {
             State::Initial => false,
             State::Intermediate { min, max } => {
-                if event.is_none() {
-                    return false;
-                }
-                let schema_element: IonSchemaElement = (&event.unwrap()).into();
+                let schema_element: IonSchemaElement = match event {
+                    Event::Value(element) => (&element).into(),
+                    Event::EndOfStream => {
+                        return false;
+                    }
+                };
 
                 // type definition validation for given event
                 let type_def = type_store.get_type_by_id(type_id.unwrap()).unwrap();
@@ -207,7 +226,7 @@ impl State {
                     Err(violation) => false,
                 }
             }
-            State::Final => event == END_OF_STREAM_EVENT,
+            State::Final => event == Event::EndOfStream,
         }
     }
 

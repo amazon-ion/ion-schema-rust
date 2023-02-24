@@ -3,7 +3,7 @@ use crate::isl::isl_constraint::{IslConstraint, IslRegexConstraint};
 use crate::isl::isl_range::{Range, RangeImpl};
 use crate::isl::isl_type_reference::IslTypeRef;
 use crate::isl::util::{Annotation, TimestampOffset, TimestampPrecision, ValidValue};
-use crate::nfa::{NfaBuilder, NfaRun, State, END_OF_STREAM_EVENT};
+use crate::nfa::{Event, NfaBuilder, NfaRun, State};
 use crate::result::{
     invalid_schema_error, invalid_schema_error_raw, IonSchemaError, IonSchemaResult,
     ValidationResult,
@@ -733,17 +733,14 @@ impl OrderedElementsConstraint {
         Ok(OrderedElementsConstraint::new(resolved_types))
     }
 
-    // Builds an NFA state machine based on given type_ids
-    // The final NFA will contains 3 types of states:
-    // * Initial - This state simply represents an initial state to start building the NFA. (Only one Initial state is allowed)
-    // * Intermediate - This state represents all the intermediate states for NFA. Each intermediate state contains a (min, max) range which represents occurrence for an event to reach that state.
-    // * Final - This state represents the final state which is only reached if the validation succeeds (Only one Final state is allowed)
+    // Builds an NFA state machine based on given type_ids. This is a limited form of NFA where state machine is linear and every transition either leads to itself or the next state.
     //
     // All the states has some transitions between them leading from one state to another or back to itself.
-    // All the intermediate states that have minimum occurrence as 0 are optional states meaning those states can lead to another state with 0 occurrence event transitions.
-    // There two special case in transitions as following:
-    // * max >= 2 -This represents transitions to self for a state. Any intermediate states with max >= 2 can transition back to itself.
-    // * max == 0 -This represents transitions skipping the optional state. Any intermediate state that has min == 0 can be skipped to transition to its next state.
+    // All the intermediate states that have a minimum occurrence of 0 are optional states, meaning those states can lead to another state with 0 occurrence event transitions.
+    // There are two special cases of transition that need to be handled.
+    // For any state whose corresponding `type_id` has an `occurs` where:
+    //   * `max >= 2`, that state will have a transition back to itself, allowing for repetition.
+    //   * `min == 0`, that state will have a transition that advances to the next state automatically, making an occurrence of that `type_id` optional.
     //
     // Here is an example of how the built NFA would look like for an `ordered_elements` constraint:
     // ```
@@ -839,7 +836,7 @@ impl ConstraintValidator for OrderedElementsConstraint {
     ) -> ValidationResult {
         let violations: Vec<Violation> = vec![];
 
-        let values = match &value {
+        let values: Vec<Element> = match &value {
             IonSchemaElement::SingleElement(element) => match element.as_sequence() {
                 None => {
                     return Err(Violation::with_violations(
@@ -866,12 +863,13 @@ impl ConstraintValidator for OrderedElementsConstraint {
         let mut nfa_run =
             OrderedElementsConstraint::build_nfa_from_type_ids(&self.type_ids, type_store);
 
-        // use nfa_run for validation
-        for event in values {
-            nfa_run.visits = nfa_run.transition(Some(event.to_owned()), type_store);
-        }
+        // convert elements into events
+        let events: Vec<Event> = Event::from_elements_to_events(values.into_iter());
 
-        nfa_run.visits = nfa_run.transition(END_OF_STREAM_EVENT, type_store);
+        // use nfa_run for validation
+        for event in events {
+            nfa_run.visits = nfa_run.transition(event, type_store);
+        }
 
         if !nfa_run.has_final_state() {
             return Err(Violation::with_violations(
