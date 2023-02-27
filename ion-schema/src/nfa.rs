@@ -6,6 +6,7 @@ use ion_rs::value::owned::Element;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
+/// Represents an event in NFA which can either be an Ion Value or an end of stream
 #[derive(Debug, Clone, PartialEq)]
 pub enum Event {
     Value(Element),
@@ -38,16 +39,18 @@ pub struct Transition {
     type_id: Option<TypeId>, // None is used for final state transition
 }
 
+/// Represents an NFA that will eb used by the ordered_elements` constraint in order to validate an Ion Value
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct Nfa {
-    pub(crate) states: Vec<State>,
-    pub(crate) transitions: HashMap<usize, HashSet<Transition>>,
+    pub(crate) states: Vec<State>, // represents states with state_id
+    pub(crate) transitions: HashMap<usize, HashSet<Transition>>, // represents transitions between states
 }
 
+/// This is a context which will be used while validating an Ion value for `ordered_elements` constraint using its NFA
 #[derive(Debug, Clone)]
 pub struct NfaRun {
-    pub(crate) visits: HashMap<usize, usize>,
-    pub(crate) nfa: Rc<Nfa>,
+    pub(crate) visits: HashMap<usize, usize>, // represents a map of (stat_id, visit_count)
+    pub(crate) nfa: Rc<Nfa>,                  // reference to the NFA
 }
 
 impl NfaRun {
@@ -151,6 +154,7 @@ impl NfaRun {
     }
 }
 
+/// Represents a builder for constructing NFA which will be used by `ordered_elements` constraint
 pub struct NfaBuilder {
     nfa: Nfa,
 }
