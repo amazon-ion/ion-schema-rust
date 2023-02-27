@@ -17,7 +17,7 @@ impl Event {
     pub(crate) fn from_elements_to_events<T: IntoIterator<Item = Element>>(iter: T) -> Vec<Event> {
         let mut events: Vec<Event> = iter
             .into_iter()
-            .map(|e| <Element as Into<Event>>::into(e))
+            .map(<Element as Into<Event>>::into)
             .collect();
         // add END_OF_STREAM at the end of events vec
         events.push(Event::EndOfStream);
