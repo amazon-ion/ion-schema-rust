@@ -3,7 +3,7 @@ use crate::isl::isl_constraint::{IslConstraint, IslRegexConstraint};
 use crate::isl::isl_range::{Range, RangeImpl};
 use crate::isl::isl_type_reference::IslTypeRef;
 use crate::isl::util::{Annotation, TimestampOffset, TimestampPrecision, ValidValue};
-use crate::nfa::{Event, NfaBuilder, NfaRun, State};
+use crate::nfa::{FinalState, NfaBuilder, NfaEvaluation};
 use crate::result::{
     invalid_schema_error, invalid_schema_error_raw, IonSchemaError, IonSchemaResult,
     ValidationResult,
@@ -16,7 +16,7 @@ use ion_rs::value::owned::Element;
 use ion_rs::value::{IonElement, IonSequence, IonStruct};
 use ion_rs::{Integer, IonType};
 use regex::{Regex, RegexBuilder};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use std::fmt::{Display, Formatter};
 use std::iter::Peekable;
@@ -779,51 +779,41 @@ impl OrderedElementsConstraint {
     // +------------------------------+
     // As shown above visit count for `END` doesn't have final state in it which means the value resulted to be invalid.
     //
-    fn build_nfa_from_type_ids(type_ids: &Vec<TypeId>, type_store: &TypeStore) -> NfaRun {
+    fn build_nfa_from_type_ids(type_ids: &[TypeId], type_store: &TypeStore) -> NfaEvaluation {
         let mut nfa_builder = NfaBuilder::new();
-        // add initial state to nfa
-        nfa_builder.with_state(State::Initial);
-
-        for type_id in type_ids {
+        let mut final_states = HashSet::new();
+        for (state_id, type_id) in type_ids.iter().enumerate() {
             let type_def = type_store.get_type_by_id(*type_id).unwrap();
             let occurs_range: Range = type_def.get_occurs_constraint("ordered_elements");
 
             // unwrap here won't lead to panic as the check for non negative range was already done while parsing ordered_elements constraint
             let (min, max) = occurs_range.non_negative_range_boundaries().unwrap();
 
+            // if the current state is required then that is the only final state till now
+            if min > 0 {
+                // remove all previous final states
+                final_states.clear();
+            }
+
+            // add current state as final state to NFA
+            final_states.insert(FinalState::new(state_id, min, max));
+
+            if state_id == 0 {
+                // add a transition to self for initial state
+                nfa_builder.with_transition(state_id, state_id, *type_id, min, max);
+                continue;
+            }
+
             // add transition to next state
-            nfa_builder.with_transition(
-                nfa_builder.total_states() - 1,
-                nfa_builder.total_states(),
-                Some(*type_id),
-                min == 0,
-            );
+            nfa_builder.with_transition(state_id - 1, state_id, *type_id, min, max);
 
-            nfa_builder.with_state(State::Intermediate { min, max });
-
-            if max >= 2 {
-                // add a a transition to self for states that have  max >= 2
-                nfa_builder.with_transition(
-                    nfa_builder.total_states() - 1,
-                    nfa_builder.total_states() - 1,
-                    Some(*type_id),
-                    min == 0,
-                );
+            if max > 1 {
+                // add a transition to self for states that have  max > 1
+                nfa_builder.with_transition(state_id, state_id, *type_id, min, max);
             }
         }
 
-        // add final state transition
-        nfa_builder.with_transition(
-            nfa_builder.total_states() - 1,
-            nfa_builder.total_states(),
-            None,
-            false,
-        );
-
-        // add final state
-        nfa_builder.with_state(State::Final);
-
-        NfaRun::new(Rc::new(nfa_builder.build()))
+        NfaEvaluation::new(Rc::new(nfa_builder.build(final_states)))
     }
 }
 
@@ -860,18 +850,23 @@ impl ConstraintValidator for OrderedElementsConstraint {
         };
 
         // build nfa for validation
-        let mut nfa_run =
+        let mut nfa_evaluation =
             OrderedElementsConstraint::build_nfa_from_type_ids(&self.type_ids, type_store);
 
-        // convert elements into events
-        let events: Vec<Event> = Event::from_elements_to_events(values.into_iter());
-
-        // use nfa_run for validation
-        for event in events {
-            nfa_run.visits = nfa_run.transition(event, type_store);
+        if !values.is_empty() && nfa_evaluation.nfa.get_final_states().is_empty() {
+            return Err(Violation::with_violations(
+                "ordered_elements",
+                ViolationCode::TypeMismatched,
+                "one or more ordered elements didn't match",
+                ion_path,
+                violations,
+            ));
         }
 
-        if !nfa_run.has_final_state() {
+        // use nfa_evaluation for validation
+        nfa_evaluation.validate_ordered_elements(values, type_store);
+
+        if !nfa_evaluation.has_final_state(type_store) {
             return Err(Violation::with_violations(
                 "ordered_elements",
                 ViolationCode::TypeMismatched,
