@@ -736,7 +736,7 @@ impl OrderedElementsConstraint {
     // Builds an NFA state machine based on given type_ids. This is a limited form of NFA where state machine is linear and every transition either leads to itself or the next state.
     //
     // All the states has some transitions between them leading from one state to another or back to itself.
-    // All the intermediate states that have a minimum occurrence of 0 are optional states, meaning those states can lead to another state with 0 occurrence event transitions.
+    // All the states that have a minimum occurrence of 0 are optional states, meaning those states can lead to another state with 0 occurrence event transitions.
     // There are two special cases of transition that need to be handled.
     // For any state whose corresponding `type_id` has an `occurs` where:
     //   * `max >= 2`, that state will have a transition back to itself, allowing for repetition.
@@ -864,7 +864,7 @@ impl ConstraintValidator for OrderedElementsConstraint {
         }
 
         // use nfa_evaluation for validation
-        nfa_evaluation.validate_ordered_elements(values, type_store);
+        nfa_evaluation.validate_ordered_elements(&values, type_store);
 
         if !nfa_evaluation.has_final_state(type_store) {
             return Err(Violation::with_violations(
