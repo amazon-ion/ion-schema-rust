@@ -74,7 +74,9 @@
 
 use crate::isl::isl_import::{IslImport, IslImportType};
 use crate::isl::isl_type::IslType;
+use crate::UserReservedFields;
 use ion_rs::value::owned::Element;
+use std::fmt::{Display, Formatter};
 
 pub mod isl_constraint;
 pub mod isl_import;
@@ -87,15 +89,27 @@ pub mod util;
 /// Currently it support v1.0 and v2.0
 #[derive(Debug, Clone)]
 pub enum IonSchemaLanguageVersion {
-    V10,
-    V20,
+    V1_0,
+    V2_0,
 }
 
-/// Provides an internal representation of an schema file
-#[derive(Debug, Clone)]
-pub struct IslSchema {
-    /// Represents Ion Schema Language version
-    isl_version: IonSchemaLanguageVersion,
+impl Display for IonSchemaLanguageVersion {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                IonSchemaLanguageVersion::V1_0 => "$ion_schema_1_0",
+                IonSchemaLanguageVersion::V2_0 => "$ion_schema_2_0",
+            }
+        )
+    }
+}
+
+//TODO: Implement ISL 2.0
+pub struct IslSchemaV2_0 {
+    /// Represents the user defined reserved fields
+    user_reserved_fields: UserReservedFields,
     /// Represents all the IslImports inside the schema file.
     /// For more information: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#imports
     imports: Vec<IslImport>,
@@ -121,16 +135,16 @@ pub struct IslSchema {
     open_content: Vec<Element>,
 }
 
-impl IslSchema {
+impl IslSchemaV2_0 {
     pub fn new(
-        isl_version: IonSchemaLanguageVersion,
+        user_reserved_fields: UserReservedFields,
         imports: Vec<IslImport>,
         types: Vec<IslType>,
         inline_imports: Vec<IslImportType>,
         open_content: Vec<Element>,
     ) -> Self {
         Self {
-            isl_version,
+            user_reserved_fields,
             imports,
             types,
             inline_imported_types: inline_imports,
@@ -138,9 +152,73 @@ impl IslSchema {
         }
     }
 
-    pub fn isl_version(&self) -> IonSchemaLanguageVersion {
-        self.isl_version.to_owned()
+    pub fn imports(&self) -> &[IslImport] {
+        &self.imports
     }
+
+    pub fn types(&self) -> &[IslType] {
+        &self.types
+    }
+
+    pub fn inline_imported_types(&self) -> &[IslImportType] {
+        &self.inline_imported_types
+    }
+
+    /// Provides top level open content for given schema
+    /// For open content defined within type definitions use IslType#open_content()
+    pub fn open_content(&self) -> &Vec<Element> {
+        &self.open_content
+    }
+
+    /// Provide user reserved field defined in the given schema
+    pub fn user_reserved_fields(&self) -> &UserReservedFields {
+        &self.user_reserved_fields
+    }
+}
+
+/// Provides an internal representation of an schema file
+#[derive(Debug, Clone)]
+pub struct IslSchemaV1_0 {
+    /// Represents all the IslImports inside the schema file.
+    /// For more information: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#imports
+    imports: Vec<IslImport>,
+    /// Represents all the IslType defined in this schema file.
+    /// For more information: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#type-definitions
+    types: Vec<IslType>,
+    /// Represents all the inline IslImportTypes in this schema file.
+    inline_imported_types: Vec<IslImportType>,
+    /// Represents open content as `Element`s
+    /// Note: This doesn't preserve the information about where the open content is placed in the schema file.
+    /// e.g. This method doesn't differentiate between following schemas with open content:
+    /// ```ion
+    /// $foo
+    /// $bar
+    /// type::{ name: foo, codepoint_length: 1 }
+    /// ```
+    ///
+    /// ```ion
+    /// type::{ name: foo, codepoint_length: 1 }
+    /// $foo
+    /// $bar
+    /// ```
+    open_content: Vec<Element>,
+}
+
+impl IslSchemaV1_0 {
+    pub fn new(
+        imports: Vec<IslImport>,
+        types: Vec<IslType>,
+        inline_imports: Vec<IslImportType>,
+        open_content: Vec<Element>,
+    ) -> Self {
+        Self {
+            imports,
+            types,
+            inline_imported_types: inline_imports,
+            open_content,
+        }
+    }
+
     pub fn imports(&self) -> &[IslImport] {
         &self.imports
     }
@@ -190,7 +268,7 @@ mod isl_tests {
     fn load_named_type(text: &str) -> IslType {
         IslType::Named(
             IslTypeImpl::from_owned_element(
-                IonSchemaLanguageVersion::V10,
+                IonSchemaLanguageVersion::V1_0,
                 &element_reader()
                     .read_one(text.as_bytes())
                     .expect("parsing failed unexpectedly"),
@@ -204,7 +282,7 @@ mod isl_tests {
     fn load_anonymous_type(text: &str) -> IslType {
         IslType::Anonymous(
             IslTypeImpl::from_owned_element(
-                IonSchemaLanguageVersion::V10,
+                IonSchemaLanguageVersion::V1_0,
                 &element_reader()
                     .read_one(text.as_bytes())
                     .expect("parsing failed unexpectedly"),

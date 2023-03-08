@@ -21,7 +21,7 @@ mod reexport_tests {
     fn load_anonymous_type(text: &str) -> IslType {
         IslType::Anonymous(
             IslTypeImpl::from_owned_element(
-                IonSchemaLanguageVersion::V10,
+                IonSchemaLanguageVersion::V1_0,
                 &element_reader()
                     .read_one(text.as_bytes())
                     .expect("parsing failed unexpectedly"),

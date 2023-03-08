@@ -696,13 +696,21 @@ impl OrderedElementsConstraint {
 
     /// Tries to create an [OrderedElements] constraint from the given Element
     pub fn resolve_from_isl_constraint(
+        isl_version: IonSchemaLanguageVersion,
         type_references: &[IslTypeRef],
         type_store: &mut TypeStore,
         pending_types: &mut PendingTypes,
     ) -> IonSchemaResult<Self> {
         let resolved_types: Vec<TypeId> = type_references
             .iter()
-            .map(|t| IslTypeRef::resolve_type_reference(t, type_store, pending_types))
+            .map(|t| {
+                IslTypeRef::resolve_type_reference(
+                    isl_version.to_owned(),
+                    t,
+                    type_store,
+                    pending_types,
+                )
+            })
             .collect::<IonSchemaResult<Vec<TypeId>>>()?;
         Ok(OrderedElementsConstraint::new(resolved_types))
     }

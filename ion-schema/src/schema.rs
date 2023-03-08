@@ -133,10 +133,10 @@ mod schema_tests {
         let mut resolver = Resolver::new(vec![]);
 
         // create a isl from owned_elements and create a schema from isl
-        let isl = resolver.isl_schema_from_elements(owned_elements, "my_schema.isl");
+        let isl = resolver.isl_schema_v1_0_from_elements(owned_elements, "my_schema.isl");
 
         resolver
-            .schema_from_isl_schema(isl.unwrap(), "my_schema.isl", type_store, None)
+            .schema_from_isl_schema_v1_0(isl.unwrap(), "my_schema.isl", type_store, None)
             .unwrap()
     }
 
@@ -303,12 +303,12 @@ mod schema_tests {
         let mut resolver = Resolver::new(vec![]);
 
         // create a isl from owned_elements and verifies if the result is `ok`
-        let isl = resolver.isl_schema_from_elements(owned_elements, "my_schema.isl");
+        let isl = resolver.isl_schema_v1_0_from_elements(owned_elements, "my_schema.isl");
         assert!(isl.is_ok());
 
         // create a schema from isl and verifies if the result is `ok`
         let schema =
-            resolver.schema_from_isl_schema(isl.unwrap(), "my_schema.isl", type_store, None);
+            resolver.schema_from_isl_schema_v1_0(isl.unwrap(), "my_schema.isl", type_store, None);
         assert!(schema.is_ok());
 
         // check if the types of the created schema matches with the actual types specified by test case

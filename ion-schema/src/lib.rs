@@ -164,3 +164,10 @@ fn load(text: &str) -> Vec<Element> {
         .read_all(text.as_bytes())
         .expect("parsing failed unexpectedly")
 }
+
+#[derive(Debug, Clone, Default)]
+pub struct UserReservedFields {
+    schema_header_fields: Vec<String>,
+    schema_footer_fields: Vec<String>,
+    type_fields: Vec<String>,
+}

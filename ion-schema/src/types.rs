@@ -806,7 +806,7 @@ mod type_definition_tests {
         let this_type_def = match isl_type {
             IslType::Named(named_isl_type) => {
                 let type_id = TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
-                    IonSchemaLanguageVersion::V10,
+                    IonSchemaLanguageVersion::V1_0,
                     &named_isl_type,
                     type_store,
                     pending_types,
@@ -819,7 +819,7 @@ mod type_definition_tests {
             }
             IslType::Anonymous(anonymous_isl_type) => {
                 let type_id = TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
-                    IonSchemaLanguageVersion::V10,
+                    IonSchemaLanguageVersion::V1_0,
                     &anonymous_isl_type,
                     type_store,
                     pending_types,

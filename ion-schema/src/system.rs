@@ -21,16 +21,18 @@
 
 use crate::authority::DocumentAuthority;
 use crate::external::ion_rs::Symbol;
+use crate::isl::isl_constraint::IslConstraint;
 use crate::isl::isl_import::{IslImport, IslImportType};
 use crate::isl::isl_type::{IslType, IslTypeImpl};
-use crate::isl::{IonSchemaLanguageVersion, IslSchema};
+use crate::isl::{IonSchemaLanguageVersion, IslSchemaV1_0, IslSchemaV2_0};
 use crate::result::{
     invalid_schema_error, unresolvable_schema_error, unresolvable_schema_error_raw, IonSchemaError,
     IonSchemaResult,
 };
 use crate::schema::Schema;
 use crate::types::{BuiltInTypeDefinition, Nullability, TypeDefinition, TypeDefinitionImpl};
-use ion_rs::value::owned::{text_token, Element};
+use crate::UserReservedFields;
+use ion_rs::value::owned::{text_token, Element, Struct};
 use ion_rs::value::reader::{element_reader, ElementReader};
 use ion_rs::value::{IonElement, IonSequence, IonStruct};
 use ion_rs::IonType;
@@ -478,7 +480,7 @@ impl TypeStore {
     /// [builtin isl types]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#type-system
     /// TODO: add document builtin type
     pub(crate) fn preload(&mut self) -> IonSchemaResult<()> {
-        let isl_version = IonSchemaLanguageVersion::V10;
+        let isl_version = IonSchemaLanguageVersion::V1_0;
         // add all ion types to the type store
         // TODO: this array can be turned into an iterator implementation in ion-rust for IonType
         use IonType::*;
@@ -715,7 +717,7 @@ impl Resolver {
         id: A,
         isl_types: B,
     ) -> IonSchemaResult<Schema> {
-        let isl_version = IonSchemaLanguageVersion::V10;
+        let isl_version = IonSchemaLanguageVersion::V1_0;
         let isl_types = isl_types.into();
         // create type_store and pending types which will be used to create type definition
         let type_store = &mut TypeStore::default();
@@ -757,12 +759,162 @@ impl Resolver {
         Ok(Schema::new(id, Rc::new(type_store.to_owned())))
     }
 
-    /// Converts given owned elements into ISL representation
-    pub fn isl_schema_from_elements<I: Iterator<Item = Element>>(
+    /// Converts given owned elements into ISL v2.0 representation
+    pub fn isl_schema_v2_0_from_elements<I: Iterator<Item = Element>>(
         &mut self,
         elements: I,
         id: &str,
-    ) -> IonSchemaResult<IslSchema> {
+    ) -> IonSchemaResult<IslSchemaV2_0> {
+        // properties that will be stored in the ISL representation
+        let mut isl_imports: Vec<IslImport> = vec![];
+        let mut isl_types: Vec<IslType> = vec![];
+        let mut isl_inline_imports: Vec<IslImportType> = vec![];
+        let mut open_content = vec![];
+        let mut user_reserved_fields = UserReservedFields::default();
+
+        let mut found_header = false;
+        let mut found_footer = false;
+
+        for value in elements {
+            let annotations: Vec<&Symbol> = value.annotations().collect();
+
+            // load header for schema
+            if annotations.contains(&&text_token("schema_header")) {
+                found_header = true;
+                let schema_header = try_to!(value.as_struct());
+                if let Some(imports) = try_to!(value.as_struct())
+                    .get("imports")
+                    .and_then(|it| it.as_sequence())
+                {
+                    for import in imports.iter() {
+                        let isl_import = IslImport::from_ion_element(import)?;
+                        isl_imports.push(isl_import);
+                    }
+                } else if let Some(user_reserved_fields_v2) = try_to!(value.as_struct())
+                    .get("user_reserved_fields")
+                    .and_then(|it| it.as_struct())
+                {
+                    user_reserved_fields = UserReservedFields {
+                        schema_header_fields: self
+                            .parse_user_reserved_fields("schema_header", user_reserved_fields_v2),
+                        schema_footer_fields: self
+                            .parse_user_reserved_fields("schema_footer", user_reserved_fields_v2),
+                        type_fields: self
+                            .parse_user_reserved_fields("type", user_reserved_fields_v2),
+                    };
+
+                    // validate user reserved fields for header
+                    let unknown_fields: Vec<(&Symbol, &Element)> = schema_header
+                        .fields()
+                        .filter(|(f, v)| {
+                            !user_reserved_fields
+                                .schema_header_fields
+                                .contains(&f.text().unwrap().to_owned())
+                                && f.text().unwrap() != "user_reserved_fields"
+                        })
+                        .collect();
+
+                    if !unknown_fields.is_empty() {
+                        // for unexpected fields return invalid schema error
+                        return invalid_schema_error("schema header contains unexpected fields");
+                    }
+                }
+            }
+            // load types for schema
+            else if annotations.contains(&&text_token("type")) {
+                // convert Element to IslType
+                let isl_type: IslTypeImpl = IslTypeImpl::from_owned_element(
+                    IonSchemaLanguageVersion::V2_0,
+                    &value,
+                    &mut isl_inline_imports,
+                )?;
+                if isl_type.name().is_none() {
+                    // if a top level type definitions doesn't contain `name` field return an error
+                    return invalid_schema_error(
+                        "Top level types must contain field `name` in their definition",
+                    );
+                }
+
+                let unknown_fields: &Vec<&String> = &isl_type
+                    .constraints()
+                    .iter()
+                    .filter(|c| matches!(c, IslConstraint::Unknown(_, _)))
+                    .map(|c| match c {
+                        IslConstraint::Unknown(f, v) => f,
+                        _ => {
+                            unreachable!("we have already filtered all other constraints")
+                        }
+                    })
+                    .filter(|f| !user_reserved_fields.type_fields.contains(f))
+                    .collect();
+
+                if !unknown_fields.is_empty() {
+                    // for unexpected fields return invalid schema error
+                    return invalid_schema_error("schema type contains unexpected fields");
+                }
+
+                isl_types.push(IslType::Named(isl_type));
+            }
+            // load footer for schema
+            else if annotations.contains(&&text_token("schema_footer")) {
+                found_footer = true;
+                let schema_footer = try_to!(value.as_struct());
+                let unknown_fields: Vec<(&Symbol, &Element)> = schema_footer
+                    .fields()
+                    .filter(|(f, v)| {
+                        !user_reserved_fields
+                            .schema_footer_fields
+                            .contains(&f.text().unwrap().to_owned())
+                    })
+                    .collect();
+
+                if !unknown_fields.is_empty() {
+                    // for unexpected fields return invalid schema error
+                    return invalid_schema_error("schema footer contains unexpected fields");
+                }
+            } else {
+                // open content
+                open_content.push(value);
+                continue;
+            }
+        }
+
+        if found_footer ^ found_header {
+            return invalid_schema_error("For any schema while a header and footer are both optional, a footer is required if a header is present (and vice-versa).");
+        }
+
+        Ok(IslSchemaV2_0::new(
+            user_reserved_fields,
+            isl_imports,
+            isl_types,
+            isl_inline_imports,
+            open_content,
+        ))
+    }
+
+    fn parse_user_reserved_fields(
+        &self,
+        user_reserved_fields_type: &str,
+        user_reserved_fields_v2: &Struct,
+    ) -> Vec<String> {
+        let user_reserved_elements: Vec<&Element> = user_reserved_fields_v2
+            .get(user_reserved_fields_type)
+            .and_then(|it| it.as_sequence().map(|s| s.iter().collect()))
+            .unwrap_or(vec![]);
+
+        user_reserved_elements
+            .iter()
+            .map(|e| e.as_str().map(|s| s.to_owned()))
+            .collect::<Option<Vec<String>>>()
+            .unwrap_or(vec![])
+    }
+
+    /// Converts given owned elements into ISL v1.0 representation
+    pub fn isl_schema_v1_0_from_elements<I: Iterator<Item = Element>>(
+        &mut self,
+        elements: I,
+        id: &str,
+    ) -> IonSchemaResult<IslSchemaV1_0> {
         // properties that will be stored in the ISL representation
         let mut isl_imports: Vec<IslImport> = vec![];
         let mut isl_types: Vec<IslType> = vec![];
@@ -772,27 +924,7 @@ impl Resolver {
         let mut found_header = false;
         let mut found_footer = false;
 
-        // ISL version marker regex
-        let isl_version_marker = Regex::new(r"^\$ion_schema_\d.*$").unwrap();
-        let mut isl_version = IonSchemaLanguageVersion::V10;
-
         for value in elements {
-            // verify if value is an ISL version marker and if it has valid format
-            if value.ion_type() == IonType::Symbol
-                && isl_version_marker.is_match(value.as_str().unwrap())
-            {
-                // This implementation supports Ion Schema 1.0 and Ion Schema 2.0
-                isl_version = match value.as_str().unwrap() {
-                    "$ion_schema_1_0" => IonSchemaLanguageVersion::V10,
-                    "$ion_schema_2_0" => IonSchemaLanguageVersion::V20,
-                    _ => {
-                        return invalid_schema_error(format!(
-                            "Unsupported Ion Schema version: {value}"
-                        ))
-                    }
-                };
-            }
-
             let annotations: Vec<&Symbol> = value.annotations().collect();
 
             // load header for schema
@@ -812,7 +944,7 @@ impl Resolver {
             else if annotations.contains(&&text_token("type")) {
                 // convert Element to IslType
                 let isl_type: IslTypeImpl = IslTypeImpl::from_owned_element(
-                    isl_version.to_owned(),
+                    IonSchemaLanguageVersion::V1_0,
                     &value,
                     &mut isl_inline_imports,
                 )?;
@@ -838,8 +970,7 @@ impl Resolver {
             return invalid_schema_error("For any schema while a header and footer are both optional, a footer is required if a header is present (and vice-versa).");
         }
 
-        Ok(IslSchema::new(
-            isl_version,
+        Ok(IslSchemaV1_0::new(
             isl_imports,
             isl_types,
             isl_inline_imports,
@@ -847,10 +978,10 @@ impl Resolver {
         ))
     }
 
-    /// Converts given ISL representation into a [`Schema`]
-    pub fn schema_from_isl_schema(
+    /// Converts given ISL 2.0 representation into a [`Schema`]
+    pub fn schema_from_isl_schema_v2_0(
         &mut self,
-        isl: IslSchema,
+        isl: IslSchemaV2_0,
         id: &str,
         type_store: &mut TypeStore,
         load_isl_import: Option<&IslImport>,
@@ -895,7 +1026,83 @@ impl Resolver {
                     // convert IslType to TypeDefinition
                     let type_id: TypeId =
                         TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
-                            isl.isl_version(),
+                            IonSchemaLanguageVersion::V2_0,
+                            named_isl_type,
+                            type_store,
+                            pending_types,
+                        )?;
+                }
+                IslType::Anonymous(_) => {
+                    unreachable!("Top level ISL type definitions are always named type definitions")
+                }
+            }
+
+            // add all types from pending types to type_store
+            added_imported_type_to_type_store =
+                pending_types.update_type_store(type_store, load_isl_import, &isl_type_names)?;
+        }
+
+        // if currently loading an ISL import (i.e. load_isl_import != None)
+        // then check if the type to be imported is added to the type_store or not
+        if load_isl_import.is_some() && !added_imported_type_to_type_store {
+            unreachable!(
+                "Unable to load import: {} as the type/types were not added to the type_store correctly",
+                id
+            );
+        }
+
+        Ok(Rc::new(Schema::new(id, Rc::new(type_store.to_owned()))))
+    }
+
+    /// Converts given ISL 1.0 representation into a [`Schema`]
+    pub fn schema_from_isl_schema_v1_0(
+        &mut self,
+        isl: IslSchemaV1_0,
+        id: &str,
+        type_store: &mut TypeStore,
+        load_isl_import: Option<&IslImport>,
+    ) -> IonSchemaResult<Rc<Schema>> {
+        // This is used while resolving an import, it is initialized as `false` to indicate that
+        // the type to be imported is not yet added to the type_store.
+        // This will be changed to `true` as soon as the type to be imported is resolved and is added to the type_store
+        let mut added_imported_type_to_type_store = false;
+
+        // Resolve all inline import types if there are any
+        // this will help resolve all inline imports before they are used as a reference to another type
+        for isl_inline_imported_type in isl.inline_imported_types() {
+            let import_id = isl_inline_imported_type.id();
+            let inline_imported_type = self.load_schema(
+                import_id,
+                type_store,
+                Some(&IslImport::Type(isl_inline_imported_type.to_owned())),
+            )?;
+        }
+
+        // Resolve all ISL imports
+        for isl_import in isl.imports() {
+            let import_id = isl_import.id();
+            let imported_schema = self.load_schema(import_id, type_store, Some(isl_import))?;
+        }
+
+        // get all isl type names that are defined within the schema
+        // this will be used to resolve type references which might not have yet resolved while loading a type definition
+        let isl_type_names: HashSet<&str> = HashSet::from_iter(
+            isl.types()
+                .iter()
+                .filter(|t| matches!(t, IslType::Named(_)))
+                .map(|t| t.name().as_ref().unwrap().as_str()),
+        );
+
+        // Resolve all ISL types and constraints
+        for isl_type in isl.types() {
+            let pending_types = &mut PendingTypes::default();
+
+            match isl_type {
+                IslType::Named(named_isl_type) => {
+                    // convert IslType to TypeDefinition
+                    let type_id: TypeId =
+                        TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
+                            IonSchemaLanguageVersion::V1_0,
                             named_isl_type,
                             type_store,
                             pending_types,
@@ -950,30 +1157,92 @@ impl Resolver {
                     _ => Err(error),
                 },
                 Ok(schema_content) => {
-                    let isl = self.isl_schema_from_elements(schema_content.into_iter(), id)?;
-                    self.schema_from_isl_schema(isl, id, type_store, load_isl_import)
+                    // ISL version marker regex
+                    let isl_version_marker = Regex::new(r"^\$ion_schema_\d.*$").unwrap();
+                    let mut isl_version = IonSchemaLanguageVersion::V1_0;
+
+                    // find the ISL version
+                    for value in &schema_content {
+                        // verify if value is an ISL version marker and if it has valid format
+                        if value.ion_type() == IonType::Symbol
+                            && isl_version_marker.is_match(value.as_str().unwrap())
+                        {
+                            // This implementation supports Ion Schema 1.0 and Ion Schema 2.0
+                            isl_version = match value.as_str().unwrap() {
+                                "$ion_schema_1_0" => IonSchemaLanguageVersion::V1_0,
+                                "$ion_schema_2_0" => IonSchemaLanguageVersion::V2_0,
+                                _ => {
+                                    return invalid_schema_error(format!(
+                                        "Unsupported Ion Schema Language version: {value}"
+                                    ))
+                                }
+                            };
+                        }
+                    }
+
+                    match isl_version {
+                        IonSchemaLanguageVersion::V1_0 => {
+                            let isl =
+                                self.isl_schema_v1_0_from_elements(schema_content.into_iter(), id)?;
+                            self.schema_from_isl_schema_v1_0(isl, id, type_store, load_isl_import)
+                        }
+                        IonSchemaLanguageVersion::V2_0 => {
+                            let isl =
+                                self.isl_schema_v2_0_from_elements(schema_content.into_iter(), id)?;
+                            self.schema_from_isl_schema_v2_0(isl, id, type_store, load_isl_import)
+                        }
+                    }
                 }
             };
         }
         unresolvable_schema_error("Unable to load schema: ".to_owned() + id)
     }
 
-    /// Loads an [`IslSchema`] using authorities and type_store
+    /// Loads an [`IslSchema`] using authorities and type_store using ISl 1.0.
     // If we are loading the root schema then this will be set to `None` ( i.e. in the beginning when
     // this method is called from the load_schema method of schema_system it is set to `None`)
     // Otherwise if we are loading an import of the schema then this will be set to `Some(isl_import)`
     // to be loaded (i.e. Inside schema_from_elements while loading imports this will be set to
     // `Some(isl_import)`)
-    fn load_isl_schema<A: AsRef<str>>(
+    fn load_isl_v1_0_schema<A: AsRef<str>>(
         &mut self,
         id: A,
         load_isl_import: Option<&IslImport>,
-    ) -> IonSchemaResult<IslSchema> {
+    ) -> IonSchemaResult<IslSchemaV1_0> {
         let id: &str = id.as_ref();
 
         for authority in &self.authorities {
             return match authority.elements(id) {
-                Ok(schema_content) => self.isl_schema_from_elements(schema_content.into_iter(), id),
+                Ok(schema_content) => {
+                    self.isl_schema_v1_0_from_elements(schema_content.into_iter(), id)
+                }
+                Err(IonSchemaError::IoError { source: e }) if e.kind() == ErrorKind::NotFound => {
+                    continue
+                }
+                Err(error) => Err(error),
+            };
+        }
+        unresolvable_schema_error("Unable to load ISL model: ".to_owned() + id)
+    }
+
+    /// Loads an [`IslSchema`] using authorities and type_store using ISL 2.0.
+    // If we are loading the root schema then this will be set to `None` ( i.e. in the beginning when
+    // this method is called from the load_schema method of schema_system it is set to `None`)
+    // Otherwise if we are loading an import of the schema then this will be set to `Some(isl_import)`
+    // to be loaded (i.e. Inside schema_from_elements while loading imports this will be set to
+    // `Some(isl_import)`)
+    fn load_isl_v2_0_schema<A: AsRef<str>>(
+        &mut self,
+        id: A,
+        load_isl_import: Option<&IslImport>,
+    ) -> IonSchemaResult<IslSchemaV2_0> {
+        let id: &str = id.as_ref();
+
+        for authority in &self.authorities {
+            return match authority.elements(id) {
+                Ok(schema_content) => {
+                    self.isl_schema_v2_0_from_elements(schema_content.into_iter(), id)
+                }
                 Err(IonSchemaError::IoError { source: e }) if e.kind() == ErrorKind::NotFound => {
                     continue
                 }
@@ -1006,10 +1275,17 @@ impl SchemaSystem {
     }
 
     /// Requests each of the provided [`DocumentAuthority`]s, in order, to get ISL model for the
-    /// requested schema id until one successfully resolves it.
+    /// requested schema id until one successfully resolves it using ISL 1.0.
     /// If an authority throws an exception, resolution silently proceeds to the next authority.
-    pub fn load_isl_schema<A: AsRef<str>>(&mut self, id: A) -> IonSchemaResult<IslSchema> {
-        self.resolver.load_isl_schema(id, None)
+    pub fn load_isl_schema_v1_0<A: AsRef<str>>(&mut self, id: A) -> IonSchemaResult<IslSchemaV1_0> {
+        self.resolver.load_isl_v1_0_schema(id, None)
+    }
+
+    /// Requests each of the provided [`DocumentAuthority`]s, in order, to get ISL model for the
+    /// requested schema id until one successfully resolves it using ISL 2.0.
+    /// If an authority throws an exception, resolution silently proceeds to the next authority.
+    pub fn load_isl_schema_v2_0<A: AsRef<str>>(&mut self, id: A) -> IonSchemaResult<IslSchemaV2_0> {
+        self.resolver.load_isl_v2_0_schema(id, None)
     }
 
     /// Returns authorities associated with this [`SchemaSystem`]
@@ -1840,7 +2116,7 @@ mod schema_system_tests {
         )];
         let mut schema_system =
             SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
-        let schema = schema_system.load_isl_schema("sample.isl")?;
+        let schema = schema_system.load_isl_schema_v1_0("sample.isl")?;
         let expected_open_content = element_reader().read_all(
             r#"
                 open_content_1::{
@@ -1858,5 +2134,90 @@ mod schema_system_tests {
         assert_eq!(&schema.open_content().len(), &2);
         assert_eq!(schema.open_content(), &expected_open_content);
         Ok(())
+    }
+
+    #[test]
+    fn unexpected_fields_in_isl_v2_0_header() {
+        // map with (id, ion content)
+        let map_authority = [(
+            "sample.isl",
+            r#"
+                schema_header::{
+                    user_reserved_fields: {
+                        schema_header: [ foo, bar ],
+                        type: [ baz ]
+                    },
+                    baz: "this is an unexpected field in schema header"
+                }
+                
+                type::{
+                  name: my_type,
+                  type: string,
+                }
+                
+                schema_footer::{}
+            "#,
+        )];
+        let mut schema_system =
+            SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
+        let schema = schema_system.load_isl_schema_v2_0("sample.isl");
+        assert!(schema.is_err());
+    }
+
+    #[test]
+    fn unexpected_fields_in_isl_v2_0_footer() {
+        // map with (id, ion content)
+        let map_authority = [(
+            "sample.isl",
+            r#"
+                schema_header::{
+                    user_reserved_fields: {
+                        schema_footer: [ foo, bar ],
+                        sdhema_header: [ baz ]
+                    },
+                }
+                
+                type::{
+                  name: my_type,
+                  type: string,
+                }
+                
+                schema_footer::{
+                    baz: "this is an unexpected field in schema header"
+                }
+            "#,
+        )];
+        let mut schema_system =
+            SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
+        let schema = schema_system.load_isl_schema_v2_0("sample.isl");
+        assert!(schema.is_err());
+    }
+
+    #[test]
+    fn unexpected_fields_in_isl_v2_0_type() {
+        // map with (id, ion content)
+        let map_authority = [(
+            "sample.isl",
+            r#"
+                schema_header::{
+                    user_reserved_fields: {
+                        schema_header: [ baz ],
+                        type: [ foo, bar ]
+                    },
+                }
+                
+                type::{
+                  name: my_type,
+                  type: string,
+                  baz: "this is an unexpected field in schema header"
+                }
+                
+                schema_footer::{}
+            "#,
+        )];
+        let mut schema_system =
+            SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
+        let schema = schema_system.load_isl_schema_v2_0("sample.isl");
+        assert!(schema.is_err());
     }
 }
