@@ -475,6 +475,7 @@ pub(crate) enum IslConstraintImpl {
     ContentClosed,
     ContainerLength(Range),
     Element(IslTypeRefImpl),
+    Exponent(Range),
     Fields(HashMap<String, IslTypeRefImpl>),
     Not(IslTypeRefImpl),
     Occurs(Range),
@@ -698,13 +699,35 @@ impl IslConstraintImpl {
                     expression.to_string(),
                 )))
             }
-            "scale" => Ok(IslConstraintImpl::Scale(Range::from_ion_element(
-                value,
-                RangeType::Any,
-            )?)),
+            "scale" => match isl_version {
+                IslVersion::V1_0 => Ok(IslConstraintImpl::Scale(Range::from_ion_element(
+                    value,
+                    RangeType::Any,
+                )?)),
+                IslVersion::V2_0 => {
+                    // for ISL 2.0 scale constraint does not exist hence `scale` will be considered as open content
+                    Ok(IslConstraintImpl::Unknown(
+                        constraint_name.to_string(),
+                        value.to_owned(),
+                    ))
+                }
+            },
             "timestamp_precision" => Ok(IslConstraintImpl::TimestampPrecision(
                 Range::from_ion_element(value, RangeType::TimestampPrecision)?,
             )),
+            "exponent" => match isl_version {
+                IslVersion::V1_0 => {
+                    // for ISL 1.0 exponent constraint does not exist hence `exponent` will be considered as open content
+                    Ok(IslConstraintImpl::Unknown(
+                        constraint_name.to_string(),
+                        value.to_owned(),
+                    ))
+                }
+                IslVersion::V2_0 => Ok(IslConstraintImpl::Exponent(Range::from_ion_element(
+                    value,
+                    RangeType::Any,
+                )?)),
+            },
             "timestamp_offset" => {
                 use IonType::*;
                 if value.is_null() {
