@@ -9,8 +9,6 @@ ion_schema_tests!(
         "constraints::occurs::invalid::occurs_for_a_field_must_be_a_positive_integer_or_a_non_empty__non_negative_integer_range__7_",
         "constraints::occurs::invalid::occurs_must_be_a_positive_integer_or_non_empty__non_negative_integer_range__06_",
         "constraints::occurs::invalid::occurs_range_must_be_a_valid__satisfiable_range__1_",
-        "constraints::scale::invalid::scale_must_be_an_integer_or_range__10_",
-        "constraints::scale::invalid::scale_must_be_an_integer_or_range__11_",
         "constraints::scale::invalid::scale_must_be_an_integer_or_range__04_",
         "constraints::valid_values::all_types::value_should_be_invalid_for_type_valid_values_all_types__04_",
         "schema::import::diamond_import::should_be_a_valid_schema",
