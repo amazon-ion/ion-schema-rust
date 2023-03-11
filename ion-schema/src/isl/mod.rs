@@ -184,7 +184,7 @@ impl IslSchema {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct IslSchemaImpl {
+pub(crate) struct IslSchemaImpl {
     /// Represents an id for the given ISL model
     id: String,
     /// Represents the user defined reserved fields
