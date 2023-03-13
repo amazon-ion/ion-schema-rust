@@ -59,6 +59,35 @@ pub enum Range {
 }
 
 impl Range {
+    pub fn non_negative_range_boundaries(&self) -> Option<(usize, usize)> {
+        match self {
+            Range::NonNegativeInteger(RangeImpl { start, end }) => {
+                let start = match start {
+                    RangeBoundaryValue::Max => usize::MAX,
+                    RangeBoundaryValue::Min => usize::MIN,
+                    RangeBoundaryValue::Value(val, range_boundary_type) => {
+                        match range_boundary_type {
+                            RangeBoundaryType::Inclusive => *val,
+                            RangeBoundaryType::Exclusive => *val + 1,
+                        }
+                    }
+                };
+                let end = match end {
+                    RangeBoundaryValue::Max => usize::MAX,
+                    RangeBoundaryValue::Min => usize::MIN,
+                    RangeBoundaryValue::Value(val, range_boundary_type) => {
+                        match range_boundary_type {
+                            RangeBoundaryType::Inclusive => *val,
+                            RangeBoundaryType::Exclusive => *val + 1,
+                        }
+                    }
+                };
+                Some((start, end))
+            }
+            _ => None,
+        }
+    }
+
     /// Provides a boolean value to specify whether the given value is within the range or not
     pub fn contains(&self, value: &Element) -> bool {
         match self {

@@ -680,10 +680,13 @@ mod schema_tests {
                      [1, 2, foo]
                      [1.0, foo]
                      [1, 2.0, 3]
-                "#),
-                load(r#"
                      [1, 2]
                      [1, foo]
+                "#),
+                load(r#"
+                     [1]
+                     [foo]
+                     [true, 1, foo]
                 "#),
                 load_schema_from_text(r#" // For a schema with ordered_elements constraint as below:
                         type:: { name: ordered_elements_type, ordered_elements:[{ type: int, occurs: optional }, { type: number, occurs: required }, { type: any, occurs: required }] }
