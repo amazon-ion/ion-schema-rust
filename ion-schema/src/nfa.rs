@@ -27,7 +27,7 @@ pub struct Transition {
 }
 
 impl Transition {
-    /// Verify if the given Ion value is valid for the transition or not
+    /// Verify if the given Ion value is valid for the transition's type_id or not
     pub fn is_valid_for_ion_value(&self, element: &Element, type_store: &TypeStore) -> bool {
         let schema_element: IonSchemaElement = element.into();
         let type_def = type_store.get_type_by_id(self.type_id).unwrap();
@@ -82,6 +82,7 @@ impl Nfa {
         self.final_states.to_owned()
     }
 
+    // TODO: make get_transitions() less expensive, avoid allocating a new HashSet for each call to the method
     /// Provides all the possible transitions for given state
     pub fn get_transitions(&self, state_id: StateId) -> HashSet<Transition> {
         self.transitions
@@ -91,9 +92,10 @@ impl Nfa {
     }
 }
 
-/// A context that will be used to store state-visit counts.
+/// Represents the current status of a single run through the NFA: namely, in which state
+/// the run is currently positioned and how many times it has visited that state.
 /// This will be used by [NfaEvaluation] which uses [Nfa] to evaluate given Ion value.
-/// With each element in the given ordered elements there will be a set of [NfaRun]s created for all possible transitions to next states.
+/// For each step in the NFA's evaluation, each existing [NfaRun] will be cloned once for each possible transition.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct NfaRun {
     state_id: StateId,
@@ -182,7 +184,7 @@ impl NfaEvaluation {
         current_element: &Element,
         elements: &mut Peekable<Iter<Element>>,
         type_store: &TypeStore,
-        next_states: &mut HashSet<NfaRun>,
+        nfa_runs: &mut HashSet<NfaRun>,
     ) {
         let source_state_id = nfa_run.state_id;
         let visits = nfa_run.state_visits;
@@ -203,14 +205,14 @@ impl NfaEvaluation {
                     current_element,
                     elements,
                     type_store,
-                    next_states,
+                    nfa_runs,
                 ) {
                     // given ordered elements are invalid because it didn't satisfy required minimum occurrence constraint
                     return;
                 }
             } else if transition.is_valid_for_ion_value(current_element, type_store) {
                 // if transition is valid, add destination state to next states
-                next_states.insert(NfaRun::new(destination_state_id, 1));
+                nfa_runs.insert(NfaRun::new(destination_state_id, 1));
             }
 
             // transition to optional state
@@ -221,7 +223,7 @@ impl NfaEvaluation {
                 current_element,
                 elements,
                 type_store,
-                next_states,
+                nfa_runs,
             );
         }
     }
@@ -258,7 +260,7 @@ impl NfaEvaluation {
         }
     }
 
-    // this sia  helper method used by `evaluate_transitions` to evaluate transitions that loops back to the same state
+    // this is a  helper method used by `evaluate_transitions` to evaluate transitions that loops back to the same state
     // this method iterates through elements to satisfy minimum required occurrences for given transition
     // It will return false if an invalid Ion value is found which doesn't satisfy minimum occurrence requirement for given transition
     // Otherwise it will return true
