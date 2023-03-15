@@ -1,6 +1,7 @@
 use crate::isl::isl_constraint::IslConstraint;
 use crate::isl::isl_import::{IslImport, IslImportType};
 use crate::isl::isl_type::IslTypeImpl;
+use crate::isl::IonSchemaLanguageVersion;
 use crate::result::{
     invalid_schema_error, invalid_schema_error_raw, unresolvable_schema_error, IonSchemaResult,
 };
@@ -67,6 +68,7 @@ impl IslTypeRef {
 
     /// Tries to create an [IslTypeRef] from the given Element
     pub fn from_ion_element(
+        isl_version: IonSchemaLanguageVersion,
         value: &Element,
         inline_imported_types: &mut Vec<IslImportType>,
     ) -> IonSchemaResult<Self> {
@@ -91,7 +93,7 @@ impl IslTypeRef {
                     let built_in_type_def = IslTypeRef::get_nullable_type_reference_definition(type_name)?;
                     let value = &element_reader()
                         .read_one(built_in_type_def.as_bytes()).unwrap();
-                    return IslTypeRef::from_ion_element(value, inline_imported_types);
+                    return IslTypeRef::from_ion_element(isl_version, value, inline_imported_types);
                 }
 
                 Ok(IslTypeRef::Named(type_name.to_owned()))
@@ -110,7 +112,7 @@ impl IslTypeRef {
                 let value_struct = try_to!(value.as_struct());
                 // if the struct doesn't have an id field then it must be an anonymous type
                 if value_struct.get("id").is_none() {
-                    return Ok(IslTypeRef::Anonymous(IslTypeImpl::from_owned_element(value, inline_imported_types)?))
+                    return Ok(IslTypeRef::Anonymous(IslTypeImpl::from_owned_element(isl_version, value, inline_imported_types)?))
                 }
                 // if it is an inline import type store it as import type reference
                  let isl_import_type = match IslImport::from_ion_element(value)? {
@@ -164,6 +166,7 @@ impl IslTypeRef {
     // TODO: break match arms into helper methods as we add more constraints
     /// Resolves a type_reference into a [TypeId] using the type_store
     pub fn resolve_type_reference(
+        isl_version: IonSchemaLanguageVersion,
         type_reference: &IslTypeRef,
         type_store: &mut TypeStore,
         pending_types: &mut PendingTypes,
@@ -175,6 +178,7 @@ impl IslTypeRef {
             IslTypeRef::Anonymous(isl_type) => {
                 let type_id = pending_types.get_total_types(type_store);
                 let type_def = TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
+                    isl_version,
                     isl_type,
                     type_store,
                     pending_types,

@@ -4,6 +4,7 @@ mod reexport_tests {
     use ion_schema::isl::isl_constraint::IslConstraint;
     use ion_schema::isl::isl_type::{IslType, IslTypeImpl};
     use ion_schema::isl::isl_type_reference::IslTypeRef;
+    use ion_schema::isl::IonSchemaLanguageVersion;
 
     /// This test shows how the ion_schema integration with ion_rs can be used
     /// through a reexport. This means that consumers of ion_schema can use this
@@ -20,6 +21,7 @@ mod reexport_tests {
     fn load_anonymous_type(text: &str) -> IslType {
         IslType::Anonymous(
             IslTypeImpl::from_owned_element(
+                IonSchemaLanguageVersion::V10,
                 &element_reader()
                     .read_one(text.as_bytes())
                     .expect("parsing failed unexpectedly"),

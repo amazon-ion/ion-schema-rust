@@ -23,7 +23,7 @@ use crate::authority::DocumentAuthority;
 use crate::external::ion_rs::Symbol;
 use crate::isl::isl_import::{IslImport, IslImportType};
 use crate::isl::isl_type::{IslType, IslTypeImpl};
-use crate::isl::IslSchema;
+use crate::isl::{IonSchemaLanguageVersion, IslSchema};
 use crate::result::{
     invalid_schema_error, unresolvable_schema_error, unresolvable_schema_error_raw, IonSchemaError,
     IonSchemaResult,
@@ -478,6 +478,7 @@ impl TypeStore {
     /// [builtin isl types]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#type-system
     /// TODO: add document builtin type
     pub(crate) fn preload(&mut self) -> IonSchemaResult<()> {
+        let isl_version = IonSchemaLanguageVersion::V10;
         // add all ion types to the type store
         // TODO: this array can be turned into an iterator implementation in ion-rust for IonType
         use IonType::*;
@@ -518,14 +519,19 @@ impl TypeStore {
         let pending_types = &mut PendingTypes::default();
         for text in DERIVED_ISL_TYPES {
             let isl_type = IslTypeImpl::from_owned_element(
+                isl_version.to_owned(),
                 &element_reader()
                     .read_one(text.as_bytes())
                     .expect("parsing failed unexpectedly"),
                 &mut vec![],
             )
             .unwrap();
-            let type_def =
-                BuiltInTypeDefinition::parse_from_isl_type(&isl_type, self, pending_types)?;
+            let type_def = BuiltInTypeDefinition::parse_from_isl_type(
+                isl_version.to_owned(),
+                &isl_type,
+                self,
+                pending_types,
+            )?;
             self.add_builtin_type(&type_def);
         }
         Ok(())
@@ -709,6 +715,7 @@ impl Resolver {
         id: A,
         isl_types: B,
     ) -> IonSchemaResult<Schema> {
+        let isl_version = IonSchemaLanguageVersion::V10;
         let isl_types = isl_types.into();
         // create type_store and pending types which will be used to create type definition
         let type_store = &mut TypeStore::default();
@@ -728,6 +735,7 @@ impl Resolver {
             match isl_type {
                 IslType::Named(named_isl_type) => {
                     TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
+                        isl_version.to_owned(),
                         named_isl_type,
                         type_store,
                         pending_types,
@@ -735,6 +743,7 @@ impl Resolver {
                 }
                 IslType::Anonymous(anonymous_isl_type) => {
                     TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
+                        isl_version.to_owned(),
                         anonymous_isl_type,
                         type_store,
                         pending_types,
@@ -765,18 +774,23 @@ impl Resolver {
 
         // ISL version marker regex
         let isl_version_marker = Regex::new(r"^\$ion_schema_\d.*$").unwrap();
+        let mut isl_version = IonSchemaLanguageVersion::V10;
 
         for value in elements {
             // verify if value is an ISL version marker and if it has valid format
             if value.ion_type() == IonType::Symbol
                 && isl_version_marker.is_match(value.as_str().unwrap())
             {
-                // This implementation only supports Ion Schema 1.0
-                if value.as_str() != Some(r"$ion_schema_1_0") {
-                    return invalid_schema_error(format!(
-                        "Unsupported Ion Schema version: {value}"
-                    ));
-                }
+                // This implementation supports Ion Schema 1.0 and Ion Schema 2.0
+                isl_version = match value.as_str().unwrap() {
+                    "$ion_schema_1_0" => IonSchemaLanguageVersion::V10,
+                    "$ion_schema_2_0" => IonSchemaLanguageVersion::V20,
+                    _ => {
+                        return invalid_schema_error(format!(
+                            "Unsupported Ion Schema version: {value}"
+                        ))
+                    }
+                };
             }
 
             let annotations: Vec<&Symbol> = value.annotations().collect();
@@ -797,8 +811,11 @@ impl Resolver {
             // load types for schema
             else if annotations.contains(&&text_token("type")) {
                 // convert Element to IslType
-                let isl_type: IslTypeImpl =
-                    IslTypeImpl::from_owned_element(&value, &mut isl_inline_imports)?;
+                let isl_type: IslTypeImpl = IslTypeImpl::from_owned_element(
+                    isl_version.to_owned(),
+                    &value,
+                    &mut isl_inline_imports,
+                )?;
                 if isl_type.name().is_none() {
                     // if a top level type definitions doesn't contain `name` field return an error
                     return invalid_schema_error(
@@ -822,6 +839,7 @@ impl Resolver {
         }
 
         Ok(IslSchema::new(
+            isl_version,
             isl_imports,
             isl_types,
             isl_inline_imports,
@@ -877,6 +895,7 @@ impl Resolver {
                     // convert IslType to TypeDefinition
                     let type_id: TypeId =
                         TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
+                            isl.isl_version(),
                             named_isl_type,
                             type_store,
                             pending_types,
@@ -1028,13 +1047,17 @@ impl SchemaSystem {
     /// Creates a type from given Element using [`TypeStore`]
     pub fn schema_type_from_element(
         &mut self,
+        isl_version: IonSchemaLanguageVersion,
         type_content: &Element,
         type_store: &mut TypeStore,
     ) -> IonSchemaResult<TypeId> {
         // convert to isl_type
         let mut isl_inline_imported_types = vec![];
-        let isl_type =
-            IslTypeImpl::from_owned_element(type_content, &mut isl_inline_imported_types)?;
+        let isl_type = IslTypeImpl::from_owned_element(
+            isl_version.to_owned(),
+            type_content,
+            &mut isl_inline_imported_types,
+        )?;
 
         // Resolve all inline import types if there are any
         // this will help resolve all inline imports before they are used as a reference to another type
@@ -1052,6 +1075,7 @@ impl SchemaSystem {
 
         // convert IslType to TypeDefinition
         let type_id: TypeId = TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
+            isl_version,
             &isl_type,
             type_store,
             pending_types,
@@ -1780,7 +1804,7 @@ mod schema_system_tests {
         let map_authority = [(
             "sample.isl",
             r#"
-                $ion_schema_2_0
+                $ion_schema_2_1
             "#,
         )];
         let mut schema_system =

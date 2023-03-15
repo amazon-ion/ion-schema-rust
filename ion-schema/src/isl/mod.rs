@@ -83,9 +83,19 @@ pub mod isl_type;
 pub mod isl_type_reference;
 pub mod util;
 
+/// Represents Ion Schema Language Versions
+/// Currently it support v1.0 and v2.0
+#[derive(Debug, Clone)]
+pub enum IonSchemaLanguageVersion {
+    V10,
+    V20,
+}
+
 /// Provides an internal representation of an schema file
 #[derive(Debug, Clone)]
 pub struct IslSchema {
+    /// Represents Ion Schema Language version
+    isl_version: IonSchemaLanguageVersion,
     /// Represents all the IslImports inside the schema file.
     /// For more information: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#imports
     imports: Vec<IslImport>,
@@ -113,12 +123,14 @@ pub struct IslSchema {
 
 impl IslSchema {
     pub fn new(
+        isl_version: IonSchemaLanguageVersion,
         imports: Vec<IslImport>,
         types: Vec<IslType>,
         inline_imports: Vec<IslImportType>,
         open_content: Vec<Element>,
     ) -> Self {
         Self {
+            isl_version,
             imports,
             types,
             inline_imported_types: inline_imports,
@@ -126,6 +138,9 @@ impl IslSchema {
         }
     }
 
+    pub fn isl_version(&self) -> IonSchemaLanguageVersion {
+        self.isl_version.to_owned()
+    }
     pub fn imports(&self) -> &[IslImport] {
         &self.imports
     }
@@ -159,6 +174,7 @@ mod isl_tests {
     use crate::isl::isl_type::{IslType, IslTypeImpl};
     use crate::isl::isl_type_reference::IslTypeRef;
     use crate::isl::util::TimestampPrecision;
+    use crate::isl::IonSchemaLanguageVersion;
     use crate::result::IonSchemaResult;
     use ion_rs::types::decimal::*;
     use ion_rs::types::integer::Integer as IntegerValue;
@@ -174,6 +190,7 @@ mod isl_tests {
     fn load_named_type(text: &str) -> IslType {
         IslType::Named(
             IslTypeImpl::from_owned_element(
+                IonSchemaLanguageVersion::V10,
                 &element_reader()
                     .read_one(text.as_bytes())
                     .expect("parsing failed unexpectedly"),
@@ -187,6 +204,7 @@ mod isl_tests {
     fn load_anonymous_type(text: &str) -> IslType {
         IslType::Anonymous(
             IslTypeImpl::from_owned_element(
+                IonSchemaLanguageVersion::V10,
                 &element_reader()
                     .read_one(text.as_bytes())
                     .expect("parsing failed unexpectedly"),
