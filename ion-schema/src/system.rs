@@ -21,7 +21,7 @@
 
 use crate::authority::DocumentAuthority;
 use crate::external::ion_rs::Symbol;
-use crate::isl::isl_constraint::IslConstraintImpl;
+use crate::isl::isl_constraint::{IslConstraint, IslConstraintImpl};
 use crate::isl::isl_import::{IslImport, IslImportType};
 use crate::isl::isl_type::{IslType, IslTypeImpl, IslTypeKind};
 use crate::isl::{IonSchemaLanguageVersion, IslSchemaV1_0, IslSchemaV2_0};
@@ -854,7 +854,12 @@ impl Resolver {
                     return invalid_schema_error("schema type contains unexpected fields");
                 }
 
-                isl_types.push(IslType::new(IslTypeKind::Named(isl_type)));
+                let constraints = isl_type
+                    .constraints()
+                    .iter()
+                    .map(|c| IslConstraint::new(IonSchemaLanguageVersion::V2_0, c.to_owned()))
+                    .collect();
+                isl_types.push(IslType::new(IslTypeKind::Named(isl_type), constraints));
             }
             // load footer for schema
             else if annotations.contains(&&text_token("schema_footer")) {
@@ -955,7 +960,12 @@ impl Resolver {
                         "Top level types must contain field `name` in their definition",
                     );
                 }
-                isl_types.push(IslType::new(IslTypeKind::Named(isl_type)));
+                let constraints = isl_type
+                    .constraints()
+                    .iter()
+                    .map(|c| IslConstraint::new(IonSchemaLanguageVersion::V1_0, c.to_owned()))
+                    .collect();
+                isl_types.push(IslType::new(IslTypeKind::Named(isl_type), constraints));
             }
             // load footer for schema
             else if annotations.contains(&&text_token("schema_footer")) {

@@ -87,7 +87,7 @@ pub mod util;
 
 /// Represents Ion Schema Language Versions
 /// Currently it support v1.0 and v2.0
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum IonSchemaLanguageVersion {
     V1_0,
     V2_0,
@@ -241,6 +241,7 @@ impl IslSchemaV1_0 {
 #[cfg(test)]
 mod isl_tests {
     use crate::isl::isl_constraint::v_1_0::*;
+    use crate::isl::isl_constraint::IslConstraint;
     use crate::isl::isl_range::DecimalRange;
     use crate::isl::isl_range::FloatRange;
     use crate::isl::isl_range::IntegerRange;
@@ -267,7 +268,7 @@ mod isl_tests {
 
     // helper function to create NamedIslType for isl tests
     fn load_named_type(text: &str) -> IslType {
-        IslType::new(IslTypeKind::Named(
+        let kind = IslTypeKind::Named(
             IslTypeImpl::from_owned_element(
                 IonSchemaLanguageVersion::V1_0,
                 &element_reader()
@@ -276,12 +277,18 @@ mod isl_tests {
                 &mut vec![],
             )
             .unwrap(),
-        ))
+        );
+        let constraints = kind
+            .constraints()
+            .iter()
+            .map(|c| IslConstraint::new(IonSchemaLanguageVersion::V1_0, c.to_owned()))
+            .collect();
+        IslType::new(kind, constraints)
     }
 
     // helper function to create AnonymousIslType for isl tests
     fn load_anonymous_type(text: &str) -> IslType {
-        IslType::new(IslTypeKind::Anonymous(
+        let kind = IslTypeKind::Anonymous(
             IslTypeImpl::from_owned_element(
                 IonSchemaLanguageVersion::V1_0,
                 &element_reader()
@@ -290,7 +297,13 @@ mod isl_tests {
                 &mut vec![],
             )
             .unwrap(),
-        ))
+        );
+        let constraints = kind
+            .constraints()
+            .iter()
+            .map(|c| IslConstraint::new(IonSchemaLanguageVersion::V1_0, c.to_owned()))
+            .collect();
+        IslType::new(kind, constraints)
     }
 
     #[test]

@@ -20,11 +20,10 @@ pub mod v_1_0 {
             .iter()
             .map(|c| c.constraint.to_owned())
             .collect();
-        IslType::new(IslTypeKind::Named(IslTypeImpl::new(
-            Some(name.into()),
-            isl_constraints,
-            None,
-        )))
+        IslType::new(
+            IslTypeKind::Named(IslTypeImpl::new(Some(name.into()), isl_constraints, None)),
+            constraints,
+        )
     }
 
     /// Creates a [IslType::Anonymous] using the [IslConstraint] defined within it
@@ -34,11 +33,10 @@ pub mod v_1_0 {
             .iter()
             .map(|c| c.constraint.to_owned())
             .collect();
-        IslType::new(IslTypeKind::Anonymous(IslTypeImpl::new(
-            None,
-            isl_constraints,
-            None,
-        )))
+        IslType::new(
+            IslTypeKind::Anonymous(IslTypeImpl::new(None, isl_constraints, None)),
+            constraints,
+        )
     }
 }
 
@@ -65,11 +63,12 @@ pub mod v_2_0 {
 #[derive(Debug, Clone, PartialEq)]
 pub struct IslType {
     pub(crate) kind: IslTypeKind,
+    constraints: Vec<IslConstraint>,
 }
 
 impl IslType {
-    pub(crate) fn new(kind: IslTypeKind) -> Self {
-        Self { kind }
+    pub(crate) fn new(kind: IslTypeKind, constraints: Vec<IslConstraint>) -> Self {
+        Self { kind, constraints }
     }
 
     /// Provides a name if the ISL type is named type definition
@@ -84,12 +83,8 @@ impl IslType {
     }
 
     /// Provides the underlying constraints of [IslType]
-    pub fn constraints(&self) -> Vec<IslConstraint> {
-        self.kind
-            .constraints()
-            .iter()
-            .map(|c| IslConstraint::new(c.to_owned()))
-            .collect()
+    pub fn constraints(&self) -> &[IslConstraint] {
+        &self.constraints
     }
 }
 
