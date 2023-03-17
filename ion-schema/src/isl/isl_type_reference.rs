@@ -1,4 +1,4 @@
-use crate::isl::isl_constraint::IslConstraint;
+use crate::isl::isl_constraint::{IslConstraint, IslConstraintImpl};
 use crate::isl::isl_import::{IslImport, IslImportType};
 use crate::isl::isl_type::IslTypeImpl;
 use crate::isl::IonSchemaLanguageVersion;
@@ -33,7 +33,12 @@ impl IslTypeRef {
 
     /// Creates a [IslTypeRef::Anonymous] using the [IonType] referenced inside it
     pub fn anonymous<A: Into<Vec<IslConstraint>>>(constraints: A) -> IslTypeRef {
-        IslTypeRef::Anonymous(IslTypeImpl::new(None, constraints.into(), None))
+        let constraints = constraints.into();
+        let isl_constraints: Vec<IslConstraintImpl> = constraints
+            .iter()
+            .map(|c| c.constraint.to_owned())
+            .collect();
+        IslTypeRef::Anonymous(IslTypeImpl::new(None, isl_constraints, None))
     }
 
     /// Provides a string representing a definition of a nullable built in type reference

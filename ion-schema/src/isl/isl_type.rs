@@ -1,4 +1,4 @@
-use crate::isl::isl_constraint::IslConstraint;
+use crate::isl::isl_constraint::{IslConstraint, IslConstraintImpl};
 use crate::isl::isl_import::IslImportType;
 use crate::isl::IonSchemaLanguageVersion;
 use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
@@ -15,16 +15,22 @@ pub enum IslType {
 impl IslType {
     /// Creates a [IslType::Named] using the [IslConstraint] defined within it
     pub fn named<A: Into<String>, B: Into<Vec<IslConstraint>>>(name: A, constraints: B) -> IslType {
-        IslType::Named(IslTypeImpl::new(
-            Some(name.into()),
-            constraints.into(),
-            None,
-        ))
+        let constraints = constraints.into();
+        let isl_constraints: Vec<IslConstraintImpl> = constraints
+            .iter()
+            .map(|c| c.constraint.to_owned())
+            .collect();
+        IslType::Named(IslTypeImpl::new(Some(name.into()), isl_constraints, None))
     }
 
     /// Creates a [IslType::Anonymous] using the [IslConstraint] defined within it
     pub fn anonymous<A: Into<Vec<IslConstraint>>>(constraints: A) -> IslType {
-        IslType::Anonymous(IslTypeImpl::new(None, constraints.into(), None))
+        let constraints = constraints.into();
+        let isl_constraints: Vec<IslConstraintImpl> = constraints
+            .iter()
+            .map(|c| c.constraint.to_owned())
+            .collect();
+        IslType::Anonymous(IslTypeImpl::new(None, isl_constraints, None))
     }
 
     /// Provides a name if the ISL type is named type definition
@@ -37,7 +43,7 @@ impl IslType {
     }
 
     /// Provides the underlying constraints of [IslTypeImpl]
-    pub fn constraints(&self) -> &[IslConstraint] {
+    pub fn constraints(&self) -> &[IslConstraintImpl] {
         match &self {
             IslType::Named(named_type) => named_type.constraints(),
             IslType::Anonymous(anonymous_type) => anonymous_type.constraints(),
@@ -67,7 +73,7 @@ impl IslType {
 #[derive(Debug, Clone)]
 pub struct IslTypeImpl {
     name: Option<String>,
-    constraints: Vec<IslConstraint>,
+    constraints: Vec<IslConstraintImpl>,
     // Represents the ISL type struct in string format for anonymous type definition
     // For named type definition & programmatically created type definition, this will be `None`
     pub(crate) isl_type_struct: Option<Element>,
@@ -76,7 +82,7 @@ pub struct IslTypeImpl {
 impl IslTypeImpl {
     pub fn new(
         name: Option<String>,
-        constraints: Vec<IslConstraint>,
+        constraints: Vec<IslConstraintImpl>,
         isl_type_struct: Option<Element>,
     ) -> Self {
         Self {
@@ -90,14 +96,14 @@ impl IslTypeImpl {
         &self.name
     }
 
-    pub fn constraints(&self) -> &[IslConstraint] {
+    pub fn constraints(&self) -> &[IslConstraintImpl] {
         &self.constraints
     }
 
     pub fn open_content(&self) -> Vec<(String, Element)> {
         let mut open_content = vec![];
         for constraint in &self.constraints {
-            if let IslConstraint::Unknown(constraint_name, element) = constraint {
+            if let IslConstraintImpl::Unknown(constraint_name, element) = constraint {
                 open_content.push((constraint_name.to_owned(), element.to_owned()))
             }
         }
@@ -106,7 +112,7 @@ impl IslTypeImpl {
 
     pub(crate) fn is_open_content_allowed(&self) -> bool {
         let mut open_content = true;
-        if self.constraints.contains(&IslConstraint::ContentClosed) {
+        if self.constraints.contains(&IslConstraintImpl::ContentClosed) {
             open_content = false;
         }
         open_content
@@ -173,7 +179,7 @@ impl IslTypeImpl {
                 }
             };
 
-            let constraint = IslConstraint::from_ion_element(
+            let constraint = IslConstraintImpl::from_ion_element(
                 isl_version.to_owned(),
                 constraint_name,
                 value,

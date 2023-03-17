@@ -21,7 +21,7 @@
 
 use crate::authority::DocumentAuthority;
 use crate::external::ion_rs::Symbol;
-use crate::isl::isl_constraint::IslConstraint;
+use crate::isl::isl_constraint::IslConstraintImpl;
 use crate::isl::isl_import::{IslImport, IslImportType};
 use crate::isl::isl_type::{IslType, IslTypeImpl};
 use crate::isl::{IonSchemaLanguageVersion, IslSchemaV1_0, IslSchemaV2_0};
@@ -838,9 +838,9 @@ impl Resolver {
                 let unknown_fields: &Vec<&String> = &isl_type
                     .constraints()
                     .iter()
-                    .filter(|c| matches!(c, IslConstraint::Unknown(_, _)))
+                    .filter(|c| matches!(c, IslConstraintImpl::Unknown(_, _)))
                     .map(|c| match c {
-                        IslConstraint::Unknown(f, v) => f,
+                        IslConstraintImpl::Unknown(f, v) => f,
                         _ => {
                             unreachable!("we have already filtered all other constraints")
                         }
