@@ -1,7 +1,7 @@
 use crate::ion_path::{IonPath, IonPathElement};
 use crate::isl::isl_constraint::{IslConstraintImpl, IslRegexConstraint};
 use crate::isl::isl_range::{Range, RangeImpl};
-use crate::isl::isl_type_reference::IslTypeRef;
+use crate::isl::isl_type_reference::IslTypeRefImpl;
 use crate::isl::util::{Annotation, TimestampOffset, TimestampPrecision, ValidValue};
 use crate::isl::IonSchemaLanguageVersion;
 use crate::nfa::{FinalState, NfaBuilder, NfaEvaluation};
@@ -222,14 +222,14 @@ impl Constraint {
     /// Resolves all ISL type references to corresponding [TypeId]s
     fn resolve_type_references_to_type_ids(
         isl_version: IonSchemaLanguageVersion,
-        type_references: &[IslTypeRef],
+        type_references: &[IslTypeRefImpl],
         type_store: &mut TypeStore,
         pending_types: &mut PendingTypes,
     ) -> IonSchemaResult<Vec<TypeId>> {
         type_references
             .iter()
             .map(|t| {
-                IslTypeRef::resolve_type_reference(
+                IslTypeRefImpl::resolve_type_reference(
                     isl_version.to_owned(),
                     t,
                     type_store,
@@ -240,7 +240,7 @@ impl Constraint {
     }
 
     /// Parse an [IslConstraint] to a [Constraint]
-    pub fn resolve_from_isl_constraint(
+    pub(crate) fn resolve_from_isl_constraint(
         isl_version: IonSchemaLanguageVersion,
         isl_constraint: &IslConstraintImpl,
         type_store: &mut TypeStore,
@@ -292,7 +292,7 @@ impl Constraint {
                 ContainerLengthConstraint::new(isl_length.to_owned()),
             )),
             IslConstraintImpl::Element(type_reference) => {
-                let type_id = IslTypeRef::resolve_type_reference(
+                let type_id = IslTypeRefImpl::resolve_type_reference(
                     isl_version,
                     type_reference,
                     type_store,
@@ -321,7 +321,7 @@ impl Constraint {
                 Ok(Constraint::OneOf(OneOfConstraint::new(type_ids)))
             }
             IslConstraintImpl::Not(type_reference) => {
-                let type_id = IslTypeRef::resolve_type_reference(
+                let type_id = IslTypeRefImpl::resolve_type_reference(
                     isl_version,
                     type_reference,
                     type_store,
@@ -330,7 +330,7 @@ impl Constraint {
                 Ok(Constraint::Not(NotConstraint::new(type_id)))
             }
             IslConstraintImpl::Type(type_reference) => {
-                let type_id = IslTypeRef::resolve_type_reference(
+                let type_id = IslTypeRefImpl::resolve_type_reference(
                     isl_version,
                     type_reference,
                     type_store,
@@ -345,7 +345,7 @@ impl Constraint {
                 let type_ids: Vec<TypeId> = type_references
                     .iter()
                     .map(|t| {
-                        IslTypeRef::resolve_type_reference(
+                        IslTypeRefImpl::resolve_type_reference(
                             isl_version.to_owned(),
                             t,
                             type_store,
@@ -699,16 +699,16 @@ impl OrderedElementsConstraint {
     }
 
     /// Tries to create an [OrderedElements] constraint from the given Element
-    pub fn resolve_from_isl_constraint(
+    fn resolve_from_isl_constraint(
         isl_version: IonSchemaLanguageVersion,
-        type_references: &[IslTypeRef],
+        type_references: &[IslTypeRefImpl],
         type_store: &mut TypeStore,
         pending_types: &mut PendingTypes,
     ) -> IonSchemaResult<Self> {
         let resolved_types: Vec<TypeId> = type_references
             .iter()
             .map(|t| {
-                IslTypeRef::resolve_type_reference(
+                IslTypeRefImpl::resolve_type_reference(
                     isl_version.to_owned(),
                     t,
                     type_store,
@@ -888,9 +888,9 @@ impl FieldsConstraint {
     }
 
     /// Tries to create an [Fields] constraint from the given Element
-    pub fn resolve_from_isl_constraint(
+    fn resolve_from_isl_constraint(
         isl_version: IonSchemaLanguageVersion,
-        fields: &HashMap<String, IslTypeRef>,
+        fields: &HashMap<String, IslTypeRefImpl>,
         type_store: &mut TypeStore,
         pending_types: &mut PendingTypes,
         open_content: bool, // Indicates if open content is allowed or not for the fields in the container
@@ -898,7 +898,7 @@ impl FieldsConstraint {
         let resolved_fields: HashMap<String, TypeId> = fields
             .iter()
             .map(|(f, t)| {
-                IslTypeRef::resolve_type_reference(
+                IslTypeRefImpl::resolve_type_reference(
                     isl_version.to_owned(),
                     t,
                     type_store,

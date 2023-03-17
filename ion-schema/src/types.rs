@@ -122,7 +122,7 @@ pub enum Nullability {
 }
 
 impl BuiltInTypeDefinition {
-    pub fn parse_from_isl_type(
+    pub(crate) fn parse_from_isl_type(
         isl_version: IonSchemaLanguageVersion,
         isl_type: &IslTypeImpl,
         type_store: &mut TypeStore,
@@ -413,7 +413,7 @@ impl TypeDefinitionImpl {
     /// and return its [`TypeId`] if the conversion was successful, otherwise return an [`IonSchemaError`]
     ///
     /// [`IonSchemaError`]: crate::result::IonSchemaError
-    pub fn parse_from_isl_type_and_update_pending_types(
+    pub(crate) fn parse_from_isl_type_and_update_pending_types(
         isl_version: IonSchemaLanguageVersion,
         isl_type: &IslTypeImpl,
         type_store: &mut TypeStore,
@@ -571,11 +571,12 @@ impl Display for TypeDefinitionImpl {
 mod type_definition_tests {
     use super::*;
     use crate::constraint::Constraint;
-    use crate::isl::isl_constraint::v_1_0;
+    use crate::isl::isl_constraint::v_1_0::*;
     use crate::isl::isl_range::Number;
     use crate::isl::isl_range::NumberRange;
-    use crate::isl::isl_type::IslType;
-    use crate::isl::isl_type_reference::IslTypeRef;
+    use crate::isl::isl_type::v_1_0::*;
+    use crate::isl::isl_type::{IslType, IslTypeKind};
+    use crate::isl::isl_type_reference::v_1_0::*;
     use crate::system::PendingTypes;
     use ion_rs::Decimal;
     use ion_rs::Integer;
@@ -589,162 +590,162 @@ mod type_definition_tests {
         /* For a schema with single anonymous type as below:
             { type: int }
          */
-        IslType::anonymous([v_1_0::type_constraint(IslTypeRef::named("int"))]),
+        anonymous_type([type_constraint(named_type_ref("int"))]),
         TypeDefinition::anonymous([Constraint::type_constraint(0)])
     ),
     case::type_constraint_with_named_type(
         /* For a schema with named type as below:
             { name: my_int, type: int }
          */
-        IslType::named("my_int", [v_1_0::type_constraint(IslTypeRef::named("int"))]),
+        named_type("my_int", [type_constraint(named_type_ref("int"))]),
         TypeDefinition::named("my_int", [Constraint::type_constraint(0)])
     ),
     case::type_constraint_with_self_reference_type(
         /* For a schema with self reference type as below:
             { name: my_int, type: my_int }
          */
-        IslType::named("my_int", [v_1_0::type_constraint(IslTypeRef::named("my_int"))]),
+        named_type("my_int", [type_constraint(named_type_ref("my_int"))]),
         TypeDefinition::named("my_int", [Constraint::type_constraint(35)])
     ),
     case::type_constraint_with_nested_self_reference_type(
         /* For a schema with nested self reference type as below:
             { name: my_int, type: { type: my_int } }
          */
-        IslType::named("my_int", [v_1_0::type_constraint(IslTypeRef::anonymous([v_1_0::type_constraint(IslTypeRef::named("my_int"))]))]),
+        named_type("my_int", [type_constraint(anonymous_type_ref([type_constraint(named_type_ref("my_int"))]))]),
         TypeDefinition::named("my_int", [Constraint::type_constraint(36)]) // 0-35 are built-in types which are preloaded to the type_store
     ),
     case::type_constraint_with_nested_type(
         /* For a schema with nested types as below:
             { name: my_int, type: { type: int } }
          */
-        IslType::named("my_int", [v_1_0::type_constraint(IslTypeRef::anonymous([v_1_0::type_constraint(IslTypeRef::named("int"))]))]),
+        named_type("my_int", [type_constraint(anonymous_type_ref([type_constraint(named_type_ref("int"))]))]),
         TypeDefinition::named("my_int", [Constraint::type_constraint(36)])
     ),
     case::type_constraint_with_nested_multiple_types(
         /* For a schema with nested multiple types as below:
             { name: my_int, type: { type: int }, type: { type: my_int } }
          */
-        IslType::named("my_int", [v_1_0::type_constraint(IslTypeRef::anonymous([v_1_0::type_constraint(IslTypeRef::named("int"))])), v_1_0::type_constraint(IslTypeRef::anonymous([v_1_0::type_constraint(IslTypeRef::named("my_int"))]))]),
+        named_type("my_int", [type_constraint(anonymous_type_ref([type_constraint(named_type_ref("int"))])), type_constraint(anonymous_type_ref([type_constraint(named_type_ref("my_int"))]))]),
         TypeDefinition::named("my_int", [Constraint::type_constraint(36), Constraint::type_constraint(37)])
     ),
     case::all_of_constraint(
         /* For a schema with all_of type as below:
             { all_of: [{ type: int }] }
         */
-        IslType::anonymous([v_1_0::all_of([IslTypeRef::anonymous([v_1_0::type_constraint(IslTypeRef::named("int"))])])]),
+        anonymous_type([all_of([anonymous_type_ref([type_constraint(named_type_ref("int"))])])]),
         TypeDefinition::anonymous([Constraint::all_of([36]), Constraint::type_constraint(34)])
     ),
     case::any_of_constraint(
         /* For a schema with any_of constraint as below:
             { any_of: [{ type: int }, { type: decimal }] }
         */
-        IslType::anonymous([v_1_0::any_of([IslTypeRef::anonymous([v_1_0::type_constraint(IslTypeRef::named("int"))]), IslTypeRef::anonymous([v_1_0::type_constraint(IslTypeRef::named("decimal"))])])]),
+        anonymous_type([any_of([anonymous_type_ref([type_constraint(named_type_ref("int"))]), anonymous_type_ref([type_constraint(named_type_ref("decimal"))])])]),
         TypeDefinition::anonymous([Constraint::any_of([36, 37]), Constraint::type_constraint(34)])
     ),
     case::one_of_constraint(
         /* For a schema with one_of constraint as below:
             { any_of: [{ type: int }, { type: decimal }] }
         */
-        IslType::anonymous([v_1_0::one_of([IslTypeRef::anonymous([v_1_0::type_constraint(IslTypeRef::named("int"))]), IslTypeRef::anonymous([v_1_0::type_constraint(IslTypeRef::named("decimal"))])])]),
+        anonymous_type([one_of([anonymous_type_ref([type_constraint(named_type_ref("int"))]), anonymous_type_ref([type_constraint(named_type_ref("decimal"))])])]),
         TypeDefinition::anonymous([Constraint::one_of([36, 37]), Constraint::type_constraint(34)])
     ),
     case::not_constraint(
         /* For a schema with not constraint as below:
             { not: { type: int } }
         */
-        IslType::anonymous([v_1_0::not(IslTypeRef::anonymous([v_1_0::type_constraint(IslTypeRef::named("int"))]))]),
+        anonymous_type([not(anonymous_type_ref([type_constraint(named_type_ref("int"))]))]),
         TypeDefinition::anonymous([Constraint::not(36), Constraint::type_constraint(34)])
     ),
     case::ordered_elements_constraint(
         /* For a schema with ordered_elements constraint as below:
             { ordered_elements: [ symbol, { type: int }, ] }
         */
-        IslType::anonymous([v_1_0::ordered_elements([IslTypeRef::named("symbol"), IslTypeRef::anonymous([v_1_0::type_constraint(IslTypeRef::named("int"))])])]),
+        anonymous_type([ordered_elements([named_type_ref("symbol"), anonymous_type_ref([type_constraint(named_type_ref("int"))])])]),
         TypeDefinition::anonymous([Constraint::ordered_elements([5, 36]), Constraint::type_constraint(34)])
     ),
     case::fields_constraint(
         /* For a schema with fields constraint as below:
             { fields: { name: string, id: int} }
         */
-        IslType::anonymous([v_1_0::fields(vec![("name".to_owned(), IslTypeRef::named("string")), ("id".to_owned(), IslTypeRef::named("int"))].into_iter())]),
+        anonymous_type([fields(vec![("name".to_owned(), named_type_ref("string")), ("id".to_owned(), named_type_ref("int"))].into_iter())]),
         TypeDefinition::anonymous([Constraint::fields(vec![("name".to_owned(), 4), ("id".to_owned(), 0)].into_iter()), Constraint::type_constraint(34)])
     ),
     case::contains_constraint(
         /* For a schema with contains constraint as below:
             { contains: [true, 1, "hello"] }
         */
-        IslType::anonymous([v_1_0::contains([true.into(), 1.into(), "hello".to_owned().into()])]),
+        anonymous_type([contains([true.into(), 1.into(), "hello".to_owned().into()])]),
         TypeDefinition::anonymous([Constraint::contains([true.into(), 1.into(), "hello".to_owned().into()]), Constraint::type_constraint(34)])
         ),
     case::container_length_constraint(
         /* For a schema with container_length constraint as below:
             { container_length: 3 }
         */
-        IslType::anonymous([v_1_0::container_length(3.into())]),
+        anonymous_type([container_length(3.into())]),
         TypeDefinition::anonymous([Constraint::container_length(3.into()), Constraint::type_constraint(34)])
     ),
     case::byte_length_constraint(
         /* For a schema with byte_length constraint as below:
             { byte_length: 3 }
         */
-        IslType::anonymous([v_1_0::byte_length(3.into())]),
+        anonymous_type([byte_length(3.into())]),
         TypeDefinition::anonymous([Constraint::byte_length(3.into()), Constraint::type_constraint(34)])
     ),
     case::codepoint_length_constraint(
         /* For a schema with codepoint_length constraint as below:
             { codepoint_length: 3 }
         */
-        IslType::anonymous([v_1_0::codepoint_length(3.into())]),
+        anonymous_type([codepoint_length(3.into())]),
         TypeDefinition::anonymous([Constraint::codepoint_length(3.into()), Constraint::type_constraint(34)])
     ),
     case::element_constraint(
         /* For a schema with element constraint as below:
             { element: int }
         */
-        IslType::anonymous([v_1_0::element(IslTypeRef::named("int"))]),
+        anonymous_type([element(named_type_ref("int"))]),
         TypeDefinition::anonymous([Constraint::element(0), Constraint::type_constraint(34)])
     ),
     case::annotations_constraint(
         /* For a schema with annotations constraint as below:
             { annotations: closed::[red, blue, green] }
         */
-        IslType::anonymous([v_1_0::annotations(vec!["closed"], vec![text_token("red").into(), text_token("blue").into(), text_token("green").into()])]),
+        anonymous_type([annotations(vec!["closed"], vec![text_token("red").into(), text_token("blue").into(), text_token("green").into()])]),
         TypeDefinition::anonymous([Constraint::annotations(vec!["closed"], vec![text_token("red").into(), text_token("blue").into(), text_token("green").into()]), Constraint::type_constraint(34)])
     ),
     case::precision_constraint(
         /* For a schema with precision constraint as below:
             { precision: 3 }
         */
-        IslType::anonymous([v_1_0::precision(3.into())]),
+        anonymous_type([precision(3.into())]),
         TypeDefinition::anonymous([Constraint::precision(3.into()), Constraint::type_constraint(34)])
     ),
     case::scale_constraint(
         /* For a schema with scale constraint as below:
             { scale: 2 }
         */
-        IslType::anonymous([v_1_0::scale(Integer::I64(2).into())]),
+        anonymous_type([scale(Integer::I64(2).into())]),
         TypeDefinition::anonymous([Constraint::scale(Integer::I64(2).into()), Constraint::type_constraint(34)])
     ),
     case::timestamp_precision_constraint(
         /* For a schema with timestamp_precision constraint as below:
             { timestamp_precision: month }
         */
-        IslType::anonymous([v_1_0::timestamp_precision("month".try_into().unwrap())]),
+        anonymous_type([timestamp_precision("month".try_into().unwrap())]),
         TypeDefinition::anonymous([Constraint::timestamp_precision("month".try_into().unwrap()), Constraint::type_constraint(34)])
     ),
     case::valid_values_constraint(
         /* For a schema with valid_values constraint as below:
             { valid_values: [2, 3.5, 5e7, "hello", hi] }
         */
-        IslType::anonymous([v_1_0::valid_values_with_values(vec![2.into(), Decimal::new(35, -1).into(), 5e7.into(), "hello".to_owned().into(), text_token("hi").into()]).unwrap()]),
+        anonymous_type([valid_values_with_values(vec![2.into(), Decimal::new(35, -1).into(), 5e7.into(), "hello".to_owned().into(), text_token("hi").into()]).unwrap()]),
         TypeDefinition::anonymous([Constraint::valid_values_with_values(vec![2.into(), Decimal::new(35, -1).into(), 5e7.into(), "hello".to_owned().into(), text_token("hi").into()]).unwrap(), Constraint::type_constraint(34)])
     ),
     case::valid_values_with_range_constraint(
         /* For a schema with valid_values constraint as below:
             { valid_values: range::[1, 5.5] }
         */
-        IslType::anonymous(
-            [v_1_0::valid_values_with_range(
+        anonymous_type(
+            [valid_values_with_range(
                 NumberRange::new(
                     Number::from(&Integer::I64(1)),
                     Number::from(&Decimal::new(55, -1))
@@ -764,15 +765,15 @@ mod type_definition_tests {
         /* For a schema with utf8_byte_length constraint as below:
             { utf8_byte_length: 3 }
         */
-        IslType::anonymous([v_1_0::utf8_byte_length(3.into())]),
+        anonymous_type([utf8_byte_length(3.into())]),
         TypeDefinition::anonymous([Constraint::utf8_byte_length(3.into()), Constraint::type_constraint(34)])
     ),
     case::regex_constraint(
         /* For a schema with regex constraint as below:
             { regex: "[abc]" }
         */
-        IslType::anonymous(
-            [v_1_0::regex(
+        anonymous_type(
+            [regex(
                 false, // case insensitive
                 false, // multiline
                 "[abc]".to_string()
@@ -791,8 +792,8 @@ mod type_definition_tests {
         /* For a schema with timestamp_offset constraint as below:
             { timestamp_offset: ["-00:00"] }
         */
-        IslType::anonymous(
-            [v_1_0::timestamp_offset(vec!["-00:00".try_into().unwrap()])]
+        anonymous_type(
+            [timestamp_offset(vec!["-00:00".try_into().unwrap()])]
         ),
         TypeDefinition::anonymous([Constraint::timestamp_offset(vec!["-00:00".try_into().unwrap()]),
             Constraint::type_constraint(34)
@@ -803,8 +804,8 @@ mod type_definition_tests {
         // assert if both the TypeDefinition are same in terms of constraints and name
         let type_store = &mut TypeStore::default();
         let pending_types = &mut PendingTypes::default();
-        let this_type_def = match isl_type {
-            IslType::Named(named_isl_type) => {
+        let this_type_def = match isl_type.kind {
+            IslTypeKind::Named(named_isl_type) => {
                 let type_id = TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
                     IonSchemaLanguageVersion::V1_0,
                     &named_isl_type,
@@ -817,7 +818,7 @@ mod type_definition_tests {
                     .unwrap();
                 type_store.get_type_by_id(type_id).unwrap()
             }
-            IslType::Anonymous(anonymous_isl_type) => {
+            IslTypeKind::Anonymous(anonymous_isl_type) => {
                 let type_id = TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
                     IonSchemaLanguageVersion::V1_0,
                     &anonymous_isl_type,

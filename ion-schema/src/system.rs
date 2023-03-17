@@ -23,7 +23,7 @@ use crate::authority::DocumentAuthority;
 use crate::external::ion_rs::Symbol;
 use crate::isl::isl_constraint::IslConstraintImpl;
 use crate::isl::isl_import::{IslImport, IslImportType};
-use crate::isl::isl_type::{IslType, IslTypeImpl};
+use crate::isl::isl_type::{IslType, IslTypeImpl, IslTypeKind};
 use crate::isl::{IonSchemaLanguageVersion, IslSchemaV1_0, IslSchemaV2_0};
 use crate::result::{
     invalid_schema_error, unresolvable_schema_error, unresolvable_schema_error_raw, IonSchemaError,
@@ -718,7 +718,8 @@ impl Resolver {
         isl_types: B,
     ) -> IonSchemaResult<Schema> {
         let isl_version = IonSchemaLanguageVersion::V1_0;
-        let isl_types = isl_types.into();
+        let isl_types: Vec<IslTypeKind> =
+            isl_types.into().iter().map(|t| t.kind.to_owned()).collect();
         // create type_store and pending types which will be used to create type definition
         let type_store = &mut TypeStore::default();
         let pending_types = &mut PendingTypes::default();
@@ -728,14 +729,14 @@ impl Resolver {
         let isl_type_names: HashSet<&str> = HashSet::from_iter(
             isl_types
                 .iter()
-                .filter(|t| matches!(t, IslType::Named(_)))
+                .filter(|t| matches!(t, IslTypeKind::Named(_)))
                 .map(|t| t.name().as_ref().unwrap().as_str()),
         );
 
         for isl_type in &isl_types {
             // convert [IslType] into [TypeDefinition]
             match isl_type {
-                IslType::Named(named_isl_type) => {
+                IslTypeKind::Named(named_isl_type) => {
                     TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
                         isl_version.to_owned(),
                         named_isl_type,
@@ -743,7 +744,7 @@ impl Resolver {
                         pending_types,
                     )?
                 }
-                IslType::Anonymous(anonymous_isl_type) => {
+                IslTypeKind::Anonymous(anonymous_isl_type) => {
                     TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
                         isl_version.to_owned(),
                         anonymous_isl_type,
@@ -853,7 +854,7 @@ impl Resolver {
                     return invalid_schema_error("schema type contains unexpected fields");
                 }
 
-                isl_types.push(IslType::Named(isl_type));
+                isl_types.push(IslType::new(IslTypeKind::Named(isl_type)));
             }
             // load footer for schema
             else if annotations.contains(&&text_token("schema_footer")) {
@@ -954,7 +955,7 @@ impl Resolver {
                         "Top level types must contain field `name` in their definition",
                     );
                 }
-                isl_types.push(IslType::Named(isl_type));
+                isl_types.push(IslType::new(IslTypeKind::Named(isl_type)));
             }
             // load footer for schema
             else if annotations.contains(&&text_token("schema_footer")) {
@@ -991,6 +992,8 @@ impl Resolver {
         // This will be changed to `true` as soon as the type to be imported is resolved and is added to the type_store
         let mut added_imported_type_to_type_store = false;
 
+        let isl_types: Vec<IslTypeKind> = isl.types().iter().map(|t| t.kind.to_owned()).collect();
+
         // Resolve all inline import types if there are any
         // this will help resolve all inline imports before they are used as a reference to another type
         for isl_inline_imported_type in isl.inline_imported_types() {
@@ -1011,18 +1014,18 @@ impl Resolver {
         // get all isl type names that are defined within the schema
         // this will be used to resolve type references which might not have yet resolved while loading a type definition
         let isl_type_names: HashSet<&str> = HashSet::from_iter(
-            isl.types()
+            isl_types
                 .iter()
-                .filter(|t| matches!(t, IslType::Named(_)))
+                .filter(|t| matches!(t, IslTypeKind::Named(_)))
                 .map(|t| t.name().as_ref().unwrap().as_str()),
         );
 
         // Resolve all ISL types and constraints
-        for isl_type in isl.types() {
+        for isl_type in &isl_types {
             let pending_types = &mut PendingTypes::default();
 
             match isl_type {
-                IslType::Named(named_isl_type) => {
+                IslTypeKind::Named(named_isl_type) => {
                     // convert IslType to TypeDefinition
                     let type_id: TypeId =
                         TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
@@ -1032,7 +1035,7 @@ impl Resolver {
                             pending_types,
                         )?;
                 }
-                IslType::Anonymous(_) => {
+                IslTypeKind::Anonymous(_) => {
                     unreachable!("Top level ISL type definitions are always named type definitions")
                 }
             }
@@ -1067,6 +1070,8 @@ impl Resolver {
         // This will be changed to `true` as soon as the type to be imported is resolved and is added to the type_store
         let mut added_imported_type_to_type_store = false;
 
+        let isl_types: Vec<IslTypeKind> = isl.types().iter().map(|t| t.kind.to_owned()).collect();
+
         // Resolve all inline import types if there are any
         // this will help resolve all inline imports before they are used as a reference to another type
         for isl_inline_imported_type in isl.inline_imported_types() {
@@ -1087,18 +1092,18 @@ impl Resolver {
         // get all isl type names that are defined within the schema
         // this will be used to resolve type references which might not have yet resolved while loading a type definition
         let isl_type_names: HashSet<&str> = HashSet::from_iter(
-            isl.types()
+            isl_types
                 .iter()
-                .filter(|t| matches!(t, IslType::Named(_)))
+                .filter(|t| matches!(t, IslTypeKind::Named(_)))
                 .map(|t| t.name().as_ref().unwrap().as_str()),
         );
 
         // Resolve all ISL types and constraints
-        for isl_type in isl.types() {
+        for isl_type in &isl_types {
             let pending_types = &mut PendingTypes::default();
 
             match isl_type {
-                IslType::Named(named_isl_type) => {
+                IslTypeKind::Named(named_isl_type) => {
                     // convert IslType to TypeDefinition
                     let type_id: TypeId =
                         TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
@@ -1108,7 +1113,7 @@ impl Resolver {
                             pending_types,
                         )?;
                 }
-                IslType::Anonymous(_) => {
+                IslTypeKind::Anonymous(_) => {
                     unreachable!("Top level ISL type definitions are always named type definitions")
                 }
             }

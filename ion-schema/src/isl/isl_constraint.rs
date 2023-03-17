@@ -1,6 +1,6 @@
 use crate::isl::isl_import::IslImportType;
 use crate::isl::isl_range::{Range, RangeType};
-use crate::isl::isl_type_reference::IslTypeRef;
+use crate::isl::isl_type_reference::IslTypeRefImpl;
 use crate::isl::util::{Annotation, TimestampOffset, ValidValue};
 use crate::isl::IonSchemaLanguageVersion;
 use crate::result::{
@@ -29,27 +29,51 @@ pub mod v_1_0 {
     /// Creates an [IslConstraint::Type] using the [IslTypeRef] referenced inside it
     // type is rust keyword hence this method is named type_constraint unlike other ISL constraint methods
     pub fn type_constraint(isl_type: IslTypeRef) -> IslConstraint {
-        IslConstraint::new(IslConstraintImpl::Type(isl_type))
+        IslConstraint::new(IslConstraintImpl::Type(isl_type.type_reference))
     }
 
     /// Creates an [IslConstraint::AllOf] using the [IslTypeRef] referenced inside it
     pub fn all_of<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
-        IslConstraint::new(IslConstraintImpl::AllOf(isl_types.into()))
+        IslConstraint::new(IslConstraintImpl::AllOf(
+            isl_types
+                .into()
+                .into_iter()
+                .map(|t| t.type_reference)
+                .collect(),
+        ))
     }
 
     /// Creates an [IslConstraint::AnyOf] using the [IslTypeRef] referenced inside it
     pub fn any_of<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
-        IslConstraint::new(IslConstraintImpl::AnyOf(isl_types.into()))
+        IslConstraint::new(IslConstraintImpl::AnyOf(
+            isl_types
+                .into()
+                .into_iter()
+                .map(|t| t.type_reference)
+                .collect(),
+        ))
     }
 
     /// Creates an [IslConstraint::OneOf] using the [IslTypeRef] referenced inside it
     pub fn one_of<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
-        IslConstraint::new(IslConstraintImpl::OneOf(isl_types.into()))
+        IslConstraint::new(IslConstraintImpl::OneOf(
+            isl_types
+                .into()
+                .into_iter()
+                .map(|t| t.type_reference)
+                .collect(),
+        ))
     }
 
     /// Creates an [IslConstraint::OrderedElements] using the [IslTypeRef] referenced inside it
     pub fn ordered_elements<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
-        IslConstraint::new(IslConstraintImpl::OrderedElements(isl_types.into()))
+        IslConstraint::new(IslConstraintImpl::OrderedElements(
+            isl_types
+                .into()
+                .into_iter()
+                .map(|t| t.type_reference)
+                .collect(),
+        ))
     }
 
     /// Creates an [IslConstraint::Precision] using the range specified in it
@@ -69,12 +93,14 @@ pub mod v_1_0 {
     where
         I: Iterator<Item = (String, IslTypeRef)>,
     {
-        IslConstraint::new(IslConstraintImpl::Fields(fields.collect()))
+        IslConstraint::new(IslConstraintImpl::Fields(
+            fields.map(|(s, t)| (s, t.type_reference)).collect(),
+        ))
     }
 
     /// Creates an [IslConstraint::Not] using the [IslTypeRef] referenced inside it
     pub fn not(isl_type: IslTypeRef) -> IslConstraint {
-        IslConstraint::new(IslConstraintImpl::Not(isl_type))
+        IslConstraint::new(IslConstraintImpl::Not(isl_type.type_reference))
     }
 
     /// Creates a [IslConstraint::Contains] using the [Element] specified inside it
@@ -126,7 +152,7 @@ pub mod v_1_0 {
 
     /// Creates an [IslConstraint::Element] using the [IslTypeRef] referenced inside it
     pub fn element(isl_type: IslTypeRef) -> IslConstraint {
-        IslConstraint::new(IslConstraintImpl::Element(isl_type))
+        IslConstraint::new(IslConstraintImpl::Element(isl_type.type_reference))
     }
 
     /// Creates an [IslConstraint::Annotations] using [str]s and [Element]s specified inside it
@@ -318,27 +344,27 @@ impl IslConstraint {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum IslConstraintImpl {
-    AllOf(Vec<IslTypeRef>),
+pub(crate) enum IslConstraintImpl {
+    AllOf(Vec<IslTypeRefImpl>),
     Annotations(IslAnnotationsConstraint),
-    AnyOf(Vec<IslTypeRef>),
+    AnyOf(Vec<IslTypeRefImpl>),
     ByteLength(Range),
     CodepointLength(Range),
     Contains(Vec<Element>),
     ContentClosed,
     ContainerLength(Range),
-    Element(IslTypeRef),
-    Fields(HashMap<String, IslTypeRef>),
-    Not(IslTypeRef),
+    Element(IslTypeRefImpl),
+    Fields(HashMap<String, IslTypeRefImpl>),
+    Not(IslTypeRefImpl),
     Occurs(Range),
-    OneOf(Vec<IslTypeRef>),
-    OrderedElements(Vec<IslTypeRef>),
+    OneOf(Vec<IslTypeRefImpl>),
+    OrderedElements(Vec<IslTypeRefImpl>),
     Precision(Range),
     Regex(IslRegexConstraint),
     Scale(Range),
     TimestampOffset(IslTimestampOffsetConstraint),
     TimestampPrecision(Range),
-    Type(IslTypeRef),
+    Type(IslTypeRefImpl),
     Unknown(String, Element), // Unknown constraint is used to store open contents
     Utf8ByteLength(Range),
     ValidValues(IslValidValuesConstraint),
@@ -356,7 +382,7 @@ impl IslConstraintImpl {
         // TODO: add more constraints to match below
         match constraint_name {
             "all_of" => {
-                let types: Vec<IslTypeRef> =
+                let types: Vec<IslTypeRefImpl> =
                     IslConstraintImpl::isl_type_references_from_ion_element(
                         isl_version,
                         value,
@@ -382,7 +408,7 @@ impl IslConstraintImpl {
                 Ok(IslConstraintImpl::Annotations(value.try_into()?))
             }
             "any_of" => {
-                let types: Vec<IslTypeRef> =
+                let types: Vec<IslTypeRefImpl> =
                     IslConstraintImpl::isl_type_references_from_ion_element(
                         isl_version,
                         value,
@@ -451,12 +477,12 @@ impl IslConstraintImpl {
                 RangeType::NonNegativeInteger,
             )?)),
             "element" => {
-                let type_reference: IslTypeRef =
-                    IslTypeRef::from_ion_element(isl_version, value, inline_imported_types)?;
+                let type_reference: IslTypeRefImpl =
+                    IslTypeRefImpl::from_ion_element(isl_version, value, inline_imported_types)?;
                 Ok(IslConstraintImpl::Element(type_reference))
             }
             "fields" => {
-                let fields: HashMap<String, IslTypeRef> =
+                let fields: HashMap<String, IslTypeRefImpl> =
                     IslConstraintImpl::isl_fields_from_ion_element(
                         isl_version,
                         value,
@@ -471,7 +497,7 @@ impl IslConstraintImpl {
                 Ok(IslConstraintImpl::Fields(fields))
             }
             "one_of" => {
-                let types: Vec<IslTypeRef> =
+                let types: Vec<IslTypeRefImpl> =
                     IslConstraintImpl::isl_type_references_from_ion_element(
                         isl_version,
                         value,
@@ -481,13 +507,13 @@ impl IslConstraintImpl {
                 Ok(IslConstraintImpl::OneOf(types))
             }
             "not" => {
-                let type_reference: IslTypeRef =
-                    IslTypeRef::from_ion_element(isl_version, value, inline_imported_types)?;
+                let type_reference: IslTypeRefImpl =
+                    IslTypeRefImpl::from_ion_element(isl_version, value, inline_imported_types)?;
                 Ok(IslConstraintImpl::Not(type_reference))
             }
             "type" => {
-                let type_reference: IslTypeRef =
-                    IslTypeRef::from_ion_element(isl_version, value, inline_imported_types)?;
+                let type_reference: IslTypeRefImpl =
+                    IslTypeRefImpl::from_ion_element(isl_version, value, inline_imported_types)?;
                 Ok(IslConstraintImpl::Type(type_reference))
             }
             "occurs" => {
@@ -523,7 +549,7 @@ impl IslConstraintImpl {
                 Ok(IslConstraintImpl::Occurs(range))
             }
             "ordered_elements" => {
-                let types: Vec<IslTypeRef> =
+                let types: Vec<IslTypeRefImpl> =
                     IslConstraintImpl::isl_type_references_from_ion_element(
                         isl_version,
                         value,
@@ -638,7 +664,7 @@ impl IslConstraintImpl {
         value: &Element,
         inline_imported_types: &mut Vec<IslImportType>,
         constraint_name: &str,
-    ) -> IonSchemaResult<Vec<IslTypeRef>> {
+    ) -> IonSchemaResult<Vec<IslTypeRefImpl>> {
         //TODO: create a method/macro for this ion type check which can be reused
         if value.is_null() {
             return Err(invalid_schema_error_raw(format!(
@@ -656,8 +682,10 @@ impl IslConstraintImpl {
             .as_sequence()
             .unwrap()
             .iter()
-            .map(|e| IslTypeRef::from_ion_element(isl_version.to_owned(), e, inline_imported_types))
-            .collect::<IonSchemaResult<Vec<IslTypeRef>>>()
+            .map(|e| {
+                IslTypeRefImpl::from_ion_element(isl_version.to_owned(), e, inline_imported_types)
+            })
+            .collect::<IonSchemaResult<Vec<IslTypeRefImpl>>>()
     }
 
     // helper method for from_ion_element to get isl fields from given ion element
@@ -665,7 +693,7 @@ impl IslConstraintImpl {
         isl_version: IonSchemaLanguageVersion,
         value: &Element,
         inline_imported_types: &mut Vec<IslImportType>,
-    ) -> IonSchemaResult<HashMap<String, IslTypeRef>> {
+    ) -> IonSchemaResult<HashMap<String, IslTypeRefImpl>> {
         if value.is_null() {
             return Err(invalid_schema_error_raw(
                 "fields constraint was a null instead of a struct",
@@ -684,10 +712,10 @@ impl IslConstraintImpl {
             .unwrap()
             .iter()
             .map(|(f, v)| {
-                IslTypeRef::from_ion_element(isl_version.to_owned(), v, inline_imported_types)
+                IslTypeRefImpl::from_ion_element(isl_version.to_owned(), v, inline_imported_types)
                     .map(|t| (f.text().unwrap().to_owned(), t))
             })
-            .collect::<IonSchemaResult<HashMap<String, IslTypeRef>>>()
+            .collect::<IonSchemaResult<HashMap<String, IslTypeRefImpl>>>()
     }
 }
 
