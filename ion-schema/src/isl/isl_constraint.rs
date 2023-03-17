@@ -378,7 +378,7 @@ mod v_2_0 {
 /// Represents schema constraints [IslConstraint] which stores IslTypeRef
 #[derive(Debug, Clone, PartialEq)]
 pub struct IslConstraint {
-    version: IonSchemaLanguageVersion,
+    pub(crate) version: IonSchemaLanguageVersion,
     pub(crate) constraint: IslConstraintImpl,
 }
 

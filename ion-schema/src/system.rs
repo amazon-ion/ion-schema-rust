@@ -1031,11 +1031,27 @@ impl Resolver {
         );
 
         // Resolve all ISL types and constraints
-        for isl_type in &isl_types {
+        for isl_type in isl.types() {
             let pending_types = &mut PendingTypes::default();
 
-            match isl_type {
+            match &isl_type.kind {
                 IslTypeKind::Named(named_isl_type) => {
+                    // verify if there are any constraints with ISL 1.0 for this isl_type
+                    let has_isl_1_0_constraints =
+                        isl_type.constraints().iter().any(|c| match c.constraint {
+                            IslConstraintImpl::Regex(_)
+                            | IslConstraintImpl::Element(_)
+                            | IslConstraintImpl::Annotations(_)
+                            | IslConstraintImpl::Scale(_) => {
+                                c.version == IonSchemaLanguageVersion::V1_0
+                            }
+                            _ => false,
+                        });
+
+                    if has_isl_1_0_constraints {
+                        return invalid_schema_error(format!("ISL type: {} contains constraints from ISL 1.0. Only use ISL 2.0 constraints for this method.", named_isl_type.name().as_ref().unwrap()));
+                    }
+
                     // convert IslType to TypeDefinition
                     let type_id: TypeId =
                         TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
@@ -1109,11 +1125,27 @@ impl Resolver {
         );
 
         // Resolve all ISL types and constraints
-        for isl_type in &isl_types {
+        for isl_type in isl.types() {
             let pending_types = &mut PendingTypes::default();
 
-            match isl_type {
+            match &isl_type.kind {
                 IslTypeKind::Named(named_isl_type) => {
+                    // verify if there are any constraints with ISL 2.0 for this isl_type
+                    let has_isl_2_0_constraints =
+                        isl_type.constraints().iter().any(|c| match c.constraint {
+                            IslConstraintImpl::Regex(_)
+                            | IslConstraintImpl::Element(_)
+                            | IslConstraintImpl::Annotations(_)
+                            | IslConstraintImpl::Scale(_) => {
+                                c.version == IonSchemaLanguageVersion::V2_0
+                            }
+                            _ => false,
+                        });
+
+                    if has_isl_2_0_constraints {
+                        return invalid_schema_error(format!("ISL type: {} contains constraints from ISL 2.0. Only use ISL 1.0 constraints for this method.", named_isl_type.name().as_ref().unwrap()));
+                    }
+
                     // convert IslType to TypeDefinition
                     let type_id: TypeId =
                         TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
@@ -1292,6 +1324,7 @@ impl SchemaSystem {
     /// Requests each of the provided [`DocumentAuthority`]s, in order, to get ISL model for the
     /// requested schema id until one successfully resolves it using ISL 1.0.
     /// If an authority throws an exception, resolution silently proceeds to the next authority.
+    /// If the given ISL model has any ISL 2.0 related types/constraints, resolution returns an error.
     pub fn load_isl_schema_v1_0<A: AsRef<str>>(&mut self, id: A) -> IonSchemaResult<IslSchemaV1_0> {
         self.resolver.load_isl_v1_0_schema(id, None)
     }
@@ -1299,6 +1332,7 @@ impl SchemaSystem {
     /// Requests each of the provided [`DocumentAuthority`]s, in order, to get ISL model for the
     /// requested schema id until one successfully resolves it using ISL 2.0.
     /// If an authority throws an exception, resolution silently proceeds to the next authority.
+    /// If the given ISL model has any ISL 1.0 related types/constraints, resolution returns an error.
     pub fn load_isl_schema_v2_0<A: AsRef<str>>(&mut self, id: A) -> IonSchemaResult<IslSchemaV2_0> {
         self.resolver.load_isl_v2_0_schema(id, None)
     }
