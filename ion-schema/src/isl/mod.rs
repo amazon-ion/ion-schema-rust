@@ -108,6 +108,8 @@ impl Display for IonSchemaLanguageVersion {
 
 //TODO: Implement ISL 2.0
 pub struct IslSchemaV2_0 {
+    /// Represents an id for the given ISL model
+    id: String,
     /// Represents the user defined reserved fields
     user_reserved_fields: UserReservedFields,
     /// Represents all the IslImports inside the schema file.
@@ -136,7 +138,8 @@ pub struct IslSchemaV2_0 {
 }
 
 impl IslSchemaV2_0 {
-    pub fn new(
+    pub fn new<A: AsRef<str>>(
+        id: A,
         user_reserved_fields: UserReservedFields,
         imports: Vec<IslImport>,
         types: Vec<IslType>,
@@ -144,12 +147,17 @@ impl IslSchemaV2_0 {
         open_content: Vec<Element>,
     ) -> Self {
         Self {
+            id: id.as_ref().to_owned(),
             user_reserved_fields,
             imports,
             types,
             inline_imported_types: inline_imports,
             open_content,
         }
+    }
+
+    pub fn id(&self) -> String {
+        self.id.to_owned()
     }
 
     pub fn imports(&self) -> &[IslImport] {
@@ -179,6 +187,8 @@ impl IslSchemaV2_0 {
 /// Provides an internal representation of an schema file
 #[derive(Debug, Clone)]
 pub struct IslSchemaV1_0 {
+    /// Represents an id for the given ISL model
+    id: String,
     /// Represents all the IslImports inside the schema file.
     /// For more information: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#imports
     imports: Vec<IslImport>,
@@ -205,18 +215,24 @@ pub struct IslSchemaV1_0 {
 }
 
 impl IslSchemaV1_0 {
-    pub fn new(
+    pub fn new<A: AsRef<str>>(
+        id: A,
         imports: Vec<IslImport>,
         types: Vec<IslType>,
         inline_imports: Vec<IslImportType>,
         open_content: Vec<Element>,
     ) -> Self {
         Self {
+            id: id.as_ref().to_owned(),
             imports,
             types,
             inline_imported_types: inline_imports,
             open_content,
         }
+    }
+
+    pub fn id(&self) -> String {
+        self.id.to_owned()
     }
 
     pub fn imports(&self) -> &[IslImport] {

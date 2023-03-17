@@ -890,6 +890,7 @@ impl Resolver {
         }
 
         Ok(IslSchemaV2_0::new(
+            id,
             user_reserved_fields,
             isl_imports,
             isl_types,
@@ -982,6 +983,7 @@ impl Resolver {
         }
 
         Ok(IslSchemaV1_0::new(
+            id,
             isl_imports,
             isl_types,
             isl_inline_imports,
@@ -993,7 +995,6 @@ impl Resolver {
     pub fn schema_from_isl_schema_v2_0(
         &mut self,
         isl: IslSchemaV2_0,
-        id: &str,
         type_store: &mut TypeStore,
         load_isl_import: Option<&IslImport>,
     ) -> IonSchemaResult<Rc<Schema>> {
@@ -1076,18 +1077,20 @@ impl Resolver {
         if load_isl_import.is_some() && !added_imported_type_to_type_store {
             unreachable!(
                 "Unable to load import: {} as the type/types were not added to the type_store correctly",
-                id
+                isl.id()
             );
         }
 
-        Ok(Rc::new(Schema::new(id, Rc::new(type_store.to_owned()))))
+        Ok(Rc::new(Schema::new(
+            isl.id(),
+            Rc::new(type_store.to_owned()),
+        )))
     }
 
     /// Converts given ISL 1.0 representation into a [`Schema`]
     pub fn schema_from_isl_schema_v1_0(
         &mut self,
         isl: IslSchemaV1_0,
-        id: &str,
         type_store: &mut TypeStore,
         load_isl_import: Option<&IslImport>,
     ) -> IonSchemaResult<Rc<Schema>> {
@@ -1170,11 +1173,14 @@ impl Resolver {
         if load_isl_import.is_some() && !added_imported_type_to_type_store {
             unreachable!(
                 "Unable to load import: {} as the type/types were not added to the type_store correctly",
-                id
+                isl.id()
             );
         }
 
-        Ok(Rc::new(Schema::new(id, Rc::new(type_store.to_owned()))))
+        Ok(Rc::new(Schema::new(
+            isl.id(),
+            Rc::new(type_store.to_owned()),
+        )))
     }
 
     /// Loads a [`Schema`] with resolved [`Type`]s using authorities and type_store
@@ -1231,12 +1237,12 @@ impl Resolver {
                         IonSchemaLanguageVersion::V1_0 => {
                             let isl =
                                 self.isl_schema_v1_0_from_elements(schema_content.into_iter(), id)?;
-                            self.schema_from_isl_schema_v1_0(isl, id, type_store, load_isl_import)
+                            self.schema_from_isl_schema_v1_0(isl, type_store, load_isl_import)
                         }
                         IonSchemaLanguageVersion::V2_0 => {
                             let isl =
                                 self.isl_schema_v2_0_from_elements(schema_content.into_iter(), id)?;
-                            self.schema_from_isl_schema_v2_0(isl, id, type_store, load_isl_import)
+                            self.schema_from_isl_schema_v2_0(isl, type_store, load_isl_import)
                         }
                     }
                 }
@@ -1337,6 +1343,26 @@ impl SchemaSystem {
         self.resolver.load_isl_v2_0_schema(id, None)
     }
 
+    /// Resolves given ISL 1.0 model into a [Schema]
+    /// If the given ISL model has any ISL 2.0 related types/constraints, resolution returns an error.
+    pub fn load_schema_from_isl_schema_v1_0(
+        &mut self,
+        isl: IslSchemaV1_0,
+    ) -> IonSchemaResult<Rc<Schema>> {
+        self.resolver
+            .schema_from_isl_schema_v1_0(isl, &mut TypeStore::default(), None)
+    }
+
+    /// Resolves given ISL 2.0 model into a [Schema]
+    /// If the given ISL model has any ISL 1.0 related types/constraints, resolution returns an error.
+    pub fn load_schema_from_isl_schema_v2_0(
+        &mut self,
+        isl: IslSchemaV2_0,
+    ) -> IonSchemaResult<Rc<Schema>> {
+        self.resolver
+            .schema_from_isl_schema_v2_0(isl, &mut TypeStore::default(), None)
+    }
+
     /// Returns authorities associated with this [`SchemaSystem`]
     fn authorities(&mut self) -> &[Box<dyn DocumentAuthority>] {
         &self.resolver.authorities
@@ -1417,6 +1443,9 @@ impl SchemaSystem {
 mod schema_system_tests {
     use super::*;
     use crate::authority::{FileSystemDocumentAuthority, MapDocumentAuthority};
+    use crate::isl::isl_constraint;
+    use crate::isl::isl_type;
+    use crate::isl::isl_type_reference;
     use crate::system::IonSchemaError::InvalidSchemaError;
     use std::path::Path;
 
@@ -2269,4 +2298,23 @@ mod schema_system_tests {
         let schema = schema_system.load_isl_schema_v2_0("sample.isl");
         assert!(schema.is_err());
     }
+
+    #[test]
+    fn load_schema_from_isl_schema_v1_0_test() {
+        // an ISL 1.0 type that contains ISL 2.0 related constraints
+        let isl_type = isl_type::v_1_0::named_type(
+            "my_type",
+            [isl_constraint::v_1_0::element(
+                isl_type_reference::v_1_0::named_type_ref("int"),
+            )],
+        );
+        let isl = IslSchemaV1_0::new("sample.isl", vec![], vec![isl_type], vec![], vec![]);
+        let mut schema_system = SchemaSystem::new(vec![]);
+        let schema = schema_system.load_schema_from_isl_schema_v1_0(isl);
+
+        // verify the resolved schema generated from the ISL 1.0 model is valid
+        assert!(schema.is_ok());
+    }
+
+    // TODO: add a test for invalid load_schema_from_isl_schema_v1_0 after ISL 2.0 constraints are implemented to demonstrate error when
 }

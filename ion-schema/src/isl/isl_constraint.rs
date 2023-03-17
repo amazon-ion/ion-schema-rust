@@ -255,7 +255,7 @@ pub mod v_1_0 {
 }
 
 /// Provides public facing APIs for constructing ISL constraints programmatically for ISL 2.0
-mod v_2_0 {
+pub mod v_2_0 {
     use crate::isl::isl_constraint::v_1_0;
     use crate::isl::isl_constraint::IslConstraint;
     use crate::isl::isl_range::{NonNegativeIntegerRange, Range, RangeImpl};
