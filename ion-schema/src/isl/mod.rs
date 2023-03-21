@@ -55,7 +55,7 @@
 //!
 //! // create a schema from given IslType using SchemaSystem
 //! let schema_system = SchemaSystem::new(vec![]); // no authorities added
-//! let schema = schema_system.schema_from_isl_types("my_schema", [isl_type.to_owned()]);
+//! let schema = schema_system.schema_from_isl_types_v1_0("my_schema", [isl_type.to_owned()]);
 //!
 //! assert!(schema.is_ok());
 //!
@@ -87,7 +87,7 @@ pub mod util;
 
 /// Represents Ion Schema Language Versions
 /// Currently it support v1.0 and v2.0
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Copy)]
 pub enum IonSchemaLanguageVersion {
     V1_0,
     V2_0,
@@ -106,12 +106,91 @@ impl Display for IonSchemaLanguageVersion {
     }
 }
 
-//TODO: Implement ISL 2.0
-pub struct IslSchemaV2_0 {
+/// Provides an internal representation of an schema file
+#[derive(Debug, Clone, PartialEq)]
+pub struct IslSchema {
+    pub(crate) schema: IslSchemaImpl,
+}
+
+impl IslSchema {
+    /// Creates an ISL schema using the [IslType]s, [IslImport]s, open content and schema id
+    pub fn schema_v_1_0<A: AsRef<str>>(
+        id: A,
+        imports: Vec<IslImport>,
+        types: Vec<IslType>,
+        inline_imports: Vec<IslImportType>,
+        open_content: Vec<Element>,
+    ) -> IslSchema {
+        IslSchema {
+            schema: IslSchemaImpl::new(
+                id.as_ref(),
+                None,
+                imports,
+                types,
+                inline_imports,
+                open_content,
+            ),
+        }
+    }
+
+    /// Creates an ISL schema using the [IslType]s, [IslImport]s, [UserReservedFields] open content and schema id
+    pub fn schema_v_2_0<A: AsRef<str>>(
+        id: A,
+        user_reserved_fields: UserReservedFields,
+        imports: Vec<IslImport>,
+        types: Vec<IslType>,
+        inline_imports: Vec<IslImportType>,
+        open_content: Vec<Element>,
+    ) -> IslSchema {
+        IslSchema {
+            schema: IslSchemaImpl::new(
+                id.as_ref(),
+                Some(user_reserved_fields),
+                imports,
+                types,
+                inline_imports,
+                open_content,
+            ),
+        }
+    }
+
+    pub fn id(&self) -> String {
+        self.schema.id.to_owned()
+    }
+
+    pub fn imports(&self) -> &[IslImport] {
+        &self.schema.imports
+    }
+
+    pub fn types(&self) -> &[IslType] {
+        &self.schema.types
+    }
+
+    pub fn inline_imported_types(&self) -> &[IslImportType] {
+        &self.schema.inline_imported_types
+    }
+
+    /// Provides top level open content for given schema
+    /// For open content defined within type definitions use IslType#open_content()
+    pub fn open_content(&self) -> &Vec<Element> {
+        &self.schema.open_content
+    }
+
+    /// Provide user reserved field defined in the given schema for ISL 2.0,
+    /// Otherwise returns None
+    pub fn user_reserved_fields(&self) -> Option<&UserReservedFields> {
+        self.schema.user_reserved_fields.as_ref()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct IslSchemaImpl {
     /// Represents an id for the given ISL model
     id: String,
     /// Represents the user defined reserved fields
-    user_reserved_fields: UserReservedFields,
+    /// For ISL 2.0 this contains the use reserved fields that are defined within schema header,
+    /// Otherwise, it is None.
+    user_reserved_fields: Option<UserReservedFields>,
     /// Represents all the IslImports inside the schema file.
     /// For more information: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#imports
     imports: Vec<IslImport>,
@@ -137,10 +216,10 @@ pub struct IslSchemaV2_0 {
     open_content: Vec<Element>,
 }
 
-impl IslSchemaV2_0 {
+impl IslSchemaImpl {
     pub fn new<A: AsRef<str>>(
         id: A,
-        user_reserved_fields: UserReservedFields,
+        user_reserved_fields: Option<UserReservedFields>,
         imports: Vec<IslImport>,
         types: Vec<IslType>,
         inline_imports: Vec<IslImportType>,
@@ -154,103 +233,6 @@ impl IslSchemaV2_0 {
             inline_imported_types: inline_imports,
             open_content,
         }
-    }
-
-    pub fn id(&self) -> String {
-        self.id.to_owned()
-    }
-
-    pub fn imports(&self) -> &[IslImport] {
-        &self.imports
-    }
-
-    pub fn types(&self) -> &[IslType] {
-        &self.types
-    }
-
-    pub fn inline_imported_types(&self) -> &[IslImportType] {
-        &self.inline_imported_types
-    }
-
-    /// Provides top level open content for given schema
-    /// For open content defined within type definitions use IslType#open_content()
-    pub fn open_content(&self) -> &Vec<Element> {
-        &self.open_content
-    }
-
-    /// Provide user reserved field defined in the given schema
-    pub fn user_reserved_fields(&self) -> &UserReservedFields {
-        &self.user_reserved_fields
-    }
-}
-
-/// Provides an internal representation of an schema file
-#[derive(Debug, Clone)]
-pub struct IslSchemaV1_0 {
-    /// Represents an id for the given ISL model
-    id: String,
-    /// Represents all the IslImports inside the schema file.
-    /// For more information: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#imports
-    imports: Vec<IslImport>,
-    /// Represents all the IslType defined in this schema file.
-    /// For more information: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#type-definitions
-    types: Vec<IslType>,
-    /// Represents all the inline IslImportTypes in this schema file.
-    inline_imported_types: Vec<IslImportType>,
-    /// Represents open content as `Element`s
-    /// Note: This doesn't preserve the information about where the open content is placed in the schema file.
-    /// e.g. This method doesn't differentiate between following schemas with open content:
-    /// ```ion
-    /// $foo
-    /// $bar
-    /// type::{ name: foo, codepoint_length: 1 }
-    /// ```
-    ///
-    /// ```ion
-    /// type::{ name: foo, codepoint_length: 1 }
-    /// $foo
-    /// $bar
-    /// ```
-    open_content: Vec<Element>,
-}
-
-impl IslSchemaV1_0 {
-    pub fn new<A: AsRef<str>>(
-        id: A,
-        imports: Vec<IslImport>,
-        types: Vec<IslType>,
-        inline_imports: Vec<IslImportType>,
-        open_content: Vec<Element>,
-    ) -> Self {
-        Self {
-            id: id.as_ref().to_owned(),
-            imports,
-            types,
-            inline_imported_types: inline_imports,
-            open_content,
-        }
-    }
-
-    pub fn id(&self) -> String {
-        self.id.to_owned()
-    }
-
-    pub fn imports(&self) -> &[IslImport] {
-        &self.imports
-    }
-
-    pub fn types(&self) -> &[IslType] {
-        &self.types
-    }
-
-    pub fn inline_imported_types(&self) -> &[IslImportType] {
-        &self.inline_imported_types
-    }
-
-    /// Provides top level open content for given schema
-    /// For open content defined within type definitions use IslType#open_content()
-    pub fn open_content(&self) -> &Vec<Element> {
-        &self.open_content
     }
 }
 

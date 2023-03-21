@@ -3,10 +3,14 @@
 
 use crate::external::ion_rs::IonType;
 use crate::ion_path::IonPath;
+use crate::isl::isl_constraint::IslConstraintImpl;
+use crate::isl::isl_type::IslTypeImpl;
+use crate::result::{invalid_schema_error, IonSchemaResult};
 use crate::violation::{Violation, ViolationCode};
-use ion_rs::value::owned::Element;
+use ion_rs::value::owned::{Element, Struct};
 use ion_rs::value::reader::{element_reader, ElementReader};
-use ion_rs::value::{IonElement, IonSequence};
+use ion_rs::value::{IonElement, IonSequence, IonStruct};
+use ion_rs::Symbol;
 use std::fmt::{Display, Formatter};
 /// A [`try`]-like macro to workaround the [`Option`]/[`Result`] nested APIs.
 /// These API require checking the type and then calling the appropriate getter function
@@ -165,9 +169,118 @@ fn load(text: &str) -> Vec<Element> {
         .expect("parsing failed unexpectedly")
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct UserReservedFields {
     schema_header_fields: Vec<String>,
     schema_footer_fields: Vec<String>,
     type_fields: Vec<String>,
+}
+
+impl UserReservedFields {
+    /// Parse use reserved fields inside a [Struct]
+    pub(crate) fn from_ion_elements(user_reserved_fields: &Struct) -> Self {
+        Self {
+            schema_header_fields: UserReservedFields::field_names_from_ion_elements(
+                "schema_header",
+                user_reserved_fields,
+            ),
+            schema_footer_fields: UserReservedFields::field_names_from_ion_elements(
+                "schema_footer",
+                user_reserved_fields,
+            ),
+            type_fields: UserReservedFields::field_names_from_ion_elements(
+                "type",
+                user_reserved_fields,
+            ),
+        }
+    }
+
+    fn field_names_from_ion_elements(
+        user_reserved_fields_type: &str,
+        user_reserved_fields: &Struct,
+    ) -> Vec<String> {
+        let user_reserved_elements: Vec<&Element> = user_reserved_fields
+            .get(user_reserved_fields_type)
+            .and_then(|it| it.as_sequence().map(|s| s.iter().collect()))
+            .unwrap_or(vec![]);
+
+        user_reserved_elements
+            .iter()
+            .map(|e| e.as_str().map(|s| s.to_owned()))
+            .collect::<Option<Vec<String>>>()
+            .unwrap_or(vec![])
+    }
+
+    pub(crate) fn validate_field_names_in_header(
+        &self,
+        schema_header: &Struct,
+    ) -> IonSchemaResult<()> {
+        let unexpected_fields: Vec<(&Symbol, &Element)> = schema_header
+            .fields()
+            .filter(|(f, v)| {
+                !self
+                    .schema_header_fields
+                    .contains(&f.text().unwrap().to_owned())
+                    && f.text().unwrap() != "user_reserved_fields"
+            })
+            .collect();
+
+        if !unexpected_fields.is_empty() {
+            // for unexpected fields return invalid schema error
+            return invalid_schema_error(format!(
+                "schema header contains unexpected fields: {unexpected_fields:?}"
+            ));
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn validate_field_names_in_type(
+        &self,
+        isl_type: &IslTypeImpl,
+    ) -> IonSchemaResult<()> {
+        let unexpected_fields: &Vec<&String> = &isl_type
+            .constraints()
+            .iter()
+            .filter(|c| matches!(c, IslConstraintImpl::Unknown(_, _)))
+            .map(|c| match c {
+                IslConstraintImpl::Unknown(f, v) => f,
+                _ => {
+                    unreachable!("we have already filtered all other constraints")
+                }
+            })
+            .filter(|f| !self.type_fields.contains(f))
+            .collect();
+
+        if !unexpected_fields.is_empty() {
+            // for unexpected fields return invalid schema error
+            return invalid_schema_error(format!(
+                "schema type contains unexpected fields: {unexpected_fields:?}"
+            ));
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn validate_field_names_in_footer(
+        &self,
+        schema_footer: &Struct,
+    ) -> IonSchemaResult<()> {
+        let unexpected_fields: Vec<(&Symbol, &Element)> = schema_footer
+            .fields()
+            .filter(|(f, v)| {
+                !self
+                    .schema_footer_fields
+                    .contains(&f.text().unwrap().to_owned())
+            })
+            .collect();
+
+        if !unexpected_fields.is_empty() {
+            // for unexpected fields return invalid schema error
+            return invalid_schema_error(format!(
+                "schema footer contains unexpected fields: {unexpected_fields:?}"
+            ));
+        }
+        Ok(())
+    }
 }
