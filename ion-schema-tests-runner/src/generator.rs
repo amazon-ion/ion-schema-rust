@@ -177,26 +177,32 @@ fn generate_test_cases_for_file(ctx: Context) -> TokenStream {
 
 /// find ISL version from schema content
 fn find_isl_version(schema_content: &[Element]) -> IonSchemaLanguageVersion {
-    let isl_version_marker = Regex::new(r"^\$ion_schema_\d.*$").unwrap();
-    let mut isl_version = IonSchemaLanguageVersion::V1_0;
+    // ISL version marker regex
+    let isl_version_marker: Regex = Regex::new(r"^\$ion_schema_\d.*$").unwrap();
 
-    // find the ISL version
     for value in schema_content {
+        // if find a type definition or a schema header before finding any version marker then this is ISL 1.0
+        if value.ion_type() == IonType::Struct
+            && (value.has_annotation("type") || value.has_annotation("schema_header"))
+        {
+            // default ISL 1.0 version will be returned
+            break;
+        }
         // verify if value is an ISL version marker and if it has valid format
         if value.ion_type() == IonType::Symbol
             && isl_version_marker.is_match(value.as_str().unwrap())
         {
             // This implementation supports Ion Schema 1.0 and Ion Schema 2.0
-            isl_version = match value.as_str().unwrap() {
+            return match value.as_str().unwrap() {
                 "$ion_schema_1_0" => IonSchemaLanguageVersion::V1_0,
                 "$ion_schema_2_0" => IonSchemaLanguageVersion::V2_0,
-                _ => {
-                    unimplemented!("Unsupported Ion Schema Language version: {}", value)
-                }
+                _ => unimplemented!("Unsupported Ion Schema Language version: {}", value),
             };
         }
     }
-    isl_version
+
+    // default ISL version 1.0 if no version marker is found
+    IonSchemaLanguageVersion::V1_0
 }
 
 /// Generates a test case to assert that some Ion text is or is not a valid ISL schema document.
@@ -243,7 +249,11 @@ fn generate_invalid_type_case(
 ) -> TokenStream {
     let invalid_type_text_token = TokenTree::from(Literal::string(invalid_type_text));
     let test_name = format_ident!("{}", util::escape_to_ident(description));
-    let isl_version = TokenTree::from(Literal::string(&format!("{isl_version}")));
+    let version = match isl_version {
+        IonSchemaLanguageVersion::V1_0 => "$ion_schema_1_0",
+        IonSchemaLanguageVersion::V2_0 => "$ion_schema_2_0",
+    };
+    let isl_version = TokenTree::from(Literal::string(version));
     quote! {
         #[test]
         fn #test_name() -> Result<(), String> {

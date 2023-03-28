@@ -99,8 +99,8 @@ impl Display for IonSchemaLanguageVersion {
             f,
             "{}",
             match self {
-                IonSchemaLanguageVersion::V1_0 => "$ion_schema_1_0",
-                IonSchemaLanguageVersion::V2_0 => "$ion_schema_2_0",
+                IonSchemaLanguageVersion::V1_0 => "ISL 1.0",
+                IonSchemaLanguageVersion::V2_0 => "ISL 2.0",
             }
         )
     }

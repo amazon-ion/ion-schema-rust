@@ -256,43 +256,88 @@ pub mod v_1_0 {
 
 /// Provides public facing APIs for constructing ISL constraints programmatically for ISL 2.0
 pub mod v_2_0 {
-    use crate::isl::isl_constraint::v_1_0;
     use crate::isl::isl_constraint::IslConstraint;
+    use crate::isl::isl_constraint::{
+        IslConstraintImpl, IslTimestampOffsetConstraint, IslValidValuesConstraint,
+    };
     use crate::isl::isl_range::{NonNegativeIntegerRange, Range, RangeImpl};
     use crate::isl::isl_type_reference::IslTypeRef;
     use crate::isl::util::{TimestampOffset, TimestampPrecision, ValidValue};
+    use crate::isl::IonSchemaLanguageVersion;
     use crate::result::IonSchemaResult;
     use ion_rs::value::owned::Element;
 
     /// Creates an [IslConstraint::Type] using the [IslTypeRef] referenced inside it
     // type is rust keyword hence this method is named type_constraint unlike other ISL constraint methods
     pub fn type_constraint(isl_type: IslTypeRef) -> IslConstraint {
-        v_1_0::type_constraint(isl_type)
+        IslConstraint::new(
+            IonSchemaLanguageVersion::V2_0,
+            IslConstraintImpl::Type(isl_type.type_reference),
+        )
     }
 
     /// Creates an [IslConstraint::AllOf] using the [IslTypeRef] referenced inside it
     pub fn all_of<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
-        v_1_0::all_of(isl_types)
+        IslConstraint::new(
+            IonSchemaLanguageVersion::V2_0,
+            IslConstraintImpl::AllOf(
+                isl_types
+                    .into()
+                    .into_iter()
+                    .map(|t| t.type_reference)
+                    .collect(),
+            ),
+        )
     }
 
     /// Creates an [IslConstraint::AnyOf] using the [IslTypeRef] referenced inside it
     pub fn any_of<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
-        v_1_0::any_of(isl_types)
+        IslConstraint::new(
+            IonSchemaLanguageVersion::V2_0,
+            IslConstraintImpl::AnyOf(
+                isl_types
+                    .into()
+                    .into_iter()
+                    .map(|t| t.type_reference)
+                    .collect(),
+            ),
+        )
     }
 
     /// Creates an [IslConstraint::OneOf] using the [IslTypeRef] referenced inside it
     pub fn one_of<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
-        v_1_0::one_of(isl_types)
+        IslConstraint::new(
+            IonSchemaLanguageVersion::V2_0,
+            IslConstraintImpl::OneOf(
+                isl_types
+                    .into()
+                    .into_iter()
+                    .map(|t| t.type_reference)
+                    .collect(),
+            ),
+        )
     }
 
     /// Creates an [IslConstraint::OrderedElements] using the [IslTypeRef] referenced inside it
     pub fn ordered_elements<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
-        v_1_0::ordered_elements(isl_types)
+        IslConstraint::new(
+            IonSchemaLanguageVersion::V2_0,
+            IslConstraintImpl::OrderedElements(
+                isl_types
+                    .into()
+                    .into_iter()
+                    .map(|t| t.type_reference)
+                    .collect(),
+            ),
+        )
     }
 
     /// Creates an [IslConstraint::Precision] using the range specified in it
     pub fn precision(precision: NonNegativeIntegerRange) -> IslConstraint {
-        v_1_0::precision(precision)
+        IslConstraint::new(
+            IonSchemaLanguageVersion::V2_0,
+            IslConstraintImpl::Precision(Range::NonNegativeInteger(precision)),
+        )
     }
 
     /// Creates an [IslConstraint::Fields] using the field names and [IslTypeRef]s referenced inside it
@@ -300,47 +345,74 @@ pub mod v_2_0 {
     where
         I: Iterator<Item = (String, IslTypeRef)>,
     {
-        v_1_0::fields(fields)
+        IslConstraint::new(
+            IonSchemaLanguageVersion::V2_0,
+            IslConstraintImpl::Fields(fields.map(|(s, t)| (s, t.type_reference)).collect()),
+        )
     }
 
     /// Creates an [IslConstraint::Not] using the [IslTypeRef] referenced inside it
     pub fn not(isl_type: IslTypeRef) -> IslConstraint {
-        v_1_0::not(isl_type)
+        IslConstraint::new(
+            IonSchemaLanguageVersion::V2_0,
+            IslConstraintImpl::Not(isl_type.type_reference),
+        )
     }
 
     /// Creates a [IslConstraint::Contains] using the [Element] specified inside it
     pub fn contains<A: Into<Vec<Element>>>(values: A) -> IslConstraint {
-        v_1_0::contains(values)
+        IslConstraint::new(
+            IonSchemaLanguageVersion::V2_0,
+            IslConstraintImpl::Contains(values.into()),
+        )
     }
 
     /// Creates an [IslConstraint::ContainerLength] using the range specified in it
     pub fn container_length(length: NonNegativeIntegerRange) -> IslConstraint {
-        v_1_0::container_length(length)
+        IslConstraint::new(
+            IonSchemaLanguageVersion::V2_0,
+            IslConstraintImpl::ContainerLength(Range::NonNegativeInteger(length)),
+        )
     }
 
     /// Creates an [IslConstraint::ByteLength] using the range specified in it
     pub fn byte_length(length: RangeImpl<usize>) -> IslConstraint {
-        v_1_0::byte_length(length)
+        IslConstraint::new(
+            IonSchemaLanguageVersion::V2_0,
+            IslConstraintImpl::ByteLength(Range::NonNegativeInteger(length)),
+        )
     }
 
     /// Creates an [IslConstraint::CodepointLength] using the range specified in it
     pub fn codepoint_length(length: RangeImpl<usize>) -> IslConstraint {
-        v_1_0::codepoint_length(length)
+        IslConstraint::new(
+            IonSchemaLanguageVersion::V2_0,
+            IslConstraintImpl::CodepointLength(Range::NonNegativeInteger(length)),
+        )
     }
 
     /// Creates an [IslConstraint::TimestampPrecision] using the range specified in it
     pub fn timestamp_precision(precision: RangeImpl<TimestampPrecision>) -> IslConstraint {
-        v_1_0::timestamp_precision(precision)
+        IslConstraint::new(
+            IonSchemaLanguageVersion::V2_0,
+            IslConstraintImpl::TimestampPrecision(Range::TimestampPrecision(precision)),
+        )
     }
 
     /// Creates an [IslConstraint::TimestampOffset] using the offset list specified in it
     pub fn timestamp_offset(offsets: Vec<TimestampOffset>) -> IslConstraint {
-        v_1_0::timestamp_offset(offsets)
+        IslConstraint::new(
+            IonSchemaLanguageVersion::V2_0,
+            IslConstraintImpl::TimestampOffset(IslTimestampOffsetConstraint::new(offsets)),
+        )
     }
 
     /// Creates an [IslConstraint::Utf8ByteLength] using the range specified in it
     pub fn utf8_byte_length(length: NonNegativeIntegerRange) -> IslConstraint {
-        v_1_0::utf8_byte_length(length)
+        IslConstraint::new(
+            IonSchemaLanguageVersion::V2_0,
+            IslConstraintImpl::Utf8ByteLength(Range::NonNegativeInteger(length)),
+        )
     }
 
     /// Creates an [IslConstraint::Element] using the [IslTypeRef] referenced inside it
@@ -361,12 +433,22 @@ pub mod v_2_0 {
     pub fn valid_values_with_values(values: Vec<Element>) -> IonSchemaResult<IslConstraint> {
         let valid_values: IonSchemaResult<Vec<ValidValue>> =
             values.iter().map(|e| e.try_into()).collect();
-        v_1_0::valid_values_with_values(values)
+        Ok(IslConstraint::new(
+            IonSchemaLanguageVersion::V2_0,
+            IslConstraintImpl::ValidValues(IslValidValuesConstraint {
+                valid_values: valid_values?,
+            }),
+        ))
     }
 
     /// Creates a [IslConstraint::ValidValues] using the [Range] specified inside it
     pub fn valid_values_with_range(range: Range) -> IslConstraint {
-        v_1_0::valid_values_with_range(range)
+        IslConstraint::new(
+            IonSchemaLanguageVersion::V2_0,
+            IslConstraintImpl::ValidValues(IslValidValuesConstraint {
+                valid_values: vec![ValidValue::Range(range)],
+            }),
+        )
     }
 
     /// Creates an [IslConstraint::Regex] using the expression and flags (case_insensitive, multi_line)

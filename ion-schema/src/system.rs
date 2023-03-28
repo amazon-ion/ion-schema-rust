@@ -21,7 +21,7 @@
 
 use crate::authority::DocumentAuthority;
 use crate::external::ion_rs::Symbol;
-use crate::isl::isl_constraint::{IslConstraint, IslConstraintImpl};
+use crate::isl::isl_constraint::IslConstraint;
 use crate::isl::isl_import::{IslImport, IslImportType};
 use crate::isl::isl_type::{IslType, IslTypeImpl, IslTypeKind};
 use crate::isl::{IonSchemaLanguageVersion, IslSchema};
@@ -32,6 +32,7 @@ use crate::result::{
 use crate::schema::Schema;
 use crate::types::{BuiltInTypeDefinition, Nullability, TypeDefinition, TypeDefinitionImpl};
 use crate::UserReservedFields;
+use ion_rs::types::IonType::Struct;
 use ion_rs::value::owned::{text_token, Element};
 use ion_rs::value::reader::{element_reader, ElementReader};
 use ion_rs::value::{IonElement, IonSequence, IonStruct};
@@ -529,7 +530,7 @@ impl TypeStore {
             )
             .unwrap();
             let type_def = BuiltInTypeDefinition::parse_from_isl_type(
-                isl_version.to_owned(),
+                isl_version,
                 &isl_type,
                 self,
                 pending_types,
@@ -737,42 +738,15 @@ impl Resolver {
             match &isl_type.kind {
                 IslTypeKind::Named(named_isl_type) => {
                     // verify that the ISL type doesn't contain constraints from another ISL version
-                    match isl_version {
-                        IonSchemaLanguageVersion::V1_0 => {
-                            // verify if there are any constraints with ISL 2.0 for this isl_type
-                            let has_isl_2_0_constraints =
-                                isl_type.constraints().iter().any(|c| match c.constraint {
-                                    IslConstraintImpl::Regex(_)
-                                    | IslConstraintImpl::Element(_)
-                                    | IslConstraintImpl::Annotations(_)
-                                    | IslConstraintImpl::Scale(_) => {
-                                        c.version == IonSchemaLanguageVersion::V2_0
-                                    }
-                                    _ => false,
-                                });
+                    let has_other_isl_constraints = isl_type
+                        .constraints()
+                        .iter()
+                        .any(|c| c.version != isl_version);
 
-                            if has_isl_2_0_constraints {
-                                return invalid_schema_error(format!("ISL type: {} contains constraints from ISL 2.0. Only use ISL 1.0 constraints for this method.", named_isl_type.name().as_ref().unwrap()));
-                            }
-                        }
-                        IonSchemaLanguageVersion::V2_0 => {
-                            // verify if there are any constraints with ISL 1.0 for this isl_type
-                            let has_isl_1_0_constraints =
-                                isl_type.constraints().iter().any(|c| match c.constraint {
-                                    IslConstraintImpl::Regex(_)
-                                    | IslConstraintImpl::Element(_)
-                                    | IslConstraintImpl::Annotations(_)
-                                    | IslConstraintImpl::Scale(_) => {
-                                        c.version == IonSchemaLanguageVersion::V2_0
-                                    }
-                                    _ => false,
-                                });
-
-                            if has_isl_1_0_constraints {
-                                return invalid_schema_error(format!("ISL type: {} contains constraints from ISL 1.0. Only use ISL 2.0 constraints for this method.", named_isl_type.name().as_ref().unwrap()));
-                            }
-                        }
+                    if has_other_isl_constraints {
+                        return invalid_schema_error(format!("ISL type: {} contains constraints from another ISL version. Only use {isl_version} constraints for this method.", named_isl_type.name().as_ref().unwrap()));
                     }
+
                     TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
                         isl_version.to_owned(),
                         named_isl_type,
@@ -939,57 +913,25 @@ impl Resolver {
         for isl_type in isl.types() {
             let pending_types = &mut PendingTypes::default();
 
-            match &isl_type.kind {
-                IslTypeKind::Named(named_isl_type) => {
-                    match isl_version {
-                        IonSchemaLanguageVersion::V1_0 => {
-                            // verify if there are any constraints with ISL 2.0 for this isl_type
-                            let has_isl_2_0_constraints =
-                                isl_type.constraints().iter().any(|c| match c.constraint {
-                                    IslConstraintImpl::Regex(_)
-                                    | IslConstraintImpl::Element(_)
-                                    | IslConstraintImpl::Annotations(_)
-                                    | IslConstraintImpl::Scale(_) => {
-                                        c.version == IonSchemaLanguageVersion::V2_0
-                                    }
-                                    _ => false,
-                                });
+            if let IslTypeKind::Named(named_isl_type) = &isl_type.kind {
+                // verify if there are any constraints with ISL 2.0 for this isl_type
+                let has_other_isl_constraints = isl_type
+                    .constraints()
+                    .iter()
+                    .any(|c| c.version != isl_version);
 
-                            if has_isl_2_0_constraints {
-                                return invalid_schema_error(format!("ISL type: {} contains constraints from ISL 2.0. Only use ISL 1.0 constraints for this method.", named_isl_type.name().as_ref().unwrap()));
-                            }
-                        }
-                        IonSchemaLanguageVersion::V2_0 => {
-                            // verify if there are any constraints with ISL 1.0 for this isl_type
-                            let has_isl_1_0_constraints =
-                                isl_type.constraints().iter().any(|c| match c.constraint {
-                                    IslConstraintImpl::Regex(_)
-                                    | IslConstraintImpl::Element(_)
-                                    | IslConstraintImpl::Annotations(_)
-                                    | IslConstraintImpl::Scale(_) => {
-                                        c.version == IonSchemaLanguageVersion::V2_0
-                                    }
-                                    _ => false,
-                                });
-
-                            if has_isl_1_0_constraints {
-                                return invalid_schema_error(format!("ISL type: {} contains constraints from ISL 1.0. Only use ISL 2.0 constraints for this method.", named_isl_type.name().as_ref().unwrap()));
-                            }
-                        }
-                    }
-
-                    // convert IslType to TypeDefinition
-                    let type_id: TypeId =
-                        TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
-                            isl_version,
-                            named_isl_type,
-                            type_store,
-                            pending_types,
-                        )?;
+                if has_other_isl_constraints {
+                    return invalid_schema_error(format!("ISL type: {} contains constraints from other ISL version. Only use {isl_version} constraints for this method.", named_isl_type.name().as_ref().unwrap()));
                 }
-                IslTypeKind::Anonymous(_) => {
-                    unreachable!("Top level ISL type definitions are always named type definitions")
-                }
+
+                // convert IslType to TypeDefinition
+                let type_id: TypeId =
+                    TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
+                        isl_version,
+                        named_isl_type,
+                        type_store,
+                        pending_types,
+                    )?;
             }
 
             // add all types from pending types to type_store
@@ -1025,6 +967,9 @@ impl Resolver {
         load_isl_import: Option<&IslImport>,
     ) -> IonSchemaResult<Rc<Schema>> {
         let id: &str = id.as_ref();
+        // ISL version marker regex
+        let isl_version_marker: Regex = Regex::new(r"^\$ion_schema_\d.*$").unwrap();
+
         if let Some(schema) = self.resolved_schema_cache.get(id) {
             return Ok(Rc::clone(schema));
         }
@@ -1039,29 +984,7 @@ impl Resolver {
                     _ => Err(error),
                 },
                 Ok(schema_content) => {
-                    // ISL version marker regex
-                    let isl_version_marker = Regex::new(r"^\$ion_schema_\d.*$").unwrap();
-                    let mut isl_version = IonSchemaLanguageVersion::V1_0;
-
-                    // find the ISL version
-                    for value in &schema_content {
-                        // verify if value is an ISL version marker and if it has valid format
-                        if value.ion_type() == IonType::Symbol
-                            && isl_version_marker.is_match(value.as_str().unwrap())
-                        {
-                            // This implementation supports Ion Schema 1.0 and Ion Schema 2.0
-                            isl_version = match value.as_str().unwrap() {
-                                "$ion_schema_1_0" => IonSchemaLanguageVersion::V1_0,
-                                "$ion_schema_2_0" => IonSchemaLanguageVersion::V2_0,
-                                _ => {
-                                    return invalid_schema_error(format!(
-                                        "Unsupported Ion Schema Language version: {value}"
-                                    ))
-                                }
-                            };
-                        }
-                    }
-
+                    let isl_version = self.find_isl_version(&schema_content, isl_version_marker)?;
                     let isl =
                         self.isl_schema_from_elements(isl_version, schema_content.into_iter(), id)?;
                     self.schema_from_isl_schema(isl_version, isl, type_store, load_isl_import)
@@ -1079,17 +1002,20 @@ impl Resolver {
     // `Some(isl_import)`)
     fn load_isl_schema<A: AsRef<str>>(
         &mut self,
-        isl_version: IonSchemaLanguageVersion,
         id: A,
         load_isl_import: Option<&IslImport>,
     ) -> IonSchemaResult<IslSchema> {
         let id: &str = id.as_ref();
+        // ISL version marker regex
+        let isl_version_marker: Regex = Regex::new(r"^\$ion_schema_\d.*$").unwrap();
 
         for authority in &self.authorities {
             return match authority.elements(id) {
-                Ok(schema_content) => {
-                    self.isl_schema_from_elements(isl_version, schema_content.into_iter(), id)
-                }
+                Ok(schema_content) => self.isl_schema_from_elements(
+                    self.find_isl_version(&schema_content, isl_version_marker)?,
+                    schema_content.into_iter(),
+                    id,
+                ),
                 Err(IonSchemaError::IoError { source: e }) if e.kind() == ErrorKind::NotFound => {
                     continue
                 }
@@ -1097,6 +1023,40 @@ impl Resolver {
             };
         }
         unresolvable_schema_error("Unable to load ISL model: ".to_owned() + id)
+    }
+
+    // This is a helper method that returns the ISL version for given schema content
+    // It returns an error for an ISL version that matches the version marker but doesn't match the existing ISL versions.
+    fn find_isl_version(
+        &self,
+        schema_content: &Vec<Element>,
+        isl_version_marker: Regex,
+    ) -> IonSchemaResult<IonSchemaLanguageVersion> {
+        for value in schema_content {
+            // if find a type definition or a schema header before finding any version marker then this is ISL 1.0
+            if value.ion_type() == Struct
+                && (value.has_annotation("type") || value.has_annotation("schema_header"))
+            {
+                // default ISL 1.0 version will be returned
+                break;
+            }
+            // verify if value is an ISL version marker and if it has valid format
+            if value.ion_type() == IonType::Symbol
+                && isl_version_marker.is_match(value.as_str().unwrap())
+            {
+                // This implementation supports Ion Schema 1.0 and Ion Schema 2.0
+                return match value.as_str().unwrap() {
+                    "$ion_schema_1_0" => Ok(IonSchemaLanguageVersion::V1_0),
+                    "$ion_schema_2_0" => Ok(IonSchemaLanguageVersion::V2_0),
+                    _ => invalid_schema_error(format!(
+                        "Unsupported Ion Schema Language version: {value}"
+                    )),
+                };
+            }
+        }
+
+        // default ISL version 1.0 if no version marker is found
+        Ok(IonSchemaLanguageVersion::V1_0)
     }
 }
 
@@ -1122,21 +1082,10 @@ impl SchemaSystem {
     }
 
     /// Requests each of the provided [`DocumentAuthority`]s, in order, to get ISL model for the
-    /// requested schema id until one successfully resolves it using ISL 1.0.
+    /// requested schema id until one successfully resolves it.
     /// If an authority throws an exception, resolution silently proceeds to the next authority.
-    /// If the given ISL model has any ISL 2.0 related types/constraints, resolution returns an error.
-    pub fn load_isl_schema_v1_0<A: AsRef<str>>(&mut self, id: A) -> IonSchemaResult<IslSchema> {
-        self.resolver
-            .load_isl_schema(IonSchemaLanguageVersion::V1_0, id, None)
-    }
-
-    /// Requests each of the provided [`DocumentAuthority`]s, in order, to get ISL model for the
-    /// requested schema id until one successfully resolves it using ISL 2.0.
-    /// If an authority throws an exception, resolution silently proceeds to the next authority.
-    /// If the given ISL model has any ISL 1.0 related types/constraints, resolution returns an error.
-    pub fn load_isl_schema_v2_0<A: AsRef<str>>(&mut self, id: A) -> IonSchemaResult<IslSchema> {
-        self.resolver
-            .load_isl_schema(IonSchemaLanguageVersion::V2_0, id, None)
+    pub fn load_isl_schema<A: AsRef<str>>(&mut self, id: A) -> IonSchemaResult<IslSchema> {
+        self.resolver.load_isl_schema(id, None)
     }
 
     /// Resolves given ISL 1.0 model into a [Schema]
@@ -1967,7 +1916,7 @@ mod schema_system_tests {
         )];
         let mut schema_system =
             SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
-        let schema = schema_system.load_isl_schema_v1_0("sample.isl")?;
+        let schema = schema_system.load_isl_schema("sample.isl")?;
         let expected_open_content = element_reader().read_all(
             r#"
                 open_content_1::{
@@ -1993,6 +1942,7 @@ mod schema_system_tests {
         let map_authority = [(
             "sample.isl",
             r#"
+                $ion_schema_2_0
                 schema_header::{
                     user_reserved_fields: {
                         schema_header: [ foo, bar ],
@@ -2011,7 +1961,7 @@ mod schema_system_tests {
         )];
         let mut schema_system =
             SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
-        let schema = schema_system.load_isl_schema_v2_0("sample.isl");
+        let schema = schema_system.load_isl_schema("sample.isl");
         assert!(schema.is_err());
     }
 
@@ -2021,6 +1971,7 @@ mod schema_system_tests {
         let map_authority = [(
             "sample.isl",
             r#"
+                $ion_schema_2_0
                 schema_header::{
                     user_reserved_fields: {
                         schema_footer: [ foo, bar ],
@@ -2040,7 +1991,7 @@ mod schema_system_tests {
         )];
         let mut schema_system =
             SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
-        let schema = schema_system.load_isl_schema_v2_0("sample.isl");
+        let schema = schema_system.load_isl_schema("sample.isl");
         assert!(schema.is_err());
     }
 
@@ -2050,6 +2001,7 @@ mod schema_system_tests {
         let map_authority = [(
             "sample.isl",
             r#"
+                $ion_schema_2_0
                 schema_header::{
                     user_reserved_fields: {
                         schema_header: [ baz ],
@@ -2068,13 +2020,13 @@ mod schema_system_tests {
         )];
         let mut schema_system =
             SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
-        let schema = schema_system.load_isl_schema_v2_0("sample.isl");
+        let schema = schema_system.load_isl_schema("sample.isl");
         assert!(schema.is_err());
     }
 
     #[test]
     fn load_schema_from_isl_schema_v1_0_test() {
-        // an ISL 1.0 type that contains ISL 2.0 related constraints
+        // an ISL 1.0 type definition
         let isl_type = isl_type::v_1_0::named_type(
             "my_type",
             [isl_constraint::v_1_0::element(
@@ -2089,5 +2041,68 @@ mod schema_system_tests {
         assert!(schema.is_ok());
     }
 
-    // TODO: add a test for invalid load_schema_from_isl_schema_v1_0 after ISL 2.0 constraints are implemented to demonstrate error when
+    #[test]
+    fn load_schema_from_isl_schema_v2_0_test() {
+        // an ISL 2.0 type definition
+        let isl_type = isl_type::v_2_0::named_type(
+            "my_type",
+            [isl_constraint::v_2_0::type_constraint(
+                isl_type_reference::v_2_0::named_type_ref("int"),
+            )],
+        );
+        let isl = IslSchema::schema_v_2_0(
+            "sample.isl",
+            UserReservedFields::default(),
+            vec![],
+            vec![isl_type],
+            vec![],
+            vec![],
+        );
+        let mut schema_system = SchemaSystem::new(vec![]);
+        let schema = schema_system.load_schema_from_isl_schema_v2_0(isl);
+
+        // verify the resolved schema generated from the ISL 2.0 model is valid
+        assert!(schema.is_ok());
+    }
+
+    #[test]
+    fn load_schema_from_isl_schema_v1_0_with_isl_v2_0_constraints_test() {
+        // an ISL 1.0 type that contains ISL 2.0 related constraints
+        let isl_type = isl_type::v_1_0::named_type(
+            "my_type",
+            [isl_constraint::v_2_0::type_constraint(
+                isl_type_reference::v_2_0::named_type_ref("int"),
+            )],
+        );
+        let isl = IslSchema::schema_v_1_0("sample.isl", vec![], vec![isl_type], vec![], vec![]);
+        let mut schema_system = SchemaSystem::new(vec![]);
+        let schema = schema_system.load_schema_from_isl_schema_v1_0(isl);
+
+        // verify the resolved schema generated from the ISL 1.0 model that contains ISL 2.0 constraints is invalid
+        assert!(schema.is_err());
+    }
+
+    #[test]
+    fn load_schema_from_isl_schema_v2_0_with_isl_v1_0_constraints_test() {
+        // an ISL 2.0 type that contains ISL 1.0 related constraints
+        let isl_type = isl_type::v_2_0::named_type(
+            "my_type",
+            [isl_constraint::v_1_0::type_constraint(
+                isl_type_reference::v_1_0::named_type_ref("int"),
+            )],
+        );
+        let isl = IslSchema::schema_v_2_0(
+            "sample.isl",
+            UserReservedFields::default(),
+            vec![],
+            vec![isl_type],
+            vec![],
+            vec![],
+        );
+        let mut schema_system = SchemaSystem::new(vec![]);
+        let schema = schema_system.load_schema_from_isl_schema_v2_0(isl);
+
+        // verify the resolved schema generated from the ISL 2.0 model that contains ISL 1.0 constraints is invalid
+        assert!(&schema.is_err());
+    }
 }

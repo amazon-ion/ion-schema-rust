@@ -29,7 +29,7 @@ mod reexport_tests {
         )];
         let mut schema_system =
             SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
-        let schema = schema_system.load_isl_schema_v1_0("sample.isl")?;
+        let schema = schema_system.load_isl_schema("sample.isl")?;
         let actual_isl_type: &IslType = &schema.types()[0];
 
         let expected_isl_type = &named_type("my_type", [type_constraint(named_type_ref("int"))]);
