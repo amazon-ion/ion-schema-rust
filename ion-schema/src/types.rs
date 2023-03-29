@@ -575,7 +575,7 @@ mod type_definition_tests {
     use crate::isl::isl_range::Number;
     use crate::isl::isl_range::NumberRange;
     use crate::isl::isl_type::v_1_0::*;
-    use crate::isl::isl_type::{IslType, IslTypeKind};
+    use crate::isl::isl_type::IslType;
     use crate::isl::isl_type_reference::v_1_0::*;
     use crate::system::PendingTypes;
     use ion_rs::Decimal;
@@ -804,33 +804,18 @@ mod type_definition_tests {
         // assert if both the TypeDefinition are same in terms of constraints and name
         let type_store = &mut TypeStore::default();
         let pending_types = &mut PendingTypes::default();
-        let this_type_def = match isl_type.kind {
-            IslTypeKind::Named(named_isl_type) => {
-                let type_id = TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
-                    IonSchemaLanguageVersion::V1_0,
-                    &named_isl_type,
-                    type_store,
-                    pending_types,
-                )
+        let this_type_def = {
+            let type_id = TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
+                IonSchemaLanguageVersion::V1_0,
+                &isl_type.type_definition,
+                type_store,
+                pending_types,
+            )
+            .unwrap();
+            pending_types
+                .update_type_store(type_store, None, &HashSet::new())
                 .unwrap();
-                pending_types
-                    .update_type_store(type_store, None, &HashSet::new())
-                    .unwrap();
-                type_store.get_type_by_id(type_id).unwrap()
-            }
-            IslTypeKind::Anonymous(anonymous_isl_type) => {
-                let type_id = TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
-                    IonSchemaLanguageVersion::V1_0,
-                    &anonymous_isl_type,
-                    type_store,
-                    pending_types,
-                )
-                .unwrap();
-                pending_types
-                    .update_type_store(type_store, None, &HashSet::new())
-                    .unwrap();
-                type_store.get_type_by_id(type_id).unwrap()
-            }
+            type_store.get_type_by_id(type_id).unwrap()
         };
         assert_eq!(this_type_def, &type_def);
     }

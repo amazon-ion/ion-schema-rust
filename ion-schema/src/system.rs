@@ -23,7 +23,7 @@ use crate::authority::DocumentAuthority;
 use crate::external::ion_rs::Symbol;
 use crate::isl::isl_constraint::IslConstraint;
 use crate::isl::isl_import::{IslImport, IslImportType};
-use crate::isl::isl_type::{IslType, IslTypeImpl, IslTypeKind};
+use crate::isl::isl_type::{IslType, IslTypeImpl};
 use crate::isl::{IonSchemaLanguageVersion, IslSchema};
 use crate::result::{
     invalid_schema_error, unresolvable_schema_error, unresolvable_schema_error_raw, IonSchemaError,
@@ -729,14 +729,14 @@ impl Resolver {
         let isl_type_names: HashSet<&str> = HashSet::from_iter(
             isl_types
                 .iter()
-                .filter(|t| matches!(t.kind, IslTypeKind::Named(_)))
+                .filter(|t| t.name().is_some())
                 .map(|t| t.name().as_ref().unwrap().as_str()),
         );
 
         for isl_type in &isl_types {
             // convert [IslType] into [TypeDefinition]
-            match &isl_type.kind {
-                IslTypeKind::Named(named_isl_type) => {
+            match &isl_type.name() {
+                Some(isl_type_name) => {
                     // verify that the ISL type doesn't contain constraints from another ISL version
                     let has_other_isl_constraints = isl_type
                         .constraints()
@@ -744,17 +744,17 @@ impl Resolver {
                         .any(|c| c.version != isl_version);
 
                     if has_other_isl_constraints {
-                        return invalid_schema_error(format!("ISL type: {} contains constraints from another ISL version. Only use {isl_version} constraints for this method.", named_isl_type.name().as_ref().unwrap()));
+                        return invalid_schema_error(format!("ISL type: {isl_type_name} contains constraints from another ISL version. Only use {isl_version} constraints for this method."));
                     }
 
                     TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
                         isl_version.to_owned(),
-                        named_isl_type,
+                        &isl_type.type_definition,
                         type_store,
                         pending_types,
                     )?
                 }
-                IslTypeKind::Anonymous(anonymous_isl_type) => {
+                None => {
                     // top level schema types can not be anonymous
                     return invalid_schema_error("Top level types must be named type definitions");
                 }
@@ -829,7 +829,7 @@ impl Resolver {
                     .iter()
                     .map(|c| IslConstraint::new(isl_version, c.to_owned()))
                     .collect();
-                isl_types.push(IslType::new(IslTypeKind::Named(isl_type), constraints));
+                isl_types.push(IslType::new(isl_type, constraints));
             }
             // load footer for schema
             else if annotations.contains(&&text_token("schema_footer")) {
@@ -881,7 +881,7 @@ impl Resolver {
         // This will be changed to `true` as soon as the type to be imported is resolved and is added to the type_store
         let mut added_imported_type_to_type_store = false;
 
-        let isl_types: Vec<IslTypeKind> = isl.types().iter().map(|t| t.kind.to_owned()).collect();
+        let isl_types = isl.types();
 
         // Resolve all inline import types if there are any
         // this will help resolve all inline imports before they are used as a reference to another type
@@ -905,15 +905,15 @@ impl Resolver {
         let isl_type_names: HashSet<&str> = HashSet::from_iter(
             isl_types
                 .iter()
-                .filter(|t| matches!(t, IslTypeKind::Named(_)))
+                .filter(|t| t.name().is_some())
                 .map(|t| t.name().as_ref().unwrap().as_str()),
         );
 
         // Resolve all ISL types and constraints
-        for isl_type in isl.types() {
+        for isl_type in isl_types {
             let pending_types = &mut PendingTypes::default();
 
-            if let IslTypeKind::Named(named_isl_type) = &isl_type.kind {
+            if let Some(isl_type_name) = &isl_type.name() {
                 // verify if there are any constraints with ISL 2.0 for this isl_type
                 let has_other_isl_constraints = isl_type
                     .constraints()
@@ -921,14 +921,14 @@ impl Resolver {
                     .any(|c| c.version != isl_version);
 
                 if has_other_isl_constraints {
-                    return invalid_schema_error(format!("ISL type: {} contains constraints from other ISL version. Only use {isl_version} constraints for this method.", named_isl_type.name().as_ref().unwrap()));
+                    return invalid_schema_error(format!("ISL type: {isl_type_name} contains constraints from other ISL version. Only use {isl_version} constraints for this method."));
                 }
 
                 // convert IslType to TypeDefinition
                 let type_id: TypeId =
                     TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
                         isl_version,
-                        named_isl_type,
+                        &isl_type.type_definition,
                         type_store,
                         pending_types,
                     )?;

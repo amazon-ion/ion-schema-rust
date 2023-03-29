@@ -249,7 +249,7 @@ mod isl_tests {
     use crate::isl::isl_range::TimestampRange;
     use crate::isl::isl_range::{Range, RangeBoundaryValue, RangeType};
     use crate::isl::isl_type::v_1_0::*;
-    use crate::isl::isl_type::{IslType, IslTypeImpl, IslTypeKind};
+    use crate::isl::isl_type::{IslType, IslTypeImpl};
     use crate::isl::isl_type_reference::v_1_0::*;
     use crate::isl::util::TimestampPrecision;
     use crate::isl::IonSchemaLanguageVersion;
@@ -266,42 +266,38 @@ mod isl_tests {
 
     // helper function to create NamedIslType for isl tests
     fn load_named_type(text: &str) -> IslType {
-        let kind = IslTypeKind::Named(
-            IslTypeImpl::from_owned_element(
-                IonSchemaLanguageVersion::V1_0,
-                &element_reader()
-                    .read_one(text.as_bytes())
-                    .expect("parsing failed unexpectedly"),
-                &mut vec![],
-            )
-            .unwrap(),
-        );
-        let constraints = kind
+        let type_def = IslTypeImpl::from_owned_element(
+            IonSchemaLanguageVersion::V1_0,
+            &element_reader()
+                .read_one(text.as_bytes())
+                .expect("parsing failed unexpectedly"),
+            &mut vec![],
+        )
+        .unwrap();
+        let constraints = type_def
             .constraints()
             .iter()
             .map(|c| IslConstraint::new(IonSchemaLanguageVersion::V1_0, c.to_owned()))
             .collect();
-        IslType::new(kind, constraints)
+        IslType::new(type_def, constraints)
     }
 
     // helper function to create AnonymousIslType for isl tests
     fn load_anonymous_type(text: &str) -> IslType {
-        let kind = IslTypeKind::Anonymous(
-            IslTypeImpl::from_owned_element(
-                IonSchemaLanguageVersion::V1_0,
-                &element_reader()
-                    .read_one(text.as_bytes())
-                    .expect("parsing failed unexpectedly"),
-                &mut vec![],
-            )
-            .unwrap(),
-        );
-        let constraints = kind
+        let type_def = IslTypeImpl::from_owned_element(
+            IonSchemaLanguageVersion::V1_0,
+            &element_reader()
+                .read_one(text.as_bytes())
+                .expect("parsing failed unexpectedly"),
+            &mut vec![],
+        )
+        .unwrap();
+        let constraints = type_def
             .constraints()
             .iter()
             .map(|c| IslConstraint::new(IonSchemaLanguageVersion::V1_0, c.to_owned()))
             .collect();
-        IslType::new(kind, constraints)
+        IslType::new(type_def, constraints)
     }
 
     #[test]
