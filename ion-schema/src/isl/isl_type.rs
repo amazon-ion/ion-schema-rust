@@ -1,6 +1,6 @@
 use crate::isl::isl_constraint::{IslConstraint, IslConstraintImpl};
 use crate::isl::isl_import::IslImportType;
-use crate::isl::IonSchemaLanguageVersion;
+use crate::isl::IslVersion;
 use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
 use ion_rs::value::owned::{text_token, Element};
 use ion_rs::value::{IonElement, IonStruct};
@@ -141,7 +141,7 @@ impl IslTypeImpl {
 
     /// Parse constraints inside an [Element] to an [IslTypeImpl]
     pub fn from_owned_element(
-        isl_version: IonSchemaLanguageVersion,
+        isl_version: IslVersion,
         ion: &Element,
         inline_imported_types: &mut Vec<IslImportType>, // stores the inline_imports that are discovered while loading this ISL type
     ) -> IonSchemaResult<Self> {
@@ -201,7 +201,7 @@ impl IslTypeImpl {
             };
 
             let constraint = IslConstraintImpl::from_ion_element(
-                isl_version.to_owned(),
+                isl_version,
                 constraint_name,
                 value,
                 &isl_type_name,

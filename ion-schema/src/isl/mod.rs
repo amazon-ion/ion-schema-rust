@@ -88,19 +88,19 @@ pub mod util;
 /// Represents Ion Schema Language Versions
 /// Currently it support v1.0 and v2.0
 #[derive(Debug, Clone, PartialEq, Copy)]
-pub enum IonSchemaLanguageVersion {
+pub enum IslVersion {
     V1_0,
     V2_0,
 }
 
-impl Display for IonSchemaLanguageVersion {
+impl Display for IslVersion {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "{}",
             match self {
-                IonSchemaLanguageVersion::V1_0 => "ISL 1.0",
-                IonSchemaLanguageVersion::V2_0 => "ISL 2.0",
+                IslVersion::V1_0 => "ISL 1.0",
+                IslVersion::V2_0 => "ISL 2.0",
             }
         )
     }
@@ -252,7 +252,7 @@ mod isl_tests {
     use crate::isl::isl_type::{IslType, IslTypeImpl};
     use crate::isl::isl_type_reference::v_1_0::*;
     use crate::isl::util::TimestampPrecision;
-    use crate::isl::IonSchemaLanguageVersion;
+    use crate::isl::IslVersion;
     use crate::result::IonSchemaResult;
     use ion_rs::types::decimal::*;
     use ion_rs::types::integer::Integer as IntegerValue;
@@ -267,7 +267,7 @@ mod isl_tests {
     // helper function to create NamedIslType for isl tests
     fn load_named_type(text: &str) -> IslType {
         let type_def = IslTypeImpl::from_owned_element(
-            IonSchemaLanguageVersion::V1_0,
+            IslVersion::V1_0,
             &element_reader()
                 .read_one(text.as_bytes())
                 .expect("parsing failed unexpectedly"),
@@ -277,7 +277,7 @@ mod isl_tests {
         let constraints = type_def
             .constraints()
             .iter()
-            .map(|c| IslConstraint::new(IonSchemaLanguageVersion::V1_0, c.to_owned()))
+            .map(|c| IslConstraint::new(IslVersion::V1_0, c.to_owned()))
             .collect();
         IslType::new(type_def, constraints)
     }
@@ -285,7 +285,7 @@ mod isl_tests {
     // helper function to create AnonymousIslType for isl tests
     fn load_anonymous_type(text: &str) -> IslType {
         let type_def = IslTypeImpl::from_owned_element(
-            IonSchemaLanguageVersion::V1_0,
+            IslVersion::V1_0,
             &element_reader()
                 .read_one(text.as_bytes())
                 .expect("parsing failed unexpectedly"),
@@ -295,7 +295,7 @@ mod isl_tests {
         let constraints = type_def
             .constraints()
             .iter()
-            .map(|c| IslConstraint::new(IonSchemaLanguageVersion::V1_0, c.to_owned()))
+            .map(|c| IslConstraint::new(IslVersion::V1_0, c.to_owned()))
             .collect();
         IslType::new(type_def, constraints)
     }

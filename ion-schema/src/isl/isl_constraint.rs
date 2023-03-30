@@ -2,7 +2,7 @@ use crate::isl::isl_import::IslImportType;
 use crate::isl::isl_range::{Range, RangeType};
 use crate::isl::isl_type_reference::IslTypeRefImpl;
 use crate::isl::util::{Annotation, TimestampOffset, ValidValue};
-use crate::isl::IonSchemaLanguageVersion;
+use crate::isl::IslVersion;
 use crate::result::{
     invalid_schema_error, invalid_schema_error_raw, IonSchemaError, IonSchemaResult,
 };
@@ -22,7 +22,7 @@ pub mod v_1_0 {
     use crate::isl::isl_range::{IntegerRange, NonNegativeIntegerRange, Range, RangeImpl};
     use crate::isl::isl_type_reference::IslTypeRef;
     use crate::isl::util::{Annotation, TimestampOffset, TimestampPrecision, ValidValue};
-    use crate::isl::IonSchemaLanguageVersion;
+    use crate::isl::IslVersion;
     use crate::result::IonSchemaResult;
     use ion_rs::value::owned::Element;
     use ion_rs::value::IonElement;
@@ -31,7 +31,7 @@ pub mod v_1_0 {
     // type is rust keyword hence this method is named type_constraint unlike other ISL constraint methods
     pub fn type_constraint(isl_type: IslTypeRef) -> IslConstraint {
         IslConstraint::new(
-            IonSchemaLanguageVersion::V1_0,
+            IslVersion::V1_0,
             IslConstraintImpl::Type(isl_type.type_reference),
         )
     }
@@ -39,7 +39,7 @@ pub mod v_1_0 {
     /// Creates an [IslConstraint::AllOf] using the [IslTypeRef] referenced inside it
     pub fn all_of<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
         IslConstraint::new(
-            IonSchemaLanguageVersion::V1_0,
+            IslVersion::V1_0,
             IslConstraintImpl::AllOf(
                 isl_types
                     .into()
@@ -53,7 +53,7 @@ pub mod v_1_0 {
     /// Creates an [IslConstraint::AnyOf] using the [IslTypeRef] referenced inside it
     pub fn any_of<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
         IslConstraint::new(
-            IonSchemaLanguageVersion::V1_0,
+            IslVersion::V1_0,
             IslConstraintImpl::AnyOf(
                 isl_types
                     .into()
@@ -67,7 +67,7 @@ pub mod v_1_0 {
     /// Creates an [IslConstraint::OneOf] using the [IslTypeRef] referenced inside it
     pub fn one_of<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
         IslConstraint::new(
-            IonSchemaLanguageVersion::V1_0,
+            IslVersion::V1_0,
             IslConstraintImpl::OneOf(
                 isl_types
                     .into()
@@ -81,7 +81,7 @@ pub mod v_1_0 {
     /// Creates an [IslConstraint::OrderedElements] using the [IslTypeRef] referenced inside it
     pub fn ordered_elements<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
         IslConstraint::new(
-            IonSchemaLanguageVersion::V1_0,
+            IslVersion::V1_0,
             IslConstraintImpl::OrderedElements(
                 isl_types
                     .into()
@@ -95,7 +95,7 @@ pub mod v_1_0 {
     /// Creates an [IslConstraint::Precision] using the range specified in it
     pub fn precision(precision: NonNegativeIntegerRange) -> IslConstraint {
         IslConstraint::new(
-            IonSchemaLanguageVersion::V1_0,
+            IslVersion::V1_0,
             IslConstraintImpl::Precision(Range::NonNegativeInteger(precision)),
         )
     }
@@ -103,7 +103,7 @@ pub mod v_1_0 {
     /// Creates an [IslConstraint::Scale] using the range specified in it
     pub fn scale(scale: IntegerRange) -> IslConstraint {
         IslConstraint::new(
-            IonSchemaLanguageVersion::V1_0,
+            IslVersion::V1_0,
             IslConstraintImpl::Scale(Range::Integer(scale)),
         )
     }
@@ -114,7 +114,7 @@ pub mod v_1_0 {
         I: Iterator<Item = (String, IslTypeRef)>,
     {
         IslConstraint::new(
-            IonSchemaLanguageVersion::V1_0,
+            IslVersion::V1_0,
             IslConstraintImpl::Fields(fields.map(|(s, t)| (s, t.type_reference)).collect()),
         )
     }
@@ -122,23 +122,20 @@ pub mod v_1_0 {
     /// Creates an [IslConstraint::Not] using the [IslTypeRef] referenced inside it
     pub fn not(isl_type: IslTypeRef) -> IslConstraint {
         IslConstraint::new(
-            IonSchemaLanguageVersion::V1_0,
+            IslVersion::V1_0,
             IslConstraintImpl::Not(isl_type.type_reference),
         )
     }
 
     /// Creates a [IslConstraint::Contains] using the [Element] specified inside it
     pub fn contains<A: Into<Vec<Element>>>(values: A) -> IslConstraint {
-        IslConstraint::new(
-            IonSchemaLanguageVersion::V1_0,
-            IslConstraintImpl::Contains(values.into()),
-        )
+        IslConstraint::new(IslVersion::V1_0, IslConstraintImpl::Contains(values.into()))
     }
 
     /// Creates an [IslConstraint::ContainerLength] using the range specified in it
     pub fn container_length(length: NonNegativeIntegerRange) -> IslConstraint {
         IslConstraint::new(
-            IonSchemaLanguageVersion::V1_0,
+            IslVersion::V1_0,
             IslConstraintImpl::ContainerLength(Range::NonNegativeInteger(length)),
         )
     }
@@ -146,7 +143,7 @@ pub mod v_1_0 {
     /// Creates an [IslConstraint::ByteLength] using the range specified in it
     pub fn byte_length(length: RangeImpl<usize>) -> IslConstraint {
         IslConstraint::new(
-            IonSchemaLanguageVersion::V1_0,
+            IslVersion::V1_0,
             IslConstraintImpl::ByteLength(Range::NonNegativeInteger(length)),
         )
     }
@@ -154,7 +151,7 @@ pub mod v_1_0 {
     /// Creates an [IslConstraint::CodepointLength] using the range specified in it
     pub fn codepoint_length(length: RangeImpl<usize>) -> IslConstraint {
         IslConstraint::new(
-            IonSchemaLanguageVersion::V1_0,
+            IslVersion::V1_0,
             IslConstraintImpl::CodepointLength(Range::NonNegativeInteger(length)),
         )
     }
@@ -162,7 +159,7 @@ pub mod v_1_0 {
     /// Creates an [IslConstraint::TimestampPrecision] using the range specified in it
     pub fn timestamp_precision(precision: RangeImpl<TimestampPrecision>) -> IslConstraint {
         IslConstraint::new(
-            IonSchemaLanguageVersion::V1_0,
+            IslVersion::V1_0,
             IslConstraintImpl::TimestampPrecision(Range::TimestampPrecision(precision)),
         )
     }
@@ -170,7 +167,7 @@ pub mod v_1_0 {
     /// Creates an [IslConstraint::TimestampOffset] using the offset list specified in it
     pub fn timestamp_offset(offsets: Vec<TimestampOffset>) -> IslConstraint {
         IslConstraint::new(
-            IonSchemaLanguageVersion::V1_0,
+            IslVersion::V1_0,
             IslConstraintImpl::TimestampOffset(IslTimestampOffsetConstraint::new(offsets)),
         )
     }
@@ -178,7 +175,7 @@ pub mod v_1_0 {
     /// Creates an [IslConstraint::Utf8ByteLength] using the range specified in it
     pub fn utf8_byte_length(length: NonNegativeIntegerRange) -> IslConstraint {
         IslConstraint::new(
-            IonSchemaLanguageVersion::V1_0,
+            IslVersion::V1_0,
             IslConstraintImpl::Utf8ByteLength(Range::NonNegativeInteger(length)),
         )
     }
@@ -186,7 +183,7 @@ pub mod v_1_0 {
     /// Creates an [IslConstraint::Element] using the [IslTypeRef] referenced inside it
     pub fn element(isl_type: IslTypeRef) -> IslConstraint {
         IslConstraint::new(
-            IonSchemaLanguageVersion::V1_0,
+            IslVersion::V1_0,
             IslConstraintImpl::Element(isl_type.type_reference),
         )
     }
@@ -210,7 +207,7 @@ pub mod v_1_0 {
             })
             .collect();
         IslConstraint::new(
-            IonSchemaLanguageVersion::V1_0,
+            IslVersion::V1_0,
             IslConstraintImpl::Annotations(IslAnnotationsConstraint::new(
                 annotations_modifiers.contains(&"closed"),
                 annotations_modifiers.contains(&"ordered"),
@@ -224,7 +221,7 @@ pub mod v_1_0 {
         let valid_values: IonSchemaResult<Vec<ValidValue>> =
             values.iter().map(|e| e.try_into()).collect();
         Ok(IslConstraint::new(
-            IonSchemaLanguageVersion::V1_0,
+            IslVersion::V1_0,
             IslConstraintImpl::ValidValues(IslValidValuesConstraint {
                 valid_values: valid_values?,
             }),
@@ -234,7 +231,7 @@ pub mod v_1_0 {
     /// Creates a [IslConstraint::ValidValues] using the [Range] specified inside it
     pub fn valid_values_with_range(range: Range) -> IslConstraint {
         IslConstraint::new(
-            IonSchemaLanguageVersion::V1_0,
+            IslVersion::V1_0,
             IslConstraintImpl::ValidValues(IslValidValuesConstraint {
                 valid_values: vec![ValidValue::Range(range)],
             }),
@@ -244,7 +241,7 @@ pub mod v_1_0 {
     /// Creates an [IslConstraint::Regex] using the expression and flags (case_insensitive, multi_line)
     pub fn regex(case_insensitive: bool, multi_line: bool, expression: String) -> IslConstraint {
         IslConstraint::new(
-            IonSchemaLanguageVersion::V1_0,
+            IslVersion::V1_0,
             IslConstraintImpl::Regex(IslRegexConstraint::new(
                 case_insensitive,
                 multi_line,
@@ -263,7 +260,7 @@ pub mod v_2_0 {
     use crate::isl::isl_range::{NonNegativeIntegerRange, Range, RangeImpl};
     use crate::isl::isl_type_reference::IslTypeRef;
     use crate::isl::util::{TimestampOffset, TimestampPrecision, ValidValue};
-    use crate::isl::IonSchemaLanguageVersion;
+    use crate::isl::IslVersion;
     use crate::result::IonSchemaResult;
     use ion_rs::value::owned::Element;
 
@@ -271,7 +268,7 @@ pub mod v_2_0 {
     // type is rust keyword hence this method is named type_constraint unlike other ISL constraint methods
     pub fn type_constraint(isl_type: IslTypeRef) -> IslConstraint {
         IslConstraint::new(
-            IonSchemaLanguageVersion::V2_0,
+            IslVersion::V2_0,
             IslConstraintImpl::Type(isl_type.type_reference),
         )
     }
@@ -279,7 +276,7 @@ pub mod v_2_0 {
     /// Creates an [IslConstraint::AllOf] using the [IslTypeRef] referenced inside it
     pub fn all_of<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
         IslConstraint::new(
-            IonSchemaLanguageVersion::V2_0,
+            IslVersion::V2_0,
             IslConstraintImpl::AllOf(
                 isl_types
                     .into()
@@ -293,7 +290,7 @@ pub mod v_2_0 {
     /// Creates an [IslConstraint::AnyOf] using the [IslTypeRef] referenced inside it
     pub fn any_of<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
         IslConstraint::new(
-            IonSchemaLanguageVersion::V2_0,
+            IslVersion::V2_0,
             IslConstraintImpl::AnyOf(
                 isl_types
                     .into()
@@ -307,7 +304,7 @@ pub mod v_2_0 {
     /// Creates an [IslConstraint::OneOf] using the [IslTypeRef] referenced inside it
     pub fn one_of<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
         IslConstraint::new(
-            IonSchemaLanguageVersion::V2_0,
+            IslVersion::V2_0,
             IslConstraintImpl::OneOf(
                 isl_types
                     .into()
@@ -321,7 +318,7 @@ pub mod v_2_0 {
     /// Creates an [IslConstraint::OrderedElements] using the [IslTypeRef] referenced inside it
     pub fn ordered_elements<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
         IslConstraint::new(
-            IonSchemaLanguageVersion::V2_0,
+            IslVersion::V2_0,
             IslConstraintImpl::OrderedElements(
                 isl_types
                     .into()
@@ -335,7 +332,7 @@ pub mod v_2_0 {
     /// Creates an [IslConstraint::Precision] using the range specified in it
     pub fn precision(precision: NonNegativeIntegerRange) -> IslConstraint {
         IslConstraint::new(
-            IonSchemaLanguageVersion::V2_0,
+            IslVersion::V2_0,
             IslConstraintImpl::Precision(Range::NonNegativeInteger(precision)),
         )
     }
@@ -346,7 +343,7 @@ pub mod v_2_0 {
         I: Iterator<Item = (String, IslTypeRef)>,
     {
         IslConstraint::new(
-            IonSchemaLanguageVersion::V2_0,
+            IslVersion::V2_0,
             IslConstraintImpl::Fields(fields.map(|(s, t)| (s, t.type_reference)).collect()),
         )
     }
@@ -354,23 +351,20 @@ pub mod v_2_0 {
     /// Creates an [IslConstraint::Not] using the [IslTypeRef] referenced inside it
     pub fn not(isl_type: IslTypeRef) -> IslConstraint {
         IslConstraint::new(
-            IonSchemaLanguageVersion::V2_0,
+            IslVersion::V2_0,
             IslConstraintImpl::Not(isl_type.type_reference),
         )
     }
 
     /// Creates a [IslConstraint::Contains] using the [Element] specified inside it
     pub fn contains<A: Into<Vec<Element>>>(values: A) -> IslConstraint {
-        IslConstraint::new(
-            IonSchemaLanguageVersion::V2_0,
-            IslConstraintImpl::Contains(values.into()),
-        )
+        IslConstraint::new(IslVersion::V2_0, IslConstraintImpl::Contains(values.into()))
     }
 
     /// Creates an [IslConstraint::ContainerLength] using the range specified in it
     pub fn container_length(length: NonNegativeIntegerRange) -> IslConstraint {
         IslConstraint::new(
-            IonSchemaLanguageVersion::V2_0,
+            IslVersion::V2_0,
             IslConstraintImpl::ContainerLength(Range::NonNegativeInteger(length)),
         )
     }
@@ -378,7 +372,7 @@ pub mod v_2_0 {
     /// Creates an [IslConstraint::ByteLength] using the range specified in it
     pub fn byte_length(length: RangeImpl<usize>) -> IslConstraint {
         IslConstraint::new(
-            IonSchemaLanguageVersion::V2_0,
+            IslVersion::V2_0,
             IslConstraintImpl::ByteLength(Range::NonNegativeInteger(length)),
         )
     }
@@ -386,7 +380,7 @@ pub mod v_2_0 {
     /// Creates an [IslConstraint::CodepointLength] using the range specified in it
     pub fn codepoint_length(length: RangeImpl<usize>) -> IslConstraint {
         IslConstraint::new(
-            IonSchemaLanguageVersion::V2_0,
+            IslVersion::V2_0,
             IslConstraintImpl::CodepointLength(Range::NonNegativeInteger(length)),
         )
     }
@@ -394,7 +388,7 @@ pub mod v_2_0 {
     /// Creates an [IslConstraint::TimestampPrecision] using the range specified in it
     pub fn timestamp_precision(precision: RangeImpl<TimestampPrecision>) -> IslConstraint {
         IslConstraint::new(
-            IonSchemaLanguageVersion::V2_0,
+            IslVersion::V2_0,
             IslConstraintImpl::TimestampPrecision(Range::TimestampPrecision(precision)),
         )
     }
@@ -402,7 +396,7 @@ pub mod v_2_0 {
     /// Creates an [IslConstraint::TimestampOffset] using the offset list specified in it
     pub fn timestamp_offset(offsets: Vec<TimestampOffset>) -> IslConstraint {
         IslConstraint::new(
-            IonSchemaLanguageVersion::V2_0,
+            IslVersion::V2_0,
             IslConstraintImpl::TimestampOffset(IslTimestampOffsetConstraint::new(offsets)),
         )
     }
@@ -410,7 +404,7 @@ pub mod v_2_0 {
     /// Creates an [IslConstraint::Utf8ByteLength] using the range specified in it
     pub fn utf8_byte_length(length: NonNegativeIntegerRange) -> IslConstraint {
         IslConstraint::new(
-            IonSchemaLanguageVersion::V2_0,
+            IslVersion::V2_0,
             IslConstraintImpl::Utf8ByteLength(Range::NonNegativeInteger(length)),
         )
     }
@@ -434,7 +428,7 @@ pub mod v_2_0 {
         let valid_values: IonSchemaResult<Vec<ValidValue>> =
             values.iter().map(|e| e.try_into()).collect();
         Ok(IslConstraint::new(
-            IonSchemaLanguageVersion::V2_0,
+            IslVersion::V2_0,
             IslConstraintImpl::ValidValues(IslValidValuesConstraint {
                 valid_values: valid_values?,
             }),
@@ -444,7 +438,7 @@ pub mod v_2_0 {
     /// Creates a [IslConstraint::ValidValues] using the [Range] specified inside it
     pub fn valid_values_with_range(range: Range) -> IslConstraint {
         IslConstraint::new(
-            IonSchemaLanguageVersion::V2_0,
+            IslVersion::V2_0,
             IslConstraintImpl::ValidValues(IslValidValuesConstraint {
                 valid_values: vec![ValidValue::Range(range)],
             }),
@@ -460,12 +454,12 @@ pub mod v_2_0 {
 /// Represents schema constraints [IslConstraint] which stores IslTypeRef
 #[derive(Debug, Clone, PartialEq)]
 pub struct IslConstraint {
-    pub(crate) version: IonSchemaLanguageVersion,
+    pub(crate) version: IslVersion,
     pub(crate) constraint: IslConstraintImpl,
 }
 
 impl IslConstraint {
-    pub(crate) fn new(version: IonSchemaLanguageVersion, constraint: IslConstraintImpl) -> Self {
+    pub(crate) fn new(version: IslVersion, constraint: IslConstraintImpl) -> Self {
         Self {
             constraint,
             version,
@@ -503,7 +497,7 @@ pub(crate) enum IslConstraintImpl {
 impl IslConstraintImpl {
     /// Parse constraints inside an [Element] to an [IslConstraint]
     pub fn from_ion_element(
-        isl_version: IonSchemaLanguageVersion,
+        isl_version: IslVersion,
         constraint_name: &str,
         value: &Element,
         type_name: &str,
@@ -790,7 +784,7 @@ impl IslConstraintImpl {
 
     // helper method for from_ion_element to get isl type references from given ion element
     fn isl_type_references_from_ion_element(
-        isl_version: IonSchemaLanguageVersion,
+        isl_version: IslVersion,
         value: &Element,
         inline_imported_types: &mut Vec<IslImportType>,
         constraint_name: &str,
@@ -812,15 +806,13 @@ impl IslConstraintImpl {
             .as_sequence()
             .unwrap()
             .iter()
-            .map(|e| {
-                IslTypeRefImpl::from_ion_element(isl_version.to_owned(), e, inline_imported_types)
-            })
+            .map(|e| IslTypeRefImpl::from_ion_element(isl_version, e, inline_imported_types))
             .collect::<IonSchemaResult<Vec<IslTypeRefImpl>>>()
     }
 
     // helper method for from_ion_element to get isl fields from given ion element
     fn isl_fields_from_ion_element(
-        isl_version: IonSchemaLanguageVersion,
+        isl_version: IslVersion,
         value: &Element,
         inline_imported_types: &mut Vec<IslImportType>,
     ) -> IonSchemaResult<HashMap<String, IslTypeRefImpl>> {
@@ -842,7 +834,7 @@ impl IslConstraintImpl {
             .unwrap()
             .iter()
             .map(|(f, v)| {
-                IslTypeRefImpl::from_ion_element(isl_version.to_owned(), v, inline_imported_types)
+                IslTypeRefImpl::from_ion_element(isl_version, v, inline_imported_types)
                     .map(|t| (f.text().unwrap().to_owned(), t))
             })
             .collect::<IonSchemaResult<HashMap<String, IslTypeRefImpl>>>()

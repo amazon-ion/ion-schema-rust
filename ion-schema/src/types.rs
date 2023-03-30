@@ -3,7 +3,7 @@ use crate::ion_path::IonPath;
 use crate::isl::isl_constraint::IslConstraintImpl;
 use crate::isl::isl_range::Range;
 use crate::isl::isl_type::IslTypeImpl;
-use crate::isl::IonSchemaLanguageVersion;
+use crate::isl::IslVersion;
 use crate::result::{IonSchemaResult, ValidationResult};
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::violation::{Violation, ViolationCode};
@@ -123,7 +123,7 @@ pub enum Nullability {
 
 impl BuiltInTypeDefinition {
     pub(crate) fn parse_from_isl_type(
-        isl_version: IonSchemaLanguageVersion,
+        isl_version: IslVersion,
         isl_type: &IslTypeImpl,
         type_store: &mut TypeStore,
         pending_types: &mut PendingTypes,
@@ -137,7 +137,7 @@ impl BuiltInTypeDefinition {
         for isl_constraint in isl_type.constraints() {
             // For built in types, open_content is set as true as Ion Schema by default allows open content
             let constraint = Constraint::resolve_from_isl_constraint(
-                isl_version.to_owned(),
+                isl_version,
                 isl_constraint,
                 type_store,
                 pending_types,
@@ -414,7 +414,7 @@ impl TypeDefinitionImpl {
     ///
     /// [`IonSchemaError`]: crate::result::IonSchemaError
     pub(crate) fn parse_from_isl_type_and_update_pending_types(
-        isl_version: IonSchemaLanguageVersion,
+        isl_version: IslVersion,
         isl_type: &IslTypeImpl,
         type_store: &mut TypeStore,
         pending_types: &mut PendingTypes,
@@ -440,7 +440,7 @@ impl TypeDefinitionImpl {
             }
 
             let constraint = Constraint::resolve_from_isl_constraint(
-                isl_version.to_owned(),
+                isl_version,
                 isl_constraint,
                 type_store,
                 pending_types,
@@ -462,7 +462,7 @@ impl TypeDefinitionImpl {
             };
 
             let isl_constraint = IslConstraintImpl::from_ion_element(
-                isl_version.to_owned(),
+                isl_version,
                 "type",
                 &Element::new_symbol(text_token("any")),
                 &isl_type_name,
@@ -806,7 +806,7 @@ mod type_definition_tests {
         let pending_types = &mut PendingTypes::default();
         let this_type_def = {
             let type_id = TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
-                IonSchemaLanguageVersion::V1_0,
+                IslVersion::V1_0,
                 &isl_type.type_definition,
                 type_store,
                 pending_types,

@@ -3,7 +3,7 @@ use crate::isl::isl_constraint::{IslConstraintImpl, IslRegexConstraint};
 use crate::isl::isl_range::{Range, RangeImpl};
 use crate::isl::isl_type_reference::IslTypeRefImpl;
 use crate::isl::util::{Annotation, TimestampOffset, TimestampPrecision, ValidValue};
-use crate::isl::IonSchemaLanguageVersion;
+use crate::isl::IslVersion;
 use crate::nfa::{FinalState, NfaBuilder, NfaEvaluation};
 use crate::result::{
     invalid_schema_error, invalid_schema_error_raw, IonSchemaError, IonSchemaResult,
@@ -221,7 +221,7 @@ impl Constraint {
 
     /// Resolves all ISL type references to corresponding [TypeId]s
     fn resolve_type_references_to_type_ids(
-        isl_version: IonSchemaLanguageVersion,
+        isl_version: IslVersion,
         type_references: &[IslTypeRefImpl],
         type_store: &mut TypeStore,
         pending_types: &mut PendingTypes,
@@ -229,19 +229,14 @@ impl Constraint {
         type_references
             .iter()
             .map(|t| {
-                IslTypeRefImpl::resolve_type_reference(
-                    isl_version.to_owned(),
-                    t,
-                    type_store,
-                    pending_types,
-                )
+                IslTypeRefImpl::resolve_type_reference(isl_version, t, type_store, pending_types)
             })
             .collect::<IonSchemaResult<Vec<TypeId>>>()
     }
 
     /// Parse an [IslConstraint] to a [Constraint]
     pub(crate) fn resolve_from_isl_constraint(
-        isl_version: IonSchemaLanguageVersion,
+        isl_version: IslVersion,
         isl_constraint: &IslConstraintImpl,
         type_store: &mut TypeStore,
         pending_types: &mut PendingTypes,
@@ -346,7 +341,7 @@ impl Constraint {
                     .iter()
                     .map(|t| {
                         IslTypeRefImpl::resolve_type_reference(
-                            isl_version.to_owned(),
+                            isl_version,
                             t,
                             type_store,
                             pending_types,
@@ -700,7 +695,7 @@ impl OrderedElementsConstraint {
 
     /// Tries to create an [OrderedElements] constraint from the given Element
     fn resolve_from_isl_constraint(
-        isl_version: IonSchemaLanguageVersion,
+        isl_version: IslVersion,
         type_references: &[IslTypeRefImpl],
         type_store: &mut TypeStore,
         pending_types: &mut PendingTypes,
@@ -708,12 +703,7 @@ impl OrderedElementsConstraint {
         let resolved_types: Vec<TypeId> = type_references
             .iter()
             .map(|t| {
-                IslTypeRefImpl::resolve_type_reference(
-                    isl_version.to_owned(),
-                    t,
-                    type_store,
-                    pending_types,
-                )
+                IslTypeRefImpl::resolve_type_reference(isl_version, t, type_store, pending_types)
             })
             .collect::<IonSchemaResult<Vec<TypeId>>>()?;
         Ok(OrderedElementsConstraint::new(resolved_types))
@@ -889,7 +879,7 @@ impl FieldsConstraint {
 
     /// Tries to create an [Fields] constraint from the given Element
     fn resolve_from_isl_constraint(
-        isl_version: IonSchemaLanguageVersion,
+        isl_version: IslVersion,
         fields: &HashMap<String, IslTypeRefImpl>,
         type_store: &mut TypeStore,
         pending_types: &mut PendingTypes,
@@ -898,13 +888,8 @@ impl FieldsConstraint {
         let resolved_fields: HashMap<String, TypeId> = fields
             .iter()
             .map(|(f, t)| {
-                IslTypeRefImpl::resolve_type_reference(
-                    isl_version.to_owned(),
-                    t,
-                    type_store,
-                    pending_types,
-                )
-                .map(|type_id| (f.to_owned(), type_id))
+                IslTypeRefImpl::resolve_type_reference(isl_version, t, type_store, pending_types)
+                    .map(|type_id| (f.to_owned(), type_id))
             })
             .collect::<IonSchemaResult<HashMap<String, TypeId>>>()?;
         Ok(FieldsConstraint::new(resolved_fields, open_content))

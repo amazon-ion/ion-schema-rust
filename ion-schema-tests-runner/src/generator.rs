@@ -5,7 +5,7 @@ use ion_rs::value::reader::element_reader;
 use ion_rs::value::reader::ElementReader;
 use ion_rs::value::IonElement;
 use ion_rs::IonType;
-use ion_schema::isl::IonSchemaLanguageVersion;
+use ion_schema::isl::IslVersion;
 use proc_macro2::{Literal, TokenStream, TokenTree};
 use quote::{format_ident, quote};
 use regex::Regex;
@@ -176,7 +176,7 @@ fn generate_test_cases_for_file(ctx: Context) -> TokenStream {
 }
 
 /// find ISL version from schema content
-fn find_isl_version(schema_content: &[Element]) -> IonSchemaLanguageVersion {
+fn find_isl_version(schema_content: &[Element]) -> IslVersion {
     // ISL version marker regex
     let isl_version_marker: Regex = Regex::new(r"^\$ion_schema_\d.*$").unwrap();
 
@@ -194,15 +194,15 @@ fn find_isl_version(schema_content: &[Element]) -> IonSchemaLanguageVersion {
         {
             // This implementation supports Ion Schema 1.0 and Ion Schema 2.0
             return match value.as_str().unwrap() {
-                "$ion_schema_1_0" => IonSchemaLanguageVersion::V1_0,
-                "$ion_schema_2_0" => IonSchemaLanguageVersion::V2_0,
+                "$ion_schema_1_0" => IslVersion::V1_0,
+                "$ion_schema_2_0" => IslVersion::V2_0,
                 _ => unimplemented!("Unsupported Ion Schema Language version: {}", value),
             };
         }
     }
 
     // default ISL version 1.0 if no version marker is found
-    IonSchemaLanguageVersion::V1_0
+    IslVersion::V1_0
 }
 
 /// Generates a test case to assert that some Ion text is or is not a valid ISL schema document.
@@ -245,13 +245,13 @@ fn generate_value_test_case(
 fn generate_invalid_type_case(
     description: &str,
     invalid_type_text: &str,
-    isl_version: &IonSchemaLanguageVersion,
+    isl_version: &IslVersion,
 ) -> TokenStream {
     let invalid_type_text_token = TokenTree::from(Literal::string(invalid_type_text));
     let test_name = format_ident!("{}", util::escape_to_ident(description));
     let version = match isl_version {
-        IonSchemaLanguageVersion::V1_0 => "$ion_schema_1_0",
-        IonSchemaLanguageVersion::V2_0 => "$ion_schema_2_0",
+        IslVersion::V1_0 => "$ion_schema_1_0",
+        IslVersion::V2_0 => "$ion_schema_2_0",
     };
     let isl_version = TokenTree::from(Literal::string(version));
     quote! {

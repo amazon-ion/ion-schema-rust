@@ -112,7 +112,7 @@ impl Iterator for SchemaTypeIterator {
 #[cfg(test)]
 mod schema_tests {
     use super::*;
-    use crate::isl::IonSchemaLanguageVersion;
+    use crate::isl::IslVersion;
     use crate::system::Resolver;
     use ion_rs::value::owned::Element;
     use ion_rs::value::reader::element_reader;
@@ -134,19 +134,11 @@ mod schema_tests {
         let mut resolver = Resolver::new(vec![]);
 
         // create a isl from owned_elements and create a schema from isl
-        let isl = resolver.isl_schema_from_elements(
-            IonSchemaLanguageVersion::V1_0,
-            owned_elements,
-            "my_schema.isl",
-        );
+        let isl =
+            resolver.isl_schema_from_elements(IslVersion::V1_0, owned_elements, "my_schema.isl");
 
         resolver
-            .schema_from_isl_schema(
-                IonSchemaLanguageVersion::V1_0,
-                isl.unwrap(),
-                type_store,
-                None,
-            )
+            .schema_from_isl_schema(IslVersion::V1_0, isl.unwrap(), type_store, None)
             .unwrap()
     }
 
@@ -313,20 +305,13 @@ mod schema_tests {
         let mut resolver = Resolver::new(vec![]);
 
         // create a isl from owned_elements and verifies if the result is `ok`
-        let isl = resolver.isl_schema_from_elements(
-            IonSchemaLanguageVersion::V1_0,
-            owned_elements,
-            "my_schema.isl",
-        );
+        let isl =
+            resolver.isl_schema_from_elements(IslVersion::V1_0, owned_elements, "my_schema.isl");
         assert!(isl.is_ok());
 
         // create a schema from isl and verifies if the result is `ok`
-        let schema = resolver.schema_from_isl_schema(
-            IonSchemaLanguageVersion::V1_0,
-            isl.unwrap(),
-            type_store,
-            None,
-        );
+        let schema =
+            resolver.schema_from_isl_schema(IslVersion::V1_0, isl.unwrap(), type_store, None);
         assert!(schema.is_ok());
 
         // check if the types of the created schema matches with the actual types specified by test case

@@ -24,7 +24,7 @@ use crate::external::ion_rs::Symbol;
 use crate::isl::isl_constraint::IslConstraint;
 use crate::isl::isl_import::{IslImport, IslImportType};
 use crate::isl::isl_type::{IslType, IslTypeImpl};
-use crate::isl::{IonSchemaLanguageVersion, IslSchema};
+use crate::isl::{IslSchema, IslVersion};
 use crate::result::{
     invalid_schema_error, unresolvable_schema_error, unresolvable_schema_error_raw, IonSchemaError,
     IonSchemaResult,
@@ -481,7 +481,7 @@ impl TypeStore {
     /// [builtin isl types]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#type-system
     /// TODO: add document builtin type
     pub(crate) fn preload(&mut self) -> IonSchemaResult<()> {
-        let isl_version = IonSchemaLanguageVersion::V1_0;
+        let isl_version = IslVersion::V1_0;
         // add all ion types to the type store
         // TODO: this array can be turned into an iterator implementation in ion-rust for IonType
         use IonType::*;
@@ -522,7 +522,7 @@ impl TypeStore {
         let pending_types = &mut PendingTypes::default();
         for text in DERIVED_ISL_TYPES {
             let isl_type = IslTypeImpl::from_owned_element(
-                isl_version.to_owned(),
+                isl_version,
                 &element_reader()
                     .read_one(text.as_bytes())
                     .expect("parsing failed unexpectedly"),
@@ -715,7 +715,7 @@ impl Resolver {
 
     pub fn schema_from_isl_types<A: AsRef<str>, B: Into<Vec<IslType>>>(
         &self,
-        isl_version: IonSchemaLanguageVersion,
+        isl_version: IslVersion,
         id: A,
         isl_types: B,
     ) -> IonSchemaResult<Schema> {
@@ -748,7 +748,7 @@ impl Resolver {
                     }
 
                     TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
-                        isl_version.to_owned(),
+                        isl_version,
                         &isl_type.type_definition,
                         type_store,
                         pending_types,
@@ -769,7 +769,7 @@ impl Resolver {
     /// Converts given owned elements into ISL v2.0 representation
     pub fn isl_schema_from_elements<I: Iterator<Item = Element>>(
         &mut self,
-        isl_version: IonSchemaLanguageVersion,
+        isl_version: IslVersion,
         elements: I,
         id: &str,
     ) -> IonSchemaResult<IslSchema> {
@@ -796,7 +796,7 @@ impl Resolver {
                         let isl_import = IslImport::from_ion_element(import)?;
                         isl_imports.push(isl_import);
                     }
-                } else if isl_version == IonSchemaLanguageVersion::V2_0 {
+                } else if isl_version == IslVersion::V2_0 {
                     if let Some(user_reserved_fields_struct) = schema_header
                         .get("user_reserved_fields")
                         .and_then(|it| it.as_struct())
@@ -820,7 +820,7 @@ impl Resolver {
                     );
                 }
 
-                if isl_version == IonSchemaLanguageVersion::V2_0 {
+                if isl_version == IslVersion::V2_0 {
                     isl_user_reserved_fields.validate_field_names_in_type(&isl_type)?;
                 }
 
@@ -834,7 +834,7 @@ impl Resolver {
             // load footer for schema
             else if annotations.contains(&&text_token("schema_footer")) {
                 found_footer = true;
-                if isl_version == IonSchemaLanguageVersion::V2_0 {
+                if isl_version == IslVersion::V2_0 {
                     let schema_footer = try_to!(value.as_struct());
                     isl_user_reserved_fields.validate_field_names_in_footer(schema_footer)?;
                 }
@@ -850,14 +850,14 @@ impl Resolver {
         }
 
         match isl_version {
-            IonSchemaLanguageVersion::V1_0 => Ok(IslSchema::schema_v_1_0(
+            IslVersion::V1_0 => Ok(IslSchema::schema_v_1_0(
                 id,
                 isl_imports,
                 isl_types,
                 isl_inline_imports,
                 open_content,
             )),
-            IonSchemaLanguageVersion::V2_0 => Ok(IslSchema::schema_v_2_0(
+            IslVersion::V2_0 => Ok(IslSchema::schema_v_2_0(
                 id,
                 isl_user_reserved_fields,
                 isl_imports,
@@ -871,7 +871,7 @@ impl Resolver {
     /// Converts given ISL representation into a [`Schema`] based on given ISL version
     pub fn schema_from_isl_schema(
         &mut self,
-        isl_version: IonSchemaLanguageVersion,
+        isl_version: IslVersion,
         isl: IslSchema,
         type_store: &mut TypeStore,
         load_isl_import: Option<&IslImport>,
@@ -1031,7 +1031,7 @@ impl Resolver {
         &self,
         schema_content: &Vec<Element>,
         isl_version_marker: Regex,
-    ) -> IonSchemaResult<IonSchemaLanguageVersion> {
+    ) -> IonSchemaResult<IslVersion> {
         for value in schema_content {
             // if find a type definition or a schema header before finding any version marker then this is ISL 1.0
             if value.ion_type() == Struct
@@ -1046,8 +1046,8 @@ impl Resolver {
             {
                 // This implementation supports Ion Schema 1.0 and Ion Schema 2.0
                 return match value.as_str().unwrap() {
-                    "$ion_schema_1_0" => Ok(IonSchemaLanguageVersion::V1_0),
-                    "$ion_schema_2_0" => Ok(IonSchemaLanguageVersion::V2_0),
+                    "$ion_schema_1_0" => Ok(IslVersion::V1_0),
+                    "$ion_schema_2_0" => Ok(IslVersion::V2_0),
                     _ => invalid_schema_error(format!(
                         "Unsupported Ion Schema Language version: {value}"
                     )),
@@ -1056,7 +1056,7 @@ impl Resolver {
         }
 
         // default ISL version 1.0 if no version marker is found
-        Ok(IonSchemaLanguageVersion::V1_0)
+        Ok(IslVersion::V1_0)
     }
 }
 
@@ -1094,12 +1094,8 @@ impl SchemaSystem {
         &mut self,
         isl: IslSchema,
     ) -> IonSchemaResult<Rc<Schema>> {
-        self.resolver.schema_from_isl_schema(
-            IonSchemaLanguageVersion::V1_0,
-            isl,
-            &mut TypeStore::default(),
-            None,
-        )
+        self.resolver
+            .schema_from_isl_schema(IslVersion::V1_0, isl, &mut TypeStore::default(), None)
     }
 
     /// Resolves given ISL 2.0 model into a [Schema]
@@ -1108,12 +1104,8 @@ impl SchemaSystem {
         &mut self,
         isl: IslSchema,
     ) -> IonSchemaResult<Rc<Schema>> {
-        self.resolver.schema_from_isl_schema(
-            IonSchemaLanguageVersion::V2_0,
-            isl,
-            &mut TypeStore::default(),
-            None,
-        )
+        self.resolver
+            .schema_from_isl_schema(IslVersion::V2_0, isl, &mut TypeStore::default(), None)
     }
 
     /// Returns authorities associated with this [`SchemaSystem`]
@@ -1146,7 +1138,7 @@ impl SchemaSystem {
         isl_types: B,
     ) -> IonSchemaResult<Schema> {
         self.resolver
-            .schema_from_isl_types(IonSchemaLanguageVersion::V1_0, id, isl_types)
+            .schema_from_isl_types(IslVersion::V1_0, id, isl_types)
     }
 
     /// Creates a schema from given [`IslType`]s using ISL 2.0
@@ -1157,7 +1149,7 @@ impl SchemaSystem {
         isl_types: B,
     ) -> IonSchemaResult<Schema> {
         self.resolver
-            .schema_from_isl_types(IonSchemaLanguageVersion::V2_0, id, isl_types)
+            .schema_from_isl_types(IslVersion::V2_0, id, isl_types)
     }
 }
 

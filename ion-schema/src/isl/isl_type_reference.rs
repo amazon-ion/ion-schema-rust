@@ -1,6 +1,6 @@
 use crate::isl::isl_import::{IslImport, IslImportType};
 use crate::isl::isl_type::IslTypeImpl;
-use crate::isl::IonSchemaLanguageVersion;
+use crate::isl::IslVersion;
 use crate::result::{
     invalid_schema_error, invalid_schema_error_raw, unresolvable_schema_error, IonSchemaResult,
 };
@@ -110,7 +110,7 @@ impl IslTypeRefImpl {
 
     /// Tries to create an [IslTypeRef] from the given Element
     pub fn from_ion_element(
-        isl_version: IonSchemaLanguageVersion,
+        isl_version: IslVersion,
         value: &Element,
         inline_imported_types: &mut Vec<IslImportType>,
     ) -> IonSchemaResult<Self> {
@@ -208,7 +208,7 @@ impl IslTypeRefImpl {
     // TODO: break match arms into helper methods as we add more constraints
     /// Resolves a type_reference into a [TypeId] using the type_store
     pub fn resolve_type_reference(
-        isl_version: IonSchemaLanguageVersion,
+        isl_version: IslVersion,
         type_reference: &IslTypeRefImpl,
         type_store: &mut TypeStore,
         pending_types: &mut PendingTypes,
