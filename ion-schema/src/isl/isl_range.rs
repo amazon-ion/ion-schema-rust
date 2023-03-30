@@ -476,7 +476,8 @@ impl<T: std::cmp::PartialOrd> RangeImpl<T> {
             (TypedRangeBoundaryValue::Integer(v1), TypedRangeBoundaryValue::Max) => {
                 RangeImpl::range(v1, RangeBoundaryValue::Max)
             }
-            (TypedRangeBoundaryValue::Integer(Value(v1, _)), _) => {
+            (TypedRangeBoundaryValue::Integer(Value(v1, _)), _)
+            | (_, TypedRangeBoundaryValue::Integer(Value(v1, _))) => {
                 invalid_schema_error("Range boundaries must have the same types")
             }
             _ => unreachable!(
@@ -501,7 +502,7 @@ impl<T: std::cmp::PartialOrd> RangeImpl<T> {
             (TypedRangeBoundaryValue::NonNegativeInteger(v1), TypedRangeBoundaryValue::Max) => {
                 RangeImpl::range(v1, RangeBoundaryValue::Max)
             }
-            (TypedRangeBoundaryValue::NonNegativeInteger(Value(v1, _)), _) => {
+            (TypedRangeBoundaryValue::NonNegativeInteger(Value(v1, _)), _) | (_, TypedRangeBoundaryValue::NonNegativeInteger(Value(v1, _)))=> {
                 invalid_schema_error("Range boundaries should have same types")
             }
             _ => unreachable!(
@@ -526,7 +527,8 @@ impl<T: std::cmp::PartialOrd> RangeImpl<T> {
             (TypedRangeBoundaryValue::Number(v1), TypedRangeBoundaryValue::Max) => {
                 RangeImpl::range(v1, RangeBoundaryValue::Max)
             }
-            (TypedRangeBoundaryValue::Number(Value(v1, _)), _) => {
+            (TypedRangeBoundaryValue::Number(Value(v1, _)), _)
+            | (_, TypedRangeBoundaryValue::Number(Value(v1, _))) => {
                 invalid_schema_error("Range boundaries should have same types")
             }
             _ => unreachable!(
@@ -551,7 +553,7 @@ impl<T: std::cmp::PartialOrd> RangeImpl<T> {
             (TypedRangeBoundaryValue::TimestampPrecision(v1), TypedRangeBoundaryValue::Max) => {
                 RangeImpl::range(v1, RangeBoundaryValue::Max)
             }
-            (TypedRangeBoundaryValue::TimestampPrecision(Value(v1, _)), _) => {
+            (TypedRangeBoundaryValue::TimestampPrecision(Value(v1, _)), _) | (_, TypedRangeBoundaryValue::TimestampPrecision(Value(v1, _)))=> {
                 invalid_schema_error("Range boundaries should have same types")
             }
             _ => unreachable!(
@@ -576,7 +578,8 @@ impl<T: std::cmp::PartialOrd> RangeImpl<T> {
             (TypedRangeBoundaryValue::Decimal(v1), TypedRangeBoundaryValue::Max) => {
                 RangeImpl::range(v1, RangeBoundaryValue::Max)
             }
-            (TypedRangeBoundaryValue::Decimal(Value(v1, _)), _) => {
+            (TypedRangeBoundaryValue::Decimal(Value(v1, _)), _)
+            | (_, TypedRangeBoundaryValue::Decimal(Value(v1, _))) => {
                 invalid_schema_error("Range boundaries should have same types")
             }
             _ => unreachable!(
@@ -601,7 +604,8 @@ impl<T: std::cmp::PartialOrd> RangeImpl<T> {
             (TypedRangeBoundaryValue::Float(v1), TypedRangeBoundaryValue::Max) => {
                 RangeImpl::range(v1, RangeBoundaryValue::Max)
             }
-            (TypedRangeBoundaryValue::Float(Value(v1, _)), _) => {
+            (TypedRangeBoundaryValue::Float(Value(v1, _)), _)
+            | (_, TypedRangeBoundaryValue::Float(Value(v1, _))) => {
                 invalid_schema_error("Range boundaries should have same types")
             }
             _ => unreachable!(
@@ -645,7 +649,8 @@ impl<T: std::cmp::PartialOrd> RangeImpl<T> {
                 }
                 RangeImpl::range(v1, RangeBoundaryValue::Max)
             }
-            (TypedRangeBoundaryValue::Timestamp(Value(v1, _)), _) => {
+            (TypedRangeBoundaryValue::Timestamp(Value(v1, _)), _)
+            | (_, TypedRangeBoundaryValue::Timestamp(Value(v1, _))) => {
                 invalid_schema_error("Range boundaries should have same types")
             }
             _ => unreachable!(

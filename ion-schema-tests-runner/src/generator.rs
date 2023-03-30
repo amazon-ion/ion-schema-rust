@@ -1,10 +1,14 @@
 use crate::generator::util::*;
 use crate::model::{TestCaseDetails, TestCaseVec};
+use ion_rs::value::owned::Element;
 use ion_rs::value::reader::element_reader;
 use ion_rs::value::reader::ElementReader;
 use ion_rs::value::IonElement;
+use ion_rs::IonType;
+use ion_schema::isl::IslVersion;
 use proc_macro2::{Literal, TokenStream, TokenTree};
 use quote::{format_ident, quote};
+use regex::Regex;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -123,6 +127,8 @@ fn generate_test_cases_for_file(ctx: Context) -> TokenStream {
         .read_all(&ion_content)
         .unwrap_or_else(|e| panic!("Error in {path_string} – {e:?}"));
 
+    let isl_version = find_isl_version(&schema_content);
+
     for element in schema_content {
         if element.has_annotation("$test") {
             let test_cases: TestCaseVec = element
@@ -143,9 +149,9 @@ fn generate_test_cases_for_file(ctx: Context) -> TokenStream {
                         &schema_text,
                         expect_valid,
                     )),
-                    TestCaseDetails::InvalidType { type_text } => {
-                        test_case_tokens.push(generate_invalid_type_case(&description, &type_text))
-                    }
+                    TestCaseDetails::InvalidType { type_text } => test_case_tokens.push(
+                        generate_invalid_type_case(&description, &type_text, &isl_version),
+                    ),
                     TestCaseDetails::Value {
                         type_id,
                         value_text,
@@ -167,6 +173,36 @@ fn generate_test_cases_for_file(ctx: Context) -> TokenStream {
     }
 
     join_token_streams(test_case_tokens)
+}
+
+/// find ISL version from schema content
+fn find_isl_version(schema_content: &[Element]) -> IslVersion {
+    // ISL version marker regex
+    let isl_version_marker: Regex = Regex::new(r"^\$ion_schema_\d.*$").unwrap();
+
+    for value in schema_content {
+        // if find a type definition or a schema header before finding any version marker then this is ISL 1.0
+        if value.ion_type() == IonType::Struct
+            && (value.has_annotation("type") || value.has_annotation("schema_header"))
+        {
+            // default ISL 1.0 version will be returned
+            break;
+        }
+        // verify if value is an ISL version marker and if it has valid format
+        if value.ion_type() == IonType::Symbol
+            && isl_version_marker.is_match(value.as_str().unwrap())
+        {
+            // This implementation supports Ion Schema 1.0 and Ion Schema 2.0
+            return match value.as_str().unwrap() {
+                "$ion_schema_1_0" => IslVersion::V1_0,
+                "$ion_schema_2_0" => IslVersion::V2_0,
+                _ => unimplemented!("Unsupported Ion Schema Language version: {}", value),
+            };
+        }
+    }
+
+    // default ISL version 1.0 if no version marker is found
+    IslVersion::V1_0
 }
 
 /// Generates a test case to assert that some Ion text is or is not a valid ISL schema document.
@@ -206,13 +242,22 @@ fn generate_value_test_case(
 }
 
 /// Generates a test case for an invalid ISL type.
-fn generate_invalid_type_case(description: &str, invalid_type_text: &str) -> TokenStream {
+fn generate_invalid_type_case(
+    description: &str,
+    invalid_type_text: &str,
+    isl_version: &IslVersion,
+) -> TokenStream {
     let invalid_type_text_token = TokenTree::from(Literal::string(invalid_type_text));
     let test_name = format_ident!("{}", util::escape_to_ident(description));
+    let version = match isl_version {
+        IslVersion::V1_0 => "$ion_schema_1_0",
+        IslVersion::V2_0 => "$ion_schema_2_0",
+    };
+    let isl_version = TokenTree::from(Literal::string(version));
     quote! {
         #[test]
         fn #test_name() -> Result<(), String> {
-            __assert_type_is_invalid(#invalid_type_text_token)
+            __assert_type_is_invalid(#invalid_type_text_token, #isl_version)
         }
     }
 }
@@ -264,8 +309,8 @@ fn generate_preamble(root_dir_path: &Path) -> TokenStream {
         /// Asserts that some Ion text is not a valid ISL type.
         /// Since [SchemaSystem] does not expose any methods for creating new, anonymous types, we
         /// wrap the type definition in a named type within a new schema.
-        fn __assert_type_is_invalid(type_def: &str) -> Result<(), String> {
-            let schema_isl_text = format!("type::{{ name: __invalid__, type: {} }}", type_def);
+        fn __assert_type_is_invalid(type_def: &str, isl_version: &str) -> Result<(), String> {
+            let schema_isl_text = format!("{} type::{{ name: __invalid__, type: {} }}", isl_version, type_def);
             let mut schema_system: ion_schema::system::SchemaSystem = __new_schema_system_with_additional_schema("__invalid_type__", &*schema_isl_text);
             let schema = schema_system.load_schema("__invalid_type__");
             if schema.is_ok() {
