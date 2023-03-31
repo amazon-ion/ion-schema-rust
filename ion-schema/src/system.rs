@@ -763,7 +763,7 @@ impl Resolver {
 
         // add all types from pending_types to type_store
         pending_types.update_type_store(type_store, None, &isl_type_names)?;
-        Ok(Schema::new(id, Arc::new(type_store.to_owned())))
+        Ok(Schema::new(id, Arc::new(type_store.clone())))
     }
 
     /// Converts given owned elements into ISL v2.0 representation
@@ -948,7 +948,7 @@ impl Resolver {
             );
         }
 
-        let schema = Arc::new(Schema::new(isl.id(), Arc::new(type_store.to_owned())));
+        let schema = Arc::new(Schema::new(isl.id(), Arc::new(type_store.clone())));
 
         // add schema to schema cache
         // if we are loading an import of the schema then we can only add this schema to cache if its a full schema import
