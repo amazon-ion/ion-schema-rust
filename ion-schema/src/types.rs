@@ -12,7 +12,7 @@ use ion_rs::value::owned::{text_token, Element};
 use ion_rs::value::{Builder, IonElement};
 use ion_rs::IonType;
 use std::fmt::{Display, Formatter};
-use std::rc::Rc;
+use std::sync::Arc;
 
 /// Provides validation for [`TypeDefinition`]
 pub trait TypeValidator {
@@ -40,11 +40,11 @@ pub trait TypeValidator {
 #[derive(Debug, Clone)]
 pub struct TypeRef {
     id: TypeId,
-    type_store: Rc<TypeStore>,
+    type_store: Arc<TypeStore>,
 }
 
 impl TypeRef {
-    pub fn new(id: TypeId, type_store: Rc<TypeStore>) -> Self {
+    pub fn new(id: TypeId, type_store: Arc<TypeStore>) -> Self {
         Self { id, type_store }
     }
 

@@ -40,7 +40,7 @@ use ion_rs::IonType;
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
 use std::io::ErrorKind;
-use std::rc::Rc;
+use std::sync::Arc;
 
 // TODO: Shift PendingTypes and TypeStore implementations to a separate module
 /// Stores information about types that are in the process of being defined.
@@ -702,7 +702,7 @@ impl TypeStore {
 /// Provides functions to load [`Schema`] with type definitions using authorities for [`SchemaSystem`]
 pub struct Resolver {
     authorities: Vec<Box<dyn DocumentAuthority>>,
-    resolved_schema_cache: HashMap<String, Rc<Schema>>,
+    resolved_schema_cache: HashMap<String, Arc<Schema>>,
 }
 
 impl Resolver {
@@ -763,7 +763,7 @@ impl Resolver {
 
         // add all types from pending_types to type_store
         pending_types.update_type_store(type_store, None, &isl_type_names)?;
-        Ok(Schema::new(id, Rc::new(type_store.to_owned())))
+        Ok(Schema::new(id, Arc::new(type_store.to_owned())))
     }
 
     /// Converts given owned elements into ISL v2.0 representation
@@ -875,7 +875,7 @@ impl Resolver {
         isl: IslSchema,
         type_store: &mut TypeStore,
         load_isl_import: Option<&IslImport>,
-    ) -> IonSchemaResult<Rc<Schema>> {
+    ) -> IonSchemaResult<Arc<Schema>> {
         // This is used while resolving an import, it is initialized as `false` to indicate that
         // the type to be imported is not yet added to the type_store.
         // This will be changed to `true` as soon as the type to be imported is resolved and is added to the type_store
@@ -948,10 +948,26 @@ impl Resolver {
             );
         }
 
-        Ok(Rc::new(Schema::new(
-            isl.id(),
-            Rc::new(type_store.to_owned()),
-        )))
+        let schema = Arc::new(Schema::new(isl.id(), Arc::new(type_store.to_owned())));
+
+        // add schema to schema cache
+        // if we are loading an import of the schema then we can only add this schema to cache if its a full schema import
+        // and can not add it to cache if we are loading specific type imports from the schema.
+        match load_isl_import {
+            None => {
+                self.resolved_schema_cache
+                    .insert(isl.id(), Arc::clone(&schema));
+            }
+            Some(isl_import) if matches!(isl_import, IslImport::Schema(_)) => {
+                self.resolved_schema_cache
+                    .insert(isl.id(), Arc::clone(&schema));
+            }
+            _ => {
+                // No op for type imports
+            }
+        }
+
+        Ok(schema)
     }
 
     /// Loads a [`Schema`] with resolved [`Type`]s using authorities and type_store
@@ -965,13 +981,13 @@ impl Resolver {
         id: A,
         type_store: &mut TypeStore,
         load_isl_import: Option<&IslImport>,
-    ) -> IonSchemaResult<Rc<Schema>> {
+    ) -> IonSchemaResult<Arc<Schema>> {
         let id: &str = id.as_ref();
         // ISL version marker regex
         let isl_version_marker: Regex = Regex::new(r"^\$ion_schema_\d.*$").unwrap();
 
         if let Some(schema) = self.resolved_schema_cache.get(id) {
-            return Ok(Rc::clone(schema));
+            return Ok(Arc::clone(schema));
         }
 
         for authority in &self.authorities {
@@ -1076,7 +1092,7 @@ impl SchemaSystem {
     /// Requests each of the provided [`DocumentAuthority`]s, in order, to resolve the requested schema id
     /// until one successfully resolves it.
     /// If an authority throws an exception, resolution silently proceeds to the next authority.
-    pub fn load_schema<A: AsRef<str>>(&mut self, id: A) -> IonSchemaResult<Rc<Schema>> {
+    pub fn load_schema<A: AsRef<str>>(&mut self, id: A) -> IonSchemaResult<Arc<Schema>> {
         self.resolver
             .load_schema(id, &mut TypeStore::default(), None)
     }
@@ -1093,7 +1109,7 @@ impl SchemaSystem {
     pub fn load_schema_from_isl_schema_v1_0(
         &mut self,
         isl: IslSchema,
-    ) -> IonSchemaResult<Rc<Schema>> {
+    ) -> IonSchemaResult<Arc<Schema>> {
         self.resolver
             .schema_from_isl_schema(IslVersion::V1_0, isl, &mut TypeStore::default(), None)
     }
@@ -1103,7 +1119,7 @@ impl SchemaSystem {
     pub fn load_schema_from_isl_schema_v2_0(
         &mut self,
         isl: IslSchema,
-    ) -> IonSchemaResult<Rc<Schema>> {
+    ) -> IonSchemaResult<Arc<Schema>> {
         self.resolver
             .schema_from_isl_schema(IslVersion::V2_0, isl, &mut TypeStore::default(), None)
     }
