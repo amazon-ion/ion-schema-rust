@@ -21,8 +21,8 @@ use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use std::fmt::{Display, Formatter};
 use std::iter::Peekable;
-use std::rc::Rc;
 use std::str::Chars;
+use std::sync::Arc;
 
 /// Provides validation for schema Constraint
 pub trait ConstraintValidator {
@@ -789,7 +789,7 @@ impl OrderedElementsConstraint {
             }
         }
 
-        NfaEvaluation::new(Rc::new(nfa_builder.build(final_states)))
+        NfaEvaluation::new(Arc::new(nfa_builder.build(final_states)))
     }
 }
 

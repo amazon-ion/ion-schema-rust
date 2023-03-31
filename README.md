@@ -42,7 +42,7 @@ use ion_schema::types::TypeRef;
 use ion_schema::IonSchemaElement;
 use std::fmt::Debug;
 use std::path::Path;
-use std::rc::Rc;
+use std::sync::Arc;
 
 fn main() -> IonSchemaResult<()> {
     // Create authorities vector containing all the authorities that will be used to load a schema based on schema id
@@ -57,7 +57,7 @@ fn main() -> IonSchemaResult<()> {
     let schema_id = "my_schema.isl";
 
     // Load schema
-    let schema: Rc<Schema> = schema_system.load_schema(schema_id)?;
+    let schema: Arc<Schema> = schema_system.load_schema(schema_id)?;
 
     // Retrieve a particular type from this schema
     let type_ref: TypeRef = schema.get_type("my_int_type").unwrap();

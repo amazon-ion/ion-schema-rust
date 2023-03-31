@@ -721,7 +721,7 @@ impl Resolver {
     ) -> IonSchemaResult<Schema> {
         let isl_types = isl_types.into();
         // create type_store and pending types which will be used to create type definition
-        let type_store = &mut TypeStore::default();
+        let mut type_store = TypeStore::default();
         let pending_types = &mut PendingTypes::default();
 
         // get all isl type names from given isl types
@@ -750,7 +750,7 @@ impl Resolver {
                     TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
                         isl_version,
                         &isl_type.type_definition,
-                        type_store,
+                        &mut type_store,
                         pending_types,
                     )?
                 }
@@ -762,8 +762,8 @@ impl Resolver {
         }
 
         // add all types from pending_types to type_store
-        pending_types.update_type_store(type_store, None, &isl_type_names)?;
-        Ok(Schema::new(id, Arc::new(type_store.clone())))
+        pending_types.update_type_store(&mut type_store, None, &isl_type_names)?;
+        Ok(Schema::new(id, Arc::new(type_store)))
     }
 
     /// Converts given owned elements into ISL v2.0 representation
@@ -1092,6 +1092,9 @@ impl SchemaSystem {
     /// Requests each of the provided [`DocumentAuthority`]s, in order, to resolve the requested schema id
     /// until one successfully resolves it.
     /// If an authority throws an exception, resolution silently proceeds to the next authority.
+    /// This method returns an `Arc<Schema>` which allows to load this schema once re-use it across threads.
+    // TODO: Add support for Rc<Schema> by providing a trait implementation of schema and schema cache. This should
+    //  allow users to choose what variant of schema they want.
     pub fn load_schema<A: AsRef<str>>(&mut self, id: A) -> IonSchemaResult<Arc<Schema>> {
         self.resolver
             .load_schema(id, &mut TypeStore::default(), None)
@@ -1106,6 +1109,9 @@ impl SchemaSystem {
 
     /// Resolves given ISL 1.0 model into a [Schema]
     /// If the given ISL model has any ISL 2.0 related types/constraints, resolution returns an error.
+    /// This method returns an `Arc<Schema>` which allows to load this schema once re-use it across threads.
+    // TODO: Add support for Rc<Schema> by providing a trait implementation of schema and schema cache. This should
+    //  allow users to choose what variant of schema they want.
     pub fn load_schema_from_isl_schema_v1_0(
         &mut self,
         isl: IslSchema,
@@ -1116,6 +1122,9 @@ impl SchemaSystem {
 
     /// Resolves given ISL 2.0 model into a [Schema]
     /// If the given ISL model has any ISL 1.0 related types/constraints, resolution returns an error.
+    /// This method returns an `Arc<Schema>` which allows to load this schema once re-use it across threads.
+    // TODO: Add support for Rc<Schema> by providing a trait implementation of schema and schema cache. This should
+    //  allow users to choose what variant of schema they want.
     pub fn load_schema_from_isl_schema_v2_0(
         &mut self,
         isl: IslSchema,
