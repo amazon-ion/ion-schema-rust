@@ -2,7 +2,7 @@ use crate::ion_path::IonPath;
 use crate::system::{TypeId, TypeStore};
 use crate::types::TypeValidator;
 use crate::IonSchemaElement;
-use ion_rs::value::owned::Element;
+use ion_rs::element::Element;
 use std::collections::{HashMap, HashSet};
 use std::iter::Peekable;
 use std::rc::Rc;

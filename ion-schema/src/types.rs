@@ -8,9 +8,9 @@ use crate::result::{IonSchemaResult, ValidationResult};
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::violation::{Violation, ViolationCode};
 use crate::IonSchemaElement;
-use ion_rs::value::owned::{text_token, Element};
-use ion_rs::value::{Builder, IonElement};
+use ion_rs::element::Element;
 use ion_rs::IonType;
+use ion_rs::Symbol;
 use std::fmt::{Display, Formatter};
 use std::rc::Rc;
 
@@ -54,7 +54,7 @@ impl TypeRef {
 
     /// Provides the validation for the given value based on this schema type
     /// ```
-    /// use ion_rs::value::owned::Element;
+    /// use ion_rs::element::Element;
     /// use ion_schema::IonSchemaElement;
     /// use ion_schema::authority::{FileSystemDocumentAuthority, DocumentAuthority};
     /// use ion_schema::system::SchemaSystem;
@@ -464,7 +464,7 @@ impl TypeDefinitionImpl {
             let isl_constraint = IslConstraintImpl::from_ion_element(
                 isl_version,
                 "type",
-                &Element::new_symbol(text_token("any")),
+                &Element::symbol(Symbol::from("any")),
                 &isl_type_name,
                 &mut vec![],
             )?;
@@ -579,7 +579,7 @@ mod type_definition_tests {
     use crate::isl::isl_type_reference::v_1_0::*;
     use crate::system::PendingTypes;
     use ion_rs::Decimal;
-    use ion_rs::Integer;
+    use ion_rs::Int;
     use rstest::*;
     use std::collections::HashSet;
 
@@ -709,8 +709,8 @@ mod type_definition_tests {
         /* For a schema with annotations constraint as below:
             { annotations: closed::[red, blue, green] }
         */
-        anonymous_type([annotations(vec!["closed"], vec![text_token("red").into(), text_token("blue").into(), text_token("green").into()])]),
-        TypeDefinition::anonymous([Constraint::annotations(vec!["closed"], vec![text_token("red").into(), text_token("blue").into(), text_token("green").into()]), Constraint::type_constraint(34)])
+        anonymous_type([annotations(vec!["closed"], vec![Symbol::from("red").into(), Symbol::from("blue").into(), Symbol::from("green").into()])]),
+        TypeDefinition::anonymous([Constraint::annotations(vec!["closed"], vec![Symbol::from("red").into(), Symbol::from("blue").into(), Symbol::from("green").into()]), Constraint::type_constraint(34)])
     ),
     case::precision_constraint(
         /* For a schema with precision constraint as below:
@@ -723,8 +723,8 @@ mod type_definition_tests {
         /* For a schema with scale constraint as below:
             { scale: 2 }
         */
-        anonymous_type([scale(Integer::I64(2).into())]),
-        TypeDefinition::anonymous([Constraint::scale(Integer::I64(2).into()), Constraint::type_constraint(34)])
+        anonymous_type([scale(Int::I64(2).into())]),
+        TypeDefinition::anonymous([Constraint::scale(Int::I64(2).into()), Constraint::type_constraint(34)])
     ),
     case::timestamp_precision_constraint(
         /* For a schema with timestamp_precision constraint as below:
@@ -737,8 +737,8 @@ mod type_definition_tests {
         /* For a schema with valid_values constraint as below:
             { valid_values: [2, 3.5, 5e7, "hello", hi] }
         */
-        anonymous_type([valid_values_with_values(vec![2.into(), Decimal::new(35, -1).into(), 5e7.into(), "hello".to_owned().into(), text_token("hi").into()]).unwrap()]),
-        TypeDefinition::anonymous([Constraint::valid_values_with_values(vec![2.into(), Decimal::new(35, -1).into(), 5e7.into(), "hello".to_owned().into(), text_token("hi").into()]).unwrap(), Constraint::type_constraint(34)])
+        anonymous_type([valid_values_with_values(vec![2.into(), Decimal::new(35, -1).into(), 5e7.into(), "hello".to_owned().into(), Symbol::from("hi").into()]).unwrap()]),
+        TypeDefinition::anonymous([Constraint::valid_values_with_values(vec![2.into(), Decimal::new(35, -1).into(), 5e7.into(), "hello".to_owned().into(), Symbol::from("hi").into()]).unwrap(), Constraint::type_constraint(34)])
     ),
     case::valid_values_with_range_constraint(
         /* For a schema with valid_values constraint as below:
@@ -747,7 +747,7 @@ mod type_definition_tests {
         anonymous_type(
             [valid_values_with_range(
                 NumberRange::new(
-                    Number::from(&Integer::I64(1)),
+                    Number::from(&Int::I64(1)),
                     Number::from(&Decimal::new(55, -1))
                 ).unwrap().into())
             ]
@@ -755,7 +755,7 @@ mod type_definition_tests {
         TypeDefinition::anonymous([
             Constraint::valid_values_with_range(
             NumberRange::new(
-                Number::from(&Integer::I64(1)),
+                Number::from(&Int::I64(1)),
                 Number::from(&Decimal::new(55, -1))
             ).unwrap().into()),
             Constraint::type_constraint(34)

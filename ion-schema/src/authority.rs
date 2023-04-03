@@ -61,9 +61,7 @@
 //! ```
 
 use crate::result::{unresolvable_schema_error_raw, IonSchemaResult};
-use ion_rs::result::IonError;
-use ion_rs::value::owned::Element;
-use ion_rs::value::reader::{element_reader, ElementReader};
+use ion_rs::element::Element;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fs;
@@ -104,8 +102,7 @@ impl DocumentAuthority for FileSystemDocumentAuthority {
         let absolute_path = self.base_path().join(id);
         // if absolute_path exists for the given id then load schema with file contents
         let ion_content = fs::read(absolute_path)?;
-        let iterator = element_reader().iterate_over(&ion_content)?;
-        let schema_content = iterator.collect::<Result<Vec<Element>, IonError>>()?;
+        let schema_content = Element::read_all(ion_content)?;
         Ok(schema_content)
     }
 }
@@ -136,8 +133,7 @@ impl DocumentAuthority for MapDocumentAuthority {
                 "MapDocumentAuthority does not contain schema with id: {id}"
             ))
         })?;
-        let iterator = element_reader().iterate_over(ion_content.as_bytes())?;
-        let schema_content = iterator.collect::<Result<Vec<Element>, IonError>>()?;
+        let schema_content = Element::read_all(ion_content.as_bytes())?;
         Ok(schema_content)
     }
 }

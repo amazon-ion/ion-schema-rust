@@ -1,6 +1,6 @@
 use ion_schema::authority::{DocumentAuthority, MapDocumentAuthority};
-use ion_schema::external::ion_rs::value::owned::Element;
-use ion_schema::external::ion_rs::value::reader::{element_reader, ElementReader};
+
+use ion_schema::external::ion_rs::element::Element;
 use ion_schema::external::ion_rs::IonResult;
 use ion_schema::result::IonSchemaResult;
 use ion_schema::schema::Schema;
@@ -20,7 +20,7 @@ macro_rules! log {
 }
 
 fn load(text: &str) -> IonResult<Element> {
-    element_reader().read_one(text.as_bytes())
+    Element::read_one(text.as_bytes())
 }
 
 #[wasm_bindgen]

@@ -13,9 +13,8 @@ use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::types::TypeValidator;
 use crate::violation::{Violation, ViolationCode};
 use crate::IonSchemaElement;
-use ion_rs::value::owned::Element;
-use ion_rs::value::{IonElement, IonSequence, IonStruct};
-use ion_rs::{Integer, IonType};
+use ion_rs::element::Element;
+use ion_rs::{Int, IonType};
 use regex::{Regex, RegexBuilder};
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
@@ -137,7 +136,7 @@ impl Constraint {
             .into_iter()
             .map(|a| {
                 Annotation::new(
-                    a.as_str().unwrap().to_owned(),
+                    a.as_text().unwrap().to_owned(),
                     Annotation::is_annotation_required(
                         &a,
                         annotations_modifiers.contains(&"required"),
@@ -160,7 +159,7 @@ impl Constraint {
     }
 
     /// Creates a [Constraint::Scale] from a [Range] specifying a precision range.
-    pub fn scale(scale: RangeImpl<Integer>) -> Constraint {
+    pub fn scale(scale: RangeImpl<Int>) -> Constraint {
         Constraint::Scale(ScaleConstraint::new(Range::Integer(scale)))
     }
 
@@ -820,7 +819,7 @@ impl ConstraintValidator for OrderedElementsConstraint {
                         violations,
                     ));
                 }
-                Some(sequence) => sequence.iter().map(|a| a.to_owned()).collect(),
+                Some(sequence) => sequence.elements().map(|a| a.to_owned()).collect(),
             },
             IonSchemaElement::Document(document) => document.to_owned(),
         };
@@ -1019,7 +1018,7 @@ impl ConstraintValidator for ContainsConstraint {
                             ion_path,
                         ));
                     }
-                    Some(ion_sequence) => ion_sequence.iter().map(|a| a.to_owned()).collect(),
+                    Some(ion_sequence) => ion_sequence.elements().map(|a| a.to_owned()).collect(),
                 }
             }
             IonSchemaElement::Document(document) => document.to_owned(),
@@ -1088,9 +1087,7 @@ impl ConstraintValidator for ContainerLengthConstraint {
                 }
 
                 match element.ion_type() {
-                    IonType::List | IonType::SExpression => {
-                        element.as_sequence().unwrap().iter().count()
-                    }
+                    IonType::List | IonType::SExp => element.as_sequence().unwrap().len(),
                     IonType::Struct => element.as_struct().unwrap().iter().count(),
                     _ => {
                         // return Violation if value is not an Ion container
@@ -1153,7 +1150,7 @@ impl ConstraintValidator for ByteLengthConstraint {
         // get the size of given bytes
         let size = value
             .expect_element_of_type(&[IonType::Blob, IonType::Clob], "byte_length", ion_path)?
-            .as_bytes()
+            .as_lob()
             .unwrap()
             .len();
 
@@ -1205,7 +1202,7 @@ impl ConstraintValidator for CodepointLengthConstraint {
                 "codepoint_length",
                 ion_path,
             )?
-            .as_str()
+            .as_text()
             .unwrap()
             .chars()
             .count();
@@ -1267,8 +1264,8 @@ impl ConstraintValidator for ElementConstraint {
 
                 // validate each element of the given value container
                 match element.ion_type() {
-                    IonType::List | IonType::SExpression => {
-                        for (index, val) in element.as_sequence().unwrap().iter().enumerate() {
+                    IonType::List | IonType::SExp => {
+                        for (index, val) in element.as_sequence().unwrap().elements().enumerate() {
                             ion_path.push(IonPathElement::Index(index));
                             let schema_element: IonSchemaElement = val.into();
                             if let Err(violation) =
@@ -1722,7 +1719,7 @@ impl ConstraintValidator for ValidValuesConstraint {
                 for valid_value in &self.valid_values {
                     match valid_value {
                         ValidValue::Range(range) => match value.ion_type() {
-                            IonType::Integer
+                            IonType::Int
                             | IonType::Float
                             | IonType::Decimal
                             | IonType::Timestamp => {
@@ -1734,9 +1731,9 @@ impl ConstraintValidator for ValidValuesConstraint {
                         },
                         ValidValue::Element(element) => {
                             // get value without annotations
-                            let value = value.to_owned().with_annotations(vec![]);
+                            let value = value.value();
 
-                            if element == &value {
+                            if element.value() == value {
                                 return Ok(());
                             }
                         }
@@ -1931,7 +1928,7 @@ impl ConstraintValidator for RegexConstraint {
         // get string value and return violation if its not a string or symbol type
         let string_value = value
             .expect_element_of_type(&[IonType::String, IonType::Symbol], "regex", ion_path)?
-            .as_str()
+            .as_text()
             .unwrap();
 
         // create regular expression
@@ -2014,7 +2011,7 @@ impl ConstraintValidator for Utf8ByteLengthConstraint {
                 "utf8_byte_length",
                 ion_path,
             )?
-            .as_str()
+            .as_text()
             .unwrap()
             .len();
 
