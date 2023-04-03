@@ -3,19 +3,18 @@ use crate::isl::util::TimestampPrecision;
 use crate::result::{
     invalid_schema_error, invalid_schema_error_raw, IonSchemaError, IonSchemaResult,
 };
+use ion_rs::element::Element;
+use ion_rs::external::bigdecimal::num_bigint::BigInt;
 use ion_rs::external::bigdecimal::BigDecimal;
 use ion_rs::types::integer::IntAccess;
-use ion_rs::value::owned::{text_token, Element};
-use ion_rs::value::{IonElement, IonSequence};
-use ion_rs::{Decimal, Integer, IonType, Timestamp};
-use num_bigint::BigInt;
+use ion_rs::{Decimal, Int, IonType, Symbol, Timestamp};
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
 use std::prelude::rust_2021::TryInto;
 use std::str::FromStr;
 
 /// Provides a type to be used to create integer ranges.
-pub type IntegerRange = RangeImpl<Integer>;
+pub type IntegerRange = RangeImpl<Int>;
 
 /// Provides a type to be used to create non negative integer ranges.
 pub type NonNegativeIntegerRange = RangeImpl<usize>;
@@ -49,7 +48,7 @@ pub type NumberRange = RangeImpl<Number>;
 // this is a wrapper around the RangeImpl generic implementation of ranges
 #[derive(Debug, Clone, PartialEq)]
 pub enum Range {
-    Integer(RangeImpl<Integer>),
+    Integer(RangeImpl<Int>),
     NonNegativeInteger(RangeImpl<usize>),
     TimestampPrecision(RangeImpl<TimestampPrecision>),
     Timestamp(RangeImpl<Timestamp>),
@@ -91,13 +90,11 @@ impl Range {
     /// Provides a boolean value to specify whether the given value is within the range or not
     pub fn contains(&self, value: &Element) -> bool {
         match self {
-            Range::Integer(int_range) if value.ion_type() == IonType::Integer => {
-                int_range.contains(value.as_integer().unwrap().to_owned())
+            Range::Integer(int_range) if value.ion_type() == IonType::Int => {
+                int_range.contains(value.as_int().unwrap().to_owned())
             }
-            Range::NonNegativeInteger(int_non_neg_range)
-                if value.ion_type() == IonType::Integer =>
-            {
-                int_non_neg_range.contains(value.as_integer().unwrap().as_i64().unwrap() as usize)
+            Range::NonNegativeInteger(int_non_neg_range) if value.ion_type() == IonType::Int => {
+                int_non_neg_range.contains(value.as_int().unwrap().as_i64().unwrap() as usize)
             }
             Range::TimestampPrecision(timestamp_precision_range)
                 if value.ion_type() == IonType::Timestamp =>
@@ -109,20 +106,20 @@ impl Range {
                 timestamp_range.contains(value.as_timestamp().unwrap().to_owned())
             }
             Range::Float(float_range) if value.ion_type() == IonType::Float => {
-                float_range.contains(value.as_f64().unwrap())
+                float_range.contains(value.as_float().unwrap())
             }
             Range::Decimal(decimal_range) if value.ion_type() == IonType::Decimal => {
                 decimal_range.contains(value.as_decimal().unwrap().to_owned())
             }
             Range::Number(number_range)
-                if value.ion_type() == IonType::Integer
+                if value.ion_type() == IonType::Int
                     || value.ion_type() == IonType::Float
                     || value.ion_type() == IonType::Decimal =>
             {
                 let value: Number = match value.ion_type() {
-                    IonType::Integer => value.as_integer().unwrap().into(),
+                    IonType::Int => value.as_int().unwrap().into(),
                     IonType::Float => {
-                        if let Ok(number_val) = value.as_f64().unwrap().try_into() {
+                        if let Ok(number_val) = value.as_float().unwrap().try_into() {
                             number_val
                         } else {
                             return false;
@@ -172,12 +169,12 @@ impl Range {
     pub fn from_ion_element(value: &Element, range_type: RangeType) -> IonSchemaResult<Range> {
         // if an integer value is passed here then convert it into a range
         // eg. if `1` is passed as value then return a range [1,1]
-        return if let Some(integer_value) = value.as_integer() {
+        return if let Some(integer_value) = value.as_int() {
             match range_type {
                 RangeType::Precision | RangeType::NonNegativeInteger => {
                     let non_negative_integer_value =
                         Range::validate_non_negative_integer_range_boundary_value(
-                            value.as_integer().unwrap(),
+                            value.as_int().unwrap(),
                             &range_type,
                         )?;
                     Ok(Range::NonNegativeInteger(non_negative_integer_value.into()))
@@ -193,7 +190,12 @@ impl Range {
                 )?
                 .into()),
             }
-        } else if let Some(timestamp_precision) = value.as_str() {
+        } else if let Some(timestamp_precision_symbol) = value.as_symbol() {
+            let timestamp_precision = timestamp_precision_symbol.text().ok_or_else(|| {
+                invalid_schema_error_raw(
+                    "Range can not be constructed from symbol with unknown text",
+                )
+            })?;
             if range_type == RangeType::TimestampPrecision {
                 Ok(TimestampPrecisionRange::new(
                     RangeBoundaryValue::Value(
@@ -215,7 +217,7 @@ impl Range {
             }
         } else if let Some(range) = value.as_sequence() {
             // verify if the value has annotation range
-            if !value.annotations().any(|a| a == &text_token("range")) {
+            if !value.annotations().any(|a| a == &Symbol::from("range")) {
                 return invalid_schema_error(
                     "An element representing a range must have the annotation `range`.",
                 );
@@ -234,7 +236,7 @@ impl Range {
             // this match statement determines that no range types other then the below range types are allowed
             match start.ion_type() {
                 IonType::Symbol
-                | IonType::Integer
+                | IonType::Int
                 | IonType::Float
                 | IonType::Decimal
                 | IonType::Timestamp => Ok(Self::validate_and_construct_range(
@@ -253,7 +255,7 @@ impl Range {
 
     // helper method to which validates a non negative integer range boundary value
     pub(crate) fn validate_non_negative_integer_range_boundary_value(
-        value: &Integer,
+        value: &Int,
         range_type: &RangeType,
     ) -> IonSchemaResult<usize> {
         // minimum precision must be greater than or equal to 1
@@ -313,7 +315,7 @@ impl Range {
                 invalid_schema_error("Upper range boundary value must not be min")
             }
             (_, TypedRangeBoundaryValue::Integer(_)) | (TypedRangeBoundaryValue::Integer(_), _) => {
-                Ok(Range::Integer(RangeImpl::<Integer>::int_range_from_typed_boundary_value(start, end)?))
+                Ok(Range::Integer(RangeImpl::<Int>::int_range_from_typed_boundary_value(start, end)?))
             }
             (_, TypedRangeBoundaryValue::NonNegativeInteger(_)) |
             (TypedRangeBoundaryValue::NonNegativeInteger(_), _) => {
@@ -465,7 +467,7 @@ impl<T: std::cmp::PartialOrd> RangeImpl<T> {
     pub(crate) fn int_range_from_typed_boundary_value(
         start: TypedRangeBoundaryValue,
         end: TypedRangeBoundaryValue,
-    ) -> IonSchemaResult<RangeImpl<Integer>> {
+    ) -> IonSchemaResult<RangeImpl<Int>> {
         match (start, end) {
             (TypedRangeBoundaryValue::Integer(v1), TypedRangeBoundaryValue::Integer(v2)) => {
                 RangeImpl::range(v1, v2)
@@ -672,8 +674,8 @@ impl From<usize> for RangeImpl<usize> {
 }
 
 /// Provides `Range` for given `Integer`
-impl From<Integer> for RangeImpl<Integer> {
-    fn from(int_value: Integer) -> Self {
+impl From<Int> for RangeImpl<Int> {
+    fn from(int_value: Int) -> Self {
         RangeImpl::range(
             RangeBoundaryValue::Value(int_value.to_owned(), RangeBoundaryType::Inclusive),
             RangeBoundaryValue::Value(int_value, RangeBoundaryType::Inclusive),
@@ -726,7 +728,7 @@ impl<T> From<T> for RangeBoundaryValue<T> {
 pub(crate) enum TypedRangeBoundaryValue {
     Min,
     Max,
-    Integer(RangeBoundaryValue<Integer>),
+    Integer(RangeBoundaryValue<Int>),
     NonNegativeInteger(RangeBoundaryValue<usize>),
     TimestampPrecision(RangeBoundaryValue<TimestampPrecision>),
     Float(RangeBoundaryValue<f64>),
@@ -742,7 +744,7 @@ impl TypedRangeBoundaryValue {
     ) -> IonSchemaResult<TypedRangeBoundaryValue> {
         let range_boundary_type = if boundary
             .annotations()
-            .any(|x| x == &text_token("exclusive"))
+            .any(|x| x == &Symbol::from("exclusive"))
         {
             RangeBoundaryType::Exclusive
         } else {
@@ -750,7 +752,7 @@ impl TypedRangeBoundaryValue {
         };
         match boundary.ion_type() {
             IonType::Symbol => {
-                let sym = try_to!(try_to!(boundary.as_sym()).text());
+                let sym = try_to!(try_to!(boundary.as_symbol()).text());
 
                 match sym {
                     "min" => Ok(TypedRangeBoundaryValue::Min),
@@ -760,13 +762,13 @@ impl TypedRangeBoundaryValue {
                     )),
                 }
             }
-            IonType::Integer => {
+            IonType::Int => {
                 return match range_type {
                      RangeType::Precision | RangeType::NonNegativeInteger => {
                          Ok(TypedRangeBoundaryValue::NonNegativeInteger(
                              RangeBoundaryValue::Value(
                                  Range::validate_non_negative_integer_range_boundary_value(
-                                     boundary.as_integer().unwrap(),
+                                     boundary.as_int().unwrap(),
                                      &range_type,
                                  )?,
                                  range_boundary_type,
@@ -775,7 +777,7 @@ impl TypedRangeBoundaryValue {
                      },
                      RangeType::Any => {
                          Ok(TypedRangeBoundaryValue::Integer(RangeBoundaryValue::Value(
-                             boundary.as_integer().unwrap().to_owned(),
+                             boundary.as_int().unwrap().to_owned(),
                              range_boundary_type,
                          )))
                      },
@@ -783,7 +785,7 @@ impl TypedRangeBoundaryValue {
                     "Timestamp precision ranges can not be constructed for integer boundary values",
                 ),
                 RangeType::NumberOrTimestamp => Ok(TypedRangeBoundaryValue::Number(RangeBoundaryValue::Value(
-                    boundary.as_integer().unwrap().into(),
+                    boundary.as_int().unwrap().into(),
                     range_boundary_type,
                 ))),
                  };
@@ -806,12 +808,12 @@ impl TypedRangeBoundaryValue {
             IonType::Float => match range_type {
                 RangeType::NumberOrTimestamp => {
                     Ok(TypedRangeBoundaryValue::Number(RangeBoundaryValue::Value(
-                        boundary.as_f64().unwrap().to_owned().try_into()?,
+                        boundary.as_float().unwrap().to_owned().try_into()?,
                         range_boundary_type,
                     )))
                 }
                 RangeType::Any => Ok(TypedRangeBoundaryValue::Float(RangeBoundaryValue::Value(
-                    boundary.as_f64().unwrap().to_owned(),
+                    boundary.as_float().unwrap().to_owned(),
                     range_boundary_type,
                 ))),
                 _ => invalid_schema_error(format!(
@@ -987,12 +989,12 @@ impl From<&Decimal> for Number {
     }
 }
 
-impl From<&Integer> for Number {
-    fn from(value: &Integer) -> Self {
+impl From<&Int> for Number {
+    fn from(value: &Int) -> Self {
         Number {
             big_decimal_value: match value {
-                Integer::I64(int_val) => int_val.to_owned().into(),
-                Integer::BigInt(big_int_val) => big_int_val.to_owned().into(),
+                Int::I64(int_val) => int_val.to_owned().into(),
+                Int::BigInt(big_int_val) => big_int_val.to_owned().into(),
             },
         }
     }

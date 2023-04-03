@@ -6,9 +6,7 @@ use crate::result::{
 };
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::types::TypeDefinitionImpl;
-use ion_rs::value::owned::Element;
-use ion_rs::value::reader::{element_reader, ElementReader};
-use ion_rs::value::{IonElement, IonStruct};
+use ion_rs::element::Element;
 use ion_rs::IonType;
 
 /// Provides public facing APIs for constructing ISL type references programmatically for ISL 1.0
@@ -122,7 +120,7 @@ impl IslTypeRefImpl {
                     )
                 }
 
-                let type_name = value.as_sym().unwrap()
+                let type_name = value.as_symbol().unwrap()
                     .text()
                     .ok_or_else(|| {
                         invalid_schema_error_raw(
@@ -133,8 +131,7 @@ impl IslTypeRefImpl {
                 // check for nullable type reference
                 if value.annotations().any(|a| a.text() == Some("nullable")) {
                     let built_in_type_def = IslTypeRefImpl::get_nullable_type_reference_definition(type_name)?;
-                    let value = &element_reader()
-                        .read_one(built_in_type_def.as_bytes()).unwrap();
+                    let value = &Element::read_one(built_in_type_def.as_bytes()).unwrap();
                     return IslTypeRefImpl::from_ion_element(isl_version, value, inline_imported_types);
                 }
 

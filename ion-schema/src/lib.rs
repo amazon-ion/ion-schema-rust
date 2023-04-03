@@ -7,9 +7,7 @@ use crate::isl::isl_constraint::IslConstraintImpl;
 use crate::isl::isl_type::IslTypeImpl;
 use crate::result::{invalid_schema_error, IonSchemaResult};
 use crate::violation::{Violation, ViolationCode};
-use ion_rs::value::owned::{Element, Struct};
-use ion_rs::value::reader::{element_reader, ElementReader};
-use ion_rs::value::{IonElement, IonSequence, IonStruct};
+use ion_rs::element::{Element, Struct};
 use ion_rs::Symbol;
 use std::fmt::{Display, Formatter};
 /// A [`try`]-like macro to workaround the [`Option`]/[`Result`] nested APIs.
@@ -50,7 +48,7 @@ pub mod external {
 /// In order to create an `IonSchemaElement`:
 ///
 /// ```
-/// use ion_rs::value::owned::Element;
+/// use ion_rs::element::Element;
 /// use ion_schema::IonSchemaElement;
 ///
 /// // create an IonSchemaElement from an Element
@@ -136,12 +134,12 @@ impl From<&Element> for IonSchemaElement {
     fn from(value: &Element) -> Self {
         if value.annotations().any(|a| a.text() == Some("document")) {
             let sequence = match value.ion_type() {
-                IonType::String => load(value.as_str().unwrap()),
-                IonType::List | IonType::SExpression => {
+                IonType::String => load(value.as_string().unwrap()),
+                IonType::List | IonType::SExp => {
                     let ion_elements: Vec<Element> = value
                         .as_sequence()
                         .unwrap()
-                        .iter()
+                        .elements()
                         .map(|oe| oe.to_owned())
                         .collect();
                     ion_elements
@@ -164,9 +162,7 @@ impl From<&Vec<Element>> for IonSchemaElement {
 
 // helper function to be used by schema tests
 fn load(text: &str) -> Vec<Element> {
-    element_reader()
-        .read_all(text.as_bytes())
-        .expect("parsing failed unexpectedly")
+    Element::read_all(text.as_bytes()).expect("parsing failed unexpectedly")
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -201,12 +197,12 @@ impl UserReservedFields {
     ) -> Vec<String> {
         let user_reserved_elements: Vec<&Element> = user_reserved_fields
             .get(user_reserved_fields_type)
-            .and_then(|it| it.as_sequence().map(|s| s.iter().collect()))
+            .and_then(|it| it.as_sequence().map(|s| s.elements().collect()))
             .unwrap_or(vec![]);
 
         user_reserved_elements
             .iter()
-            .map(|e| e.as_str().map(|s| s.to_owned()))
+            .map(|e| e.as_string().map(|s| s.to_owned()))
             .collect::<Option<Vec<String>>>()
             .unwrap_or(vec![])
     }

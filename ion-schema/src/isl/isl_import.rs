@@ -1,6 +1,5 @@
 use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
-use ion_rs::value::owned::Element;
-use ion_rs::value::{IonElement, IonStruct};
+use ion_rs::element::Element;
 
 /// Represents an import in an ISL schema.
 /// For more information: `<https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#imports>`
@@ -24,7 +23,7 @@ impl IslImport {
     pub fn from_ion_element(value: &Element) -> IonSchemaResult<IslImport> {
         let import = try_to!(value.as_struct());
         let id = match import.get("id") {
-            Some(import_id) => try_to!(import_id.as_str()),
+            Some(import_id) => try_to!(import_id.as_string()),
             None => {
                 return Err(invalid_schema_error_raw(
                     "import must have an id field in its definition",
@@ -33,12 +32,12 @@ impl IslImport {
         };
 
         let type_name = match import.get("type") {
-            Some(type_name) => try_to!(type_name.as_str()),
+            Some(type_name) => try_to!(type_name.as_text()),
             None => return Ok(IslImport::Schema(id.to_owned())),
         };
 
         let alias = match import.get("as") {
-            Some(alias) => alias.as_str().map(|a| a.to_owned()),
+            Some(alias) => alias.as_text().map(|a| a.to_owned()),
             None => {
                 return Ok(IslImport::Type(IslImportType::new(
                     id.to_owned(),

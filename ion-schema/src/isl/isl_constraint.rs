@@ -6,10 +6,8 @@ use crate::isl::IslVersion;
 use crate::result::{
     invalid_schema_error, invalid_schema_error_raw, IonSchemaError, IonSchemaResult,
 };
-use ion_rs::value::owned::{text_token, Element};
-use ion_rs::value::IonStruct;
-use ion_rs::value::{IonElement, IonSequence};
-use ion_rs::IonType;
+use ion_rs::element::Element;
+use ion_rs::{IonType, Symbol};
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 
@@ -24,8 +22,7 @@ pub mod v_1_0 {
     use crate::isl::util::{Annotation, TimestampOffset, TimestampPrecision, ValidValue};
     use crate::isl::IslVersion;
     use crate::result::IonSchemaResult;
-    use ion_rs::value::owned::Element;
-    use ion_rs::value::IonElement;
+    use ion_rs::element::Element;
 
     /// Creates an [IslConstraint::Type] using the [IslTypeRef] referenced inside it
     // type is rust keyword hence this method is named type_constraint unlike other ISL constraint methods
@@ -198,7 +195,7 @@ pub mod v_1_0 {
             .into_iter()
             .map(|a| {
                 Annotation::new(
-                    a.as_str().unwrap().to_owned(),
+                    a.as_text().unwrap().to_owned(),
                     Annotation::is_annotation_required(
                         &a,
                         annotations_modifiers.contains(&"required"),
@@ -262,7 +259,7 @@ pub mod v_2_0 {
     use crate::isl::util::{TimestampOffset, TimestampPrecision, ValidValue};
     use crate::isl::IslVersion;
     use crate::result::IonSchemaResult;
-    use ion_rs::value::owned::Element;
+    use ion_rs::element::Element;
 
     /// Creates an [IslConstraint::Type] using the [IslTypeRef] referenced inside it
     // type is rust keyword hence this method is named type_constraint unlike other ISL constraint methods
@@ -566,7 +563,7 @@ impl IslConstraintImpl {
                 let values: Vec<Element> = value
                     .as_sequence()
                     .unwrap()
-                    .iter()
+                    .elements()
                     .map(|e| e.to_owned())
                     .collect();
                 Ok(IslConstraintImpl::Contains(values))
@@ -585,7 +582,7 @@ impl IslConstraintImpl {
                     )));
                 }
 
-                if let Some(closed) = value.as_sym().unwrap().text() {
+                if let Some(closed) = value.as_text() {
                     if closed != "closed" {
                         return Err(invalid_schema_error_raw(format!(
                             "content constraint was a {closed} instead of a symbol `closed`"
@@ -649,7 +646,7 @@ impl IslConstraintImpl {
                 }
                 let range = match value.ion_type() {
                     Symbol => {
-                        let sym = try_to!(try_to!(value.as_sym()).text());
+                        let sym = try_to!(try_to!(value.as_symbol()).text());
                         match sym {
                             "optional" => Range::optional(),
                             "required" => Range::required(),
@@ -660,9 +657,7 @@ impl IslConstraintImpl {
                             }
                         }
                     }
-                    Integer | List => {
-                        Range::from_ion_element(value, RangeType::NonNegativeInteger)?
-                    }
+                    Int | List => Range::from_ion_element(value, RangeType::NonNegativeInteger)?,
                     _ => {
                         return invalid_schema_error(format!(
                             "ion type: {:?} is not supported with occurs constraint",
@@ -687,10 +682,10 @@ impl IslConstraintImpl {
                 RangeType::Precision,
             )?)),
             "regex" => {
-                let case_insensitive = value.annotations().any(|a| a == &text_token("i"));
-                let multi_line = value.annotations().any(|a| a == &text_token("m"));
+                let case_insensitive = value.annotations().any(|a| a == &Symbol::from("i"));
+                let multi_line = value.annotations().any(|a| a == &Symbol::from("m"));
 
-                let expression = value.as_str().ok_or_else(|| {
+                let expression = value.as_string().ok_or_else(|| {
                     invalid_schema_error_raw(format!(
                         "expected regex to contain a string expression but found: {}",
                         value.ion_type()
@@ -731,7 +726,7 @@ impl IslConstraintImpl {
                             );
                         }
                         let list_vec: IonSchemaResult<Vec<TimestampOffset>> = list_values
-                            .iter()
+                            .elements()
                             .map(|e| {
                                 if e.is_null() {
                                     return invalid_schema_error(
@@ -752,7 +747,7 @@ impl IslConstraintImpl {
                                 }
 
                                 // unwrap here will not panic as we have already verified the ion type to be a string
-                                let string_value = e.as_str().unwrap();
+                                let string_value = e.as_string().unwrap();
 
                                 // convert the string to TimestampOffset which stores offset in minutes
                                 string_value.try_into()
@@ -805,7 +800,7 @@ impl IslConstraintImpl {
         value
             .as_sequence()
             .unwrap()
-            .iter()
+            .elements()
             .map(|e| IslTypeRefImpl::from_ion_element(isl_version, e, inline_imported_types))
             .collect::<IonSchemaResult<Vec<IslTypeRefImpl>>>()
     }
@@ -872,10 +867,10 @@ impl TryFrom<&Element> for IslAnnotationsConstraint {
         let annotations: Vec<Annotation> = value
             .as_sequence()
             .unwrap()
-            .iter()
+            .elements()
             .map(|e| {
                 Annotation::new(
-                    e.as_str().unwrap().to_owned(),
+                    e.as_text().unwrap().to_owned(),
                     Annotation::is_annotation_required(
                         e,
                         annotation_modifiers.contains(&"required"),
@@ -925,7 +920,7 @@ impl TryFrom<&Element> for IslValidValuesConstraint {
     type Error = IonSchemaError;
 
     fn try_from(value: &Element) -> IonSchemaResult<Self> {
-        if value.annotations().any(|a| a == &text_token("range")) {
+        if value.annotations().any(|a| a == &Symbol::from("range")) {
             return IslValidValuesConstraint::new(vec![ValidValue::Range(
                 Range::from_ion_element(value, RangeType::NumberOrTimestamp)?,
             )]);
@@ -934,7 +929,7 @@ impl TryFrom<&Element> for IslValidValuesConstraint {
             if value.ion_type() == IonType::List {
                 let mut valid_values = vec![];
                 let values: IonSchemaResult<Vec<()>> = values
-                    .iter()
+                    .elements()
                     .map(|e| {
                         valid_values.push(e.try_into()?);
                         Ok(())

@@ -114,16 +114,12 @@ mod schema_tests {
     use super::*;
     use crate::isl::IslVersion;
     use crate::system::Resolver;
-    use ion_rs::value::owned::Element;
-    use ion_rs::value::reader::element_reader;
-    use ion_rs::value::reader::ElementReader;
+    use ion_rs::element::Element;
     use rstest::*;
 
     // helper function to be used by schema tests
     fn load(text: &str) -> Vec<Element> {
-        element_reader()
-            .read_all(text.as_bytes())
-            .expect("parsing failed unexpectedly")
+        Element::read_all(text.as_bytes()).expect("parsing failed unexpectedly")
     }
 
     // helper function to be used by validation tests

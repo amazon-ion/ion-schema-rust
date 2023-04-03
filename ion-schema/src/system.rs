@@ -32,10 +32,9 @@ use crate::result::{
 use crate::schema::Schema;
 use crate::types::{BuiltInTypeDefinition, Nullability, TypeDefinition, TypeDefinitionImpl};
 use crate::UserReservedFields;
+use ion_rs::element::Element;
+use ion_rs::element::IonSequence;
 use ion_rs::types::IonType::Struct;
-use ion_rs::value::owned::{text_token, Element};
-use ion_rs::value::reader::{element_reader, ElementReader};
-use ion_rs::value::{IonElement, IonSequence, IonStruct};
 use ion_rs::IonType;
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
@@ -486,18 +485,7 @@ impl TypeStore {
         // TODO: this array can be turned into an iterator implementation in ion-rust for IonType
         use IonType::*;
         let built_in_atomic_types: [IonType; 12] = [
-            Integer,
-            Float,
-            Decimal,
-            Timestamp,
-            String,
-            Symbol,
-            Boolean,
-            Blob,
-            Clob,
-            SExpression,
-            List,
-            Struct,
+            Int, Float, Decimal, Timestamp, String, Symbol, Bool, Blob, Clob, SExp, List, Struct,
         ];
         // add all the atomic ion types that doesn't allow nulls [type_ids: 0 - 11]
         for atomic_type in built_in_atomic_types {
@@ -523,9 +511,7 @@ impl TypeStore {
         for text in DERIVED_ISL_TYPES {
             let isl_type = IslTypeImpl::from_owned_element(
                 isl_version,
-                &element_reader()
-                    .read_one(text.as_bytes())
-                    .expect("parsing failed unexpectedly"),
+                &Element::read_one(text.as_bytes()).expect("parsing failed unexpectedly"),
                 &mut vec![],
             )
             .unwrap();
@@ -569,16 +555,9 @@ impl TypeStore {
         &self,
         name: &str,
     ) -> Option<&TypeId> {
-        let type_name = match name {
-            "int" => "integer",
-            "bool" => "boolean",
-            "$int" => "$integer",
-            "$bool" => "$boolean",
-            _ => name,
-        };
         self.ids_by_name
             .get(name)
-            .or_else(|| self.builtin_type_ids_by_name.get(type_name))
+            .or_else(|| self.builtin_type_ids_by_name.get(name))
     }
 
     /// Provides the [`TypeId`] associated with given name if it exists in the [`TypeStore`] as a type
@@ -592,13 +571,6 @@ impl TypeStore {
     /// Provides the [`TypeId`] associated with given type name if it exists in the [`TypeStore`]  
     /// Otherwise returns None
     pub(crate) fn get_builtin_type_id(&self, type_name: &str) -> Option<TypeId> {
-        let type_name = match type_name {
-            "int" => "integer",
-            "bool" => "boolean",
-            "$int" => "$integer",
-            "$bool" => "$boolean",
-            _ => type_name,
-        };
         self.builtin_type_ids_by_name
             .get(type_name)
             .map(|t| t.to_owned())
@@ -787,12 +759,11 @@ impl Resolver {
             let annotations: Vec<&Symbol> = value.annotations().collect();
 
             // load header for schema
-            if annotations.contains(&&text_token("schema_header")) {
+            if annotations.contains(&&Symbol::from("schema_header")) {
                 found_header = true;
                 let schema_header = try_to!(value.as_struct());
-                if let Some(imports) = schema_header.get("imports").and_then(|it| it.as_sequence())
-                {
-                    for import in imports.iter() {
+                if let Some(imports) = schema_header.get("imports").and_then(|it| it.as_list()) {
+                    for import in imports.elements() {
                         let isl_import = IslImport::from_ion_element(import)?;
                         isl_imports.push(isl_import);
                     }
@@ -809,7 +780,7 @@ impl Resolver {
                 }
             }
             // load types for schema
-            else if annotations.contains(&&text_token("type")) {
+            else if annotations.contains(&&Symbol::from("type")) {
                 // convert Element to IslType
                 let isl_type: IslTypeImpl =
                     IslTypeImpl::from_owned_element(isl_version, &value, &mut isl_inline_imports)?;
@@ -832,7 +803,7 @@ impl Resolver {
                 isl_types.push(IslType::new(isl_type, constraints));
             }
             // load footer for schema
-            else if annotations.contains(&&text_token("schema_footer")) {
+            else if annotations.contains(&&Symbol::from("schema_footer")) {
                 found_footer = true;
                 if isl_version == IslVersion::V2_0 {
                     let schema_footer = try_to!(value.as_struct());
@@ -1042,10 +1013,10 @@ impl Resolver {
             }
             // verify if value is an ISL version marker and if it has valid format
             if value.ion_type() == IonType::Symbol
-                && isl_version_marker.is_match(value.as_str().unwrap())
+                && isl_version_marker.is_match(value.as_text().unwrap())
             {
                 // This implementation supports Ion Schema 1.0 and Ion Schema 2.0
-                return match value.as_str().unwrap() {
+                return match value.as_text().unwrap() {
                     "$ion_schema_1_0" => Ok(IslVersion::V1_0),
                     "$ion_schema_2_0" => Ok(IslVersion::V2_0),
                     _ => invalid_schema_error(format!(
@@ -1909,7 +1880,7 @@ mod schema_system_tests {
         let mut schema_system =
             SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
         let schema = schema_system.load_isl_schema("sample.isl")?;
-        let expected_open_content = element_reader().read_all(
+        let expected_open_content = Element::read_all(
             r#"
                 open_content_1::{
                     unknown_constraint: "this is an open content struct"
