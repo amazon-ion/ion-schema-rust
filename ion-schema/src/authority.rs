@@ -102,7 +102,7 @@ impl DocumentAuthority for FileSystemDocumentAuthority {
         let absolute_path = self.base_path().join(id);
         // if absolute_path exists for the given id then load schema with file contents
         let ion_content = fs::read(absolute_path)?;
-        let schema_content = Element::read_all(&ion_content)?;
+        let schema_content = Element::read_all(ion_content)?;
         Ok(schema_content)
     }
 }
