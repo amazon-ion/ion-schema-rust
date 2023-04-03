@@ -164,6 +164,10 @@ impl Constraint {
     pub fn scale(scale: RangeImpl<Int>) -> Constraint {
         Constraint::Scale(ScaleConstraint::new(Range::Integer(scale)))
     }
+    /// Creates a [Constraint::Exponent] from a [Range] specifying an exponent range.
+    pub fn exponent(exponent: RangeImpl<Int>) -> Constraint {
+        Constraint::Exponent(ExponentConstraint::new(Range::Integer(exponent)))
+    }
 
     /// Creates a [Constraint::TimestampPrecision] from a [Range] specifying a precision range.
     pub fn timestamp_precision(precision: RangeImpl<TimestampPrecision>) -> Constraint {

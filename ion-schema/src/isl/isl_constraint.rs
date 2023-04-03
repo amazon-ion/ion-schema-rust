@@ -260,6 +260,7 @@ pub mod v_2_0 {
     use crate::isl::IslVersion;
     use crate::result::IonSchemaResult;
     use ion_rs::element::Element;
+    use ion_rs::Int;
 
     /// Creates an [IslConstraint::Type] using the [IslTypeRef] referenced inside it
     // type is rust keyword hence this method is named type_constraint unlike other ISL constraint methods
@@ -331,6 +332,14 @@ pub mod v_2_0 {
         IslConstraint::new(
             IslVersion::V2_0,
             IslConstraintImpl::Precision(Range::NonNegativeInteger(precision)),
+        )
+    }
+
+    /// Creates a [IslConstraint::Exponent] from a [Range] specifying an exponent range.
+    pub fn exponent(exponent: RangeImpl<Int>) -> IslConstraint {
+        IslConstraint::new(
+            IslVersion::V2_0,
+            IslConstraintImpl::Exponent(Range::Integer(exponent)),
         )
     }
 
