@@ -112,8 +112,9 @@ impl Iterator for SchemaTypeIterator {
 #[cfg(test)]
 mod schema_tests {
     use super::*;
+    use crate::authority::MapDocumentAuthority;
     use crate::isl::IslVersion;
-    use crate::system::Resolver;
+    use crate::system::{Resolver, SchemaSystem};
     use ion_rs::element::Element;
     use rstest::*;
 
@@ -124,18 +125,11 @@ mod schema_tests {
 
     // helper function to be used by validation tests
     fn load_schema_from_text(text: &str) -> Rc<Schema> {
-        let owned_elements = load(text).into_iter();
-        // create a type_store and resolver instance to be used for loading Elements as schema
-        let type_store = &mut TypeStore::default();
-        let mut resolver = Resolver::new(vec![]);
-
-        // create a isl from owned_elements and create a schema from isl
-        let isl =
-            resolver.isl_schema_from_elements(IslVersion::V1_0, owned_elements, "my_schema.isl");
-
-        resolver
-            .schema_from_isl_schema(IslVersion::V1_0, isl.unwrap(), type_store, None)
-            .unwrap()
+        // map with (id, ion content)
+        let map_authority = [("sample.isl", text)];
+        let mut schema_system =
+            SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
+        schema_system.load_schema("sample.isl").unwrap()
     }
 
     #[rstest(
@@ -260,6 +254,13 @@ mod schema_tests {
                     type:: { name: scale_type, scale: 2 }
                  "#).into_iter(),
         1 // this includes named type scale_type
+    ),
+    case::exponent_constraint(
+        load(r#" // For a schema with exponent constraint as below:
+                    $ion_schema_2_0
+                    type:: { name: exponent_type, exponent: -2 }
+                 "#).into_iter(),
+        1 // this includes named type exponent_type
     ),
     case::timestamp_precision_constraint(
         load(r#" // For a schema with timestamp_precision constraint as below:
@@ -981,6 +982,28 @@ mod schema_tests {
                                 type::{ name: scale_type, scale: range::[min, 4] }
                         "#),
             "scale_type"
+        ),
+        case::exponent_constraint(
+            load(r#"
+                      0.4
+                      0.42
+                      0.432
+                      0.4321
+                      43d3
+                      0d0
+                    "#),
+            load(r#"
+                      null
+                      null.null
+                      null.decimal
+                      null.symbol
+                      0.43210
+                    "#),
+            load_schema_from_text(r#" // For a schema with exponent constraint as below:
+                            $ion_schema_2_0
+                            type::{ name: exponent_type, exponent: range::[-4, 4] }
+                    "#),
+            "exponent_type"
         ),
         case::timestamp_precision_constraint(
             load(r#"

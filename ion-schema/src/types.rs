@@ -577,6 +577,7 @@ mod type_definition_tests {
     use crate::isl::isl_type::v_1_0::*;
     use crate::isl::isl_type::IslType;
     use crate::isl::isl_type_reference::v_1_0::*;
+    use crate::isl::*;
     use crate::system::PendingTypes;
     use ion_rs::Decimal;
     use ion_rs::Int;
@@ -725,6 +726,13 @@ mod type_definition_tests {
         */
         anonymous_type([scale(Int::I64(2).into())]),
         TypeDefinition::anonymous([Constraint::scale(Int::I64(2).into()), Constraint::type_constraint(34)])
+    ),
+    case::exponent_constraint(
+        /* For a schema with exponent constraint as below:
+            { exponent: 2 }
+        */
+        isl_type::v_2_0::anonymous_type([isl_constraint::v_2_0::exponent(Int::I64(2).into())]),
+        TypeDefinition::anonymous([Constraint::exponent(Int::I64(2).into()), Constraint::type_constraint(34)])
     ),
     case::timestamp_precision_constraint(
         /* For a schema with timestamp_precision constraint as below:

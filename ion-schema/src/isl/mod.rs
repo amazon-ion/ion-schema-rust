@@ -253,6 +253,7 @@ mod isl_tests {
     use crate::isl::isl_type_reference::v_1_0::*;
     use crate::isl::util::TimestampPrecision;
     use crate::isl::IslVersion;
+    use crate::isl::*;
     use crate::result::IonSchemaResult;
     use ion_rs::element::Element;
     use ion_rs::types::decimal::*;
@@ -261,7 +262,7 @@ mod isl_tests {
     use ion_rs::Symbol;
     use rstest::*;
     use std::io::Write;
-    // helper function to create NamedIslType for isl tests
+    // helper function to create NamedIslType for isl tests using ISL 1.0
     fn load_named_type(text: &str) -> IslType {
         let type_def = IslTypeImpl::from_owned_element(
             IslVersion::V1_0,
@@ -277,7 +278,7 @@ mod isl_tests {
         IslType::new(type_def, constraints)
     }
 
-    // helper function to create AnonymousIslType for isl tests
+    // helper function to create AnonymousIslType for isl tests using ISL 1.0
     fn load_anonymous_type(text: &str) -> IslType {
         let type_def = IslTypeImpl::from_owned_element(
             IslVersion::V1_0,
@@ -289,6 +290,22 @@ mod isl_tests {
             .constraints()
             .iter()
             .map(|c| IslConstraint::new(IslVersion::V1_0, c.to_owned()))
+            .collect();
+        IslType::new(type_def, constraints)
+    }
+
+    // helper function to create AnonymousIslType for isl tests using ISL 2.0
+    fn load_anonymous_type_v2_0(text: &str) -> IslType {
+        let type_def = IslTypeImpl::from_owned_element(
+            IslVersion::V2_0,
+            &Element::read_one(text.as_bytes()).expect("parsing failed unexpectedly"),
+            &mut vec![],
+        )
+        .unwrap();
+        let constraints = type_def
+            .constraints()
+            .iter()
+            .map(|c| IslConstraint::new(IslVersion::V2_0, c.to_owned()))
             .collect();
         IslType::new(type_def, constraints)
     }
@@ -449,6 +466,12 @@ mod isl_tests {
                         { scale: 2 }
                     "#),
         anonymous_type([scale(IntegerValue::I64(2).into())])
+    ),
+    case::exponent_constraint(
+        load_anonymous_type_v2_0(r#" // For a schema with exponent constraint as below:
+                        { exponent: -2 }
+                    "#),
+        isl_type::v_2_0::anonymous_type([isl_constraint::v_2_0::exponent(IntegerValue::I64(-2).into())])
     ),
     case::timestamp_precision_constraint(
         load_anonymous_type(r#" // For a schema with timestamp_precision constraint as below:

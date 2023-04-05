@@ -3,9 +3,9 @@ use crate::isl::util::TimestampPrecision;
 use crate::result::{
     invalid_schema_error, invalid_schema_error_raw, IonSchemaError, IonSchemaResult,
 };
-use ion_rs::element::Element;
+use ion_rs::element::{Element, IonSequence};
 use ion_rs::external::bigdecimal::num_bigint::BigInt;
-use ion_rs::external::bigdecimal::BigDecimal;
+use ion_rs::external::bigdecimal::{BigDecimal, One};
 use ion_rs::types::integer::IntAccess;
 use ion_rs::{Decimal, Int, IonType, Symbol, Timestamp};
 use std::cmp::Ordering;
@@ -215,7 +215,7 @@ impl Range {
                     value.ion_type()
                 ))
             }
-        } else if let Some(range) = value.as_sequence() {
+        } else if let Some(range) = value.as_list() {
             // verify if the value has annotation range
             if !value.annotations().any(|a| a == &Symbol::from("range")) {
                 return invalid_schema_error(
@@ -469,8 +469,32 @@ impl<T: std::cmp::PartialOrd> RangeImpl<T> {
         end: TypedRangeBoundaryValue,
     ) -> IonSchemaResult<RangeImpl<Int>> {
         match (start, end) {
-            (TypedRangeBoundaryValue::Integer(v1), TypedRangeBoundaryValue::Integer(v2)) => {
-                RangeImpl::range(v1, v2)
+            (
+                TypedRangeBoundaryValue::Integer(RangeBoundaryValue::Value(v1, v1_type)),
+                TypedRangeBoundaryValue::Integer(RangeBoundaryValue::Value(v2, v2_type)),
+            ) => {
+                // Safe unwrap since as_big_int returns None for i64 value
+                let v1_as_big_int = v1
+                    .as_big_int()
+                    .map(|v| v.to_owned())
+                    .unwrap_or(BigInt::from(v1.as_i64().unwrap()));
+
+                let v2_as_big_int = v2
+                    .as_big_int()
+                    .map(|v| v.to_owned())
+                    .unwrap_or(BigInt::from(v2.as_i64().unwrap()));
+
+                // verify this is not an empty range for which there is no valid integer values
+                if (v2_as_big_int - v1_as_big_int).is_one()
+                    && v1_type == RangeBoundaryType::Exclusive
+                    && v2_type == RangeBoundaryType::Exclusive
+                {
+                    return invalid_schema_error("No valid values in the Integer range");
+                }
+                RangeImpl::range(
+                    RangeBoundaryValue::Value(v1, v1_type),
+                    RangeBoundaryValue::Value(v2, v2_type),
+                )
             }
             (TypedRangeBoundaryValue::Min, TypedRangeBoundaryValue::Integer(v2)) => {
                 RangeImpl::range(RangeBoundaryValue::Min, v2)

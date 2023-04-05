@@ -20,6 +20,7 @@ use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use std::fmt::{Display, Formatter};
 use std::iter::Peekable;
+use std::ops::Neg;
 use std::rc::Rc;
 use std::str::Chars;
 
@@ -50,6 +51,7 @@ pub enum Constraint {
     ContentClosed,
     ContainerLength(ContainerLengthConstraint),
     Element(ElementConstraint),
+    Exponent(ExponentConstraint),
     Fields(FieldsConstraint),
     Not(NotConstraint),
     OneOf(OneOfConstraint),
@@ -161,6 +163,10 @@ impl Constraint {
     /// Creates a [Constraint::Scale] from a [Range] specifying a precision range.
     pub fn scale(scale: RangeImpl<Int>) -> Constraint {
         Constraint::Scale(ScaleConstraint::new(Range::Integer(scale)))
+    }
+    /// Creates a [Constraint::Exponent] from a [Range] specifying an exponent range.
+    pub fn exponent(exponent: RangeImpl<Int>) -> Constraint {
+        Constraint::Exponent(ExponentConstraint::new(Range::Integer(exponent)))
     }
 
     /// Creates a [Constraint::TimestampPrecision] from a [Range] specifying a precision range.
@@ -363,6 +369,9 @@ impl Constraint {
                     timestamp_offset.valid_offsets().to_vec(),
                 )))
             }
+            IslConstraintImpl::Exponent(exponent_range) => Ok(Constraint::Exponent(
+                ExponentConstraint::new(exponent_range.to_owned()),
+            )),
             IslConstraintImpl::TimestampPrecision(timestamp_precision_range) => {
                 Ok(Constraint::TimestampPrecision(
                     TimestampPrecisionConstraint::new(timestamp_precision_range.to_owned()),
@@ -426,6 +435,7 @@ impl Constraint {
             Constraint::Precision(precision) => precision.validate(value, type_store, ion_path),
             Constraint::Regex(regex) => regex.validate(value, type_store, ion_path),
             Constraint::Scale(scale) => scale.validate(value, type_store, ion_path),
+            Constraint::Exponent(exponent) => exponent.validate(value, type_store, ion_path),
             Constraint::TimestampOffset(timestamp_offset) => {
                 timestamp_offset.validate(value, type_store, ion_path)
             }
@@ -1593,7 +1603,7 @@ impl ConstraintValidator for ScaleConstraint {
     ) -> ValidationResult {
         // get scale of decimal value
         let value_scale = value
-            .expect_element_of_type(&[IonType::Decimal], "precision", ion_path)?
+            .expect_element_of_type(&[IonType::Decimal], "scale", ion_path)?
             .as_decimal()
             .unwrap()
             .scale();
@@ -1607,6 +1617,55 @@ impl ConstraintValidator for ScaleConstraint {
                 "scale",
                 ViolationCode::InvalidLength,
                 format!("expected scale {scale_range} found {value_scale}"),
+                ion_path,
+            ));
+        }
+
+        Ok(())
+    }
+}
+
+/// Implements Ion Schema's `exponent` constraint
+/// [exponent]: https://amazon-ion.github.io/ion-schema/docs/isl-2-0/spec#exponent
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExponentConstraint {
+    exponent_range: Range,
+}
+
+impl ExponentConstraint {
+    pub fn new(exponent_range: Range) -> Self {
+        Self { exponent_range }
+    }
+
+    pub fn exponent(&self) -> &Range {
+        &self.exponent_range
+    }
+}
+
+impl ConstraintValidator for ExponentConstraint {
+    fn validate(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> ValidationResult {
+        // get exponent of decimal value
+        let value_exponent = value
+            .expect_element_of_type(&[IonType::Decimal], "exponent", ion_path)?
+            .as_decimal()
+            .unwrap()
+            .scale()
+            .neg();
+
+        // get isl decimal exponent as a range
+        let exponent_range: &Range = self.exponent();
+
+        // return a Violation if the value didn't follow exponent constraint
+        if !exponent_range.contains(&(value_exponent).into()) {
+            return Err(Violation::new(
+                "exponent",
+                ViolationCode::InvalidLength,
+                format!("expected exponent {exponent_range} found {value_exponent}"),
                 ion_path,
             ));
         }
