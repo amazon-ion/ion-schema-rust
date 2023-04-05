@@ -729,7 +729,7 @@ mod type_definition_tests {
     ),
     case::exponent_constraint(
         /* For a schema with exponent constraint as below:
-            { exponent: -2 }
+            { exponent: 2 }
         */
         isl_type::v_2_0::anonymous_type([isl_constraint::v_2_0::exponent(Int::I64(2).into())]),
         TypeDefinition::anonymous([Constraint::exponent(Int::I64(2).into()), Constraint::type_constraint(34)])

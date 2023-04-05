@@ -167,11 +167,11 @@ trait StructUtils {
 impl StructUtils for Struct {
     fn get_required_text_field(&self, field_name: &str) -> Result<&str, String> {
         if self.get_all(field_name).count() > 1 {
-            return Err(format!(
+            Err(format!(
                 "Malformed test case - field '{}' is repeated: {}",
                 field_name,
                 Element::from(self.clone())
-            ));
+            ))
         } else {
             let field = self.get(field_name).ok_or(format!(
                 "Malformed test case - field '{}' is missing: {}",
