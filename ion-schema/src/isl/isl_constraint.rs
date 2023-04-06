@@ -181,7 +181,7 @@ pub mod v_1_0 {
     pub fn element(isl_type: IslTypeRef) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V1_0,
-            IslConstraintImpl::Element(isl_type.type_reference, None),
+            IslConstraintImpl::Element(isl_type.type_reference, false),
         )
     }
 
@@ -419,7 +419,7 @@ pub mod v_2_0 {
     pub fn element(isl_type: IslTypeRef, require_distinct_elements: bool) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V2_0,
-            IslConstraintImpl::Element(isl_type.type_reference, Some(require_distinct_elements)),
+            IslConstraintImpl::Element(isl_type.type_reference, require_distinct_elements),
         )
     }
 
@@ -485,9 +485,10 @@ pub(crate) enum IslConstraintImpl {
     Contains(Vec<Element>),
     ContentClosed,
     ContainerLength(Range),
+    // Represents Element(type_reference, expected_distinct).
     // For ISL 2.0 true/false is specified based on whether `distinct` annotation is present or not.
-    // Represents Element(type_reference, expected_distinct). None here is used for ISL 1.0 which doesn't support `distinct` elements.
-    Element(IslTypeRefImpl, Option<bool>),
+    // For ISL 1.0 which doesn't support `distinct` elements this will be (type_reference, false).
+    Element(IslTypeRefImpl, bool),
     Exponent(Range),
     Fields(HashMap<String, IslTypeRefImpl>),
     Not(IslTypeRefImpl),
@@ -616,8 +617,8 @@ impl IslConstraintImpl {
                     IslTypeRefImpl::from_ion_element(isl_version, value, inline_imported_types)?;
                 match isl_version {
                     IslVersion::V1_0 => {
-                        // for ISL 1.0 `distinct annotation on `element` constraint is not supported which is represented by `None` here
-                        Ok(IslConstraintImpl::Element(type_reference, None))
+                        // for ISL 1.0 `distinct annotation on `element` constraint is not supported which is represented by `false` here
+                        Ok(IslConstraintImpl::Element(type_reference, false))
                     }
                     IslVersion::V2_0 => {
                         // return error if there are any annotations other than `distinct` or `$null_or`
@@ -640,10 +641,7 @@ impl IslConstraintImpl {
                             ));
                         }
 
-                        Ok(IslConstraintImpl::Element(
-                            type_reference,
-                            Some(require_distinct),
-                        ))
+                        Ok(IslConstraintImpl::Element(type_reference, require_distinct))
                     }
                 }
             }

@@ -13,7 +13,7 @@ use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::types::TypeValidator;
 use crate::violation::{Violation, ViolationCode};
 use crate::IonSchemaElement;
-use ion_rs::element::{Element, IonSequence};
+use ion_rs::element::Element;
 use ion_rs::{Int, IonType};
 use regex::{Regex, RegexBuilder};
 use std::collections::{HashMap, HashSet};
@@ -306,7 +306,7 @@ impl Constraint {
                 )?;
                 Ok(Constraint::Element(ElementConstraint::new(
                     type_id,
-                    require_distinct_elements.unwrap_or(false),
+                    *require_distinct_elements,
                 )))
             }
             IslConstraintImpl::Fields(fields) => {
@@ -1248,8 +1248,8 @@ impl ConstraintValidator for CodepointLengthConstraint {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ElementConstraint {
     type_id: TypeId,
-    // This field is used for ISL 2.0 and it represents whether validation for distinct elements is required or not.
-    // For ISL 1.0 this is always false as it doesn't support distinct elements validation.
+    /// This field is used for ISL 2.0 and it represents whether validation for distinct elements is required or not.
+    /// For ISL 1.0 this is always false as it doesn't support distinct elements validation.
     required_distinct_elements: bool,
 }
 
@@ -1276,7 +1276,6 @@ impl ConstraintValidator for ElementConstraint {
 
         // create a set for checking duplicate elements
         let mut element_set = vec![];
-        let mut duplicate_elements_builder = Element::list_builder();
 
         // get elements for given container in the form (ion_path_element, element_value)
         let elements: Vec<(IonPathElement, &Element)> = match value {
@@ -1341,23 +1340,15 @@ impl ConstraintValidator for ElementConstraint {
                 violations.push(violation);
             }
             if self.required_distinct_elements && element_set.contains(&val) {
-                duplicate_elements_builder = duplicate_elements_builder.push(val);
+                violations.push(Violation::new(
+                    "element",
+                    ViolationCode::ElementNotDistinct,
+                    format!("expected distinct elements but found duplicate element {val}",),
+                    ion_path,
+                ))
             }
             element_set.push(val);
             ion_path.pop();
-        }
-
-        let duplicate_elements = duplicate_elements_builder.build();
-        if self.required_distinct_elements && !duplicate_elements.is_empty() {
-            violations.push(Violation::new(
-                "element",
-                ViolationCode::ElementNotDistinct,
-                format!(
-                    "one or more elements are duplicate values: {}",
-                    duplicate_elements
-                ),
-                ion_path,
-            ));
         }
 
         if !violations.is_empty() {
