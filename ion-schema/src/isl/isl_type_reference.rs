@@ -6,6 +6,7 @@ use crate::result::{
 };
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::types::TypeDefinitionImpl;
+use crate::IslConstraintImpl;
 use ion_rs::element::Element;
 use ion_rs::IonType;
 
@@ -104,6 +105,19 @@ impl IslTypeRefImpl {
                 )
             }
         })
+    }
+
+    /// Verifies if the given type reference contains an `occurs` field or not
+    // This is used to make sure only `ordered_elements` and `fields` constraint can contain `occurs`.
+    // This method returns `false` for `Named` or `TypeImport` type references because `occurs` field is not allowed within named type definitions.
+    pub fn get_occurs_constraint(&self) -> bool {
+        match self {
+            IslTypeRefImpl::Anonymous(anonymous_type_def) => anonymous_type_def
+                .constraints()
+                .iter()
+                .any(|c| matches!(c, IslConstraintImpl::Occurs(_))),
+            _ => false,
+        }
     }
 
     /// Tries to create an [IslTypeRef] from the given Element

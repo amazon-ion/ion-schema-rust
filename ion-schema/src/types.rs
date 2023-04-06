@@ -706,6 +706,13 @@ mod type_definition_tests {
         anonymous_type([element(named_type_ref("int"))]),
         TypeDefinition::anonymous([Constraint::element(0), Constraint::type_constraint(34)])
     ),
+    case::distinct_element_constraint(
+        /* For a schema with distinct element constraint as below:
+            { element: distinct::int }
+        */
+        isl_type::v_2_0::anonymous_type([isl_constraint::v_2_0::element(named_type_ref("int"), true)]),
+        TypeDefinition::anonymous([Constraint::distinct_element(0), Constraint::type_constraint(34)])
+    ),
     case::annotations_constraint(
         /* For a schema with annotations constraint as below:
             { annotations: closed::[red, blue, green] }

@@ -124,8 +124,14 @@ impl Constraint {
     }
 
     /// Creates a [Constraint::Element] referring to the type represented by the provided [TypeId].
+    /// This method assumes that distinct elements are not required. IF you want to have distinct elements use `distinct_element` method instead.
     pub fn element(type_id: TypeId) -> Constraint {
-        Constraint::Element(ElementConstraint::new(type_id))
+        Constraint::Element(ElementConstraint::new(type_id, false))
+    }
+
+    /// Creates a [Constraint::Element] referring to the type represented by the provided [TypeId] where each element is distinct.
+    pub fn distinct_element(type_id: TypeId) -> Constraint {
+        Constraint::Element(ElementConstraint::new(type_id, true))
     }
 
     /// Creates a [Constraint::Annotations] using [str]s and [Element]s specified inside it
@@ -291,14 +297,17 @@ impl Constraint {
             IslConstraintImpl::ContainerLength(isl_length) => Ok(Constraint::ContainerLength(
                 ContainerLengthConstraint::new(isl_length.to_owned()),
             )),
-            IslConstraintImpl::Element(type_reference) => {
+            IslConstraintImpl::Element(type_reference, require_distinct_elements) => {
                 let type_id = IslTypeRefImpl::resolve_type_reference(
                     isl_version,
                     type_reference,
                     type_store,
                     pending_types,
                 )?;
-                Ok(Constraint::Element(ElementConstraint::new(type_id)))
+                Ok(Constraint::Element(ElementConstraint::new(
+                    type_id,
+                    require_distinct_elements.unwrap_or(false),
+                )))
             }
             IslConstraintImpl::Fields(fields) => {
                 let fields_constraint: FieldsConstraint =
@@ -1239,11 +1248,17 @@ impl ConstraintValidator for CodepointLengthConstraint {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ElementConstraint {
     type_id: TypeId,
+    // This field is used for ISL 2.0 and it represents whether validation for distinct elements is required or not.
+    // For ISL 1.0 this is always false as it doesn't support distinct elements validation.
+    required_distinct_elements: bool,
 }
 
 impl ElementConstraint {
-    pub fn new(type_id: TypeId) -> Self {
-        Self { type_id }
+    pub fn new(type_id: TypeId, required_distinct_elements: bool) -> Self {
+        Self {
+            type_id,
+            required_distinct_elements,
+        }
     }
 }
 
@@ -1258,6 +1273,10 @@ impl ConstraintValidator for ElementConstraint {
 
         // this type_id was validated while creating `ElementConstraint` hence the unwrap here is safe
         let type_def = type_store.get_type_by_id(self.type_id).unwrap();
+
+        // create a set for checking duplicate elements
+        let mut element_set: Vec<&Element> = vec![];
+        let mut duplicate_elements = vec![];
 
         // validate element constraint for container types
         match value {
@@ -1283,6 +1302,10 @@ impl ConstraintValidator for ElementConstraint {
                             {
                                 violations.push(violation);
                             }
+                            if self.required_distinct_elements && element_set.contains(&val) {
+                                duplicate_elements.push(val.to_owned());
+                            }
+                            element_set.push(val);
                             ion_path.pop();
                         }
                     }
@@ -1296,6 +1319,10 @@ impl ConstraintValidator for ElementConstraint {
                             {
                                 violations.push(violation);
                             }
+                            if self.required_distinct_elements && element_set.contains(&val) {
+                                duplicate_elements.push(val.to_owned());
+                            }
+                            element_set.push(val);
                             ion_path.pop();
                         }
                     }
@@ -1322,9 +1349,25 @@ impl ConstraintValidator for ElementConstraint {
                     {
                         violations.push(violation);
                     }
+                    if self.required_distinct_elements && element_set.contains(&val) {
+                        duplicate_elements.push(val.to_owned());
+                    }
+                    element_set.push(val);
                     ion_path.pop();
                 }
             }
+        }
+
+        if self.required_distinct_elements && !duplicate_elements.is_empty() {
+            violations.push(Violation::new(
+                "element",
+                ViolationCode::ElementNotDistinct,
+                format!(
+                    "one or more elements are duplicate values: {:?}",
+                    duplicate_elements
+                ),
+                ion_path,
+            ));
         }
 
         if !violations.is_empty() {
