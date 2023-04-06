@@ -13,7 +13,7 @@ use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::types::TypeValidator;
 use crate::violation::{Violation, ViolationCode};
 use crate::IonSchemaElement;
-use ion_rs::element::Element;
+use ion_rs::element::{Element, IonSequence};
 use ion_rs::{Int, IonType};
 use regex::{Regex, RegexBuilder};
 use std::collections::{HashMap, HashSet};
@@ -1275,11 +1275,11 @@ impl ConstraintValidator for ElementConstraint {
         let type_def = type_store.get_type_by_id(self.type_id).unwrap();
 
         // create a set for checking duplicate elements
-        let mut element_set: Vec<&Element> = vec![];
-        let mut duplicate_elements = vec![];
+        let mut element_set = vec![];
+        let mut duplicate_elements_builder = Element::list_builder();
 
-        // validate element constraint for container types
-        match value {
+        // get elements for given container in the form (ion_path_element, element_value)
+        let elements: Vec<(IonPathElement, &Element)> = match value {
             IonSchemaElement::SingleElement(element) => {
                 // Check for null container
                 if element.is_null() {
@@ -1293,39 +1293,24 @@ impl ConstraintValidator for ElementConstraint {
 
                 // validate each element of the given value container
                 match element.ion_type() {
-                    IonType::List | IonType::SExp => {
-                        for (index, val) in element.as_sequence().unwrap().elements().enumerate() {
-                            ion_path.push(IonPathElement::Index(index));
-                            let schema_element: IonSchemaElement = val.into();
-                            if let Err(violation) =
-                                type_def.validate(&schema_element, type_store, ion_path)
-                            {
-                                violations.push(violation);
-                            }
-                            if self.required_distinct_elements && element_set.contains(&val) {
-                                duplicate_elements.push(val.to_owned());
-                            }
-                            element_set.push(val);
-                            ion_path.pop();
-                        }
-                    }
-                    IonType::Struct => {
-                        for (field_name, val) in element.as_struct().unwrap().iter() {
-                            ion_path
-                                .push(IonPathElement::Field(field_name.text().unwrap().to_owned()));
-                            let schema_element: IonSchemaElement = val.into();
-                            if let Err(violation) =
-                                type_def.validate(&schema_element, type_store, ion_path)
-                            {
-                                violations.push(violation);
-                            }
-                            if self.required_distinct_elements && element_set.contains(&val) {
-                                duplicate_elements.push(val.to_owned());
-                            }
-                            element_set.push(val);
-                            ion_path.pop();
-                        }
-                    }
+                    IonType::List | IonType::SExp => element
+                        .as_sequence()
+                        .unwrap()
+                        .elements()
+                        .enumerate()
+                        .map(|(index, val)| (IonPathElement::Index(index), val))
+                        .collect(),
+                    IonType::Struct => element
+                        .as_struct()
+                        .unwrap()
+                        .iter()
+                        .map(|(field_name, val)| {
+                            (
+                                IonPathElement::Field(field_name.text().unwrap().to_owned()),
+                                val,
+                            )
+                        })
+                        .collect(),
                     _ => {
                         // return Violation if value is not an Ion container
                         return Err(Violation::new(
@@ -1340,30 +1325,35 @@ impl ConstraintValidator for ElementConstraint {
                     }
                 }
             }
-            IonSchemaElement::Document(document) => {
-                for (index, val) in document.iter().enumerate() {
-                    ion_path.push(IonPathElement::Index(index));
-                    let schema_element: IonSchemaElement = val.into();
+            IonSchemaElement::Document(document) => document
+                .iter()
+                .enumerate()
+                .map(|(index, val)| (IonPathElement::Index(index), val))
+                .collect(),
+        };
 
-                    if let Err(violation) = type_def.validate(&schema_element, type_store, ion_path)
-                    {
-                        violations.push(violation);
-                    }
-                    if self.required_distinct_elements && element_set.contains(&val) {
-                        duplicate_elements.push(val.to_owned());
-                    }
-                    element_set.push(val);
-                    ion_path.pop();
-                }
+        // validate element constraint
+        for (ion_path_element, val) in elements {
+            ion_path.push(ion_path_element);
+            let schema_element: IonSchemaElement = val.into();
+
+            if let Err(violation) = type_def.validate(&schema_element, type_store, ion_path) {
+                violations.push(violation);
             }
+            if self.required_distinct_elements && element_set.contains(&val) {
+                duplicate_elements_builder = duplicate_elements_builder.push(val);
+            }
+            element_set.push(val);
+            ion_path.pop();
         }
 
+        let duplicate_elements = duplicate_elements_builder.build();
         if self.required_distinct_elements && !duplicate_elements.is_empty() {
             violations.push(Violation::new(
                 "element",
                 ViolationCode::ElementNotDistinct,
                 format!(
-                    "one or more elements are duplicate values: {:?}",
+                    "one or more elements are duplicate values: {}",
                     duplicate_elements
                 ),
                 ion_path,
