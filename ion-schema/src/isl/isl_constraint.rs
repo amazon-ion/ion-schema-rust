@@ -181,7 +181,7 @@ pub mod v_1_0 {
     pub fn element(isl_type: IslTypeRef) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V1_0,
-            IslConstraintImpl::Element(isl_type.type_reference),
+            IslConstraintImpl::Element(isl_type.type_reference, false),
         )
     }
 
@@ -415,10 +415,12 @@ pub mod v_2_0 {
         )
     }
 
-    /// Creates an [IslConstraint::Element] using the [IslTypeRef] referenced inside it
-    pub fn element(isl_type: IslTypeRef) -> IslConstraint {
-        // add support for `distinct::` elements
-        todo!()
+    /// Creates an [IslConstraint::Element] using the [IslTypeRef] referenced inside it and considers whether distinct elements are required or not
+    pub fn element(isl_type: IslTypeRef, require_distinct_elements: bool) -> IslConstraint {
+        IslConstraint::new(
+            IslVersion::V2_0,
+            IslConstraintImpl::Element(isl_type.type_reference, require_distinct_elements),
+        )
     }
 
     /// Creates an [IslConstraint::Annotations] using [str]s and [Element]s specified inside it
@@ -483,7 +485,10 @@ pub(crate) enum IslConstraintImpl {
     Contains(Vec<Element>),
     ContentClosed,
     ContainerLength(Range),
-    Element(IslTypeRefImpl),
+    // Represents Element(type_reference, expected_distinct).
+    // For ISL 2.0 true/false is specified based on whether `distinct` annotation is present or not.
+    // For ISL 1.0 which doesn't support `distinct` elements this will be (type_reference, false).
+    Element(IslTypeRefImpl, bool),
     Exponent(Range),
     Fields(HashMap<String, IslTypeRefImpl>),
     Not(IslTypeRefImpl),
@@ -610,7 +615,35 @@ impl IslConstraintImpl {
             "element" => {
                 let type_reference: IslTypeRefImpl =
                     IslTypeRefImpl::from_ion_element(isl_version, value, inline_imported_types)?;
-                Ok(IslConstraintImpl::Element(type_reference))
+                match isl_version {
+                    IslVersion::V1_0 => {
+                        // for ISL 1.0 `distinct annotation on `element` constraint is not supported which is represented by `false` here
+                        Ok(IslConstraintImpl::Element(type_reference, false))
+                    }
+                    IslVersion::V2_0 => {
+                        // return error if there are any annotations other than `distinct` or `$null_or`
+                        if value
+                            .annotations()
+                            .any(|a| a.text() != Some("distinct") && a.text() != Some("$null_or"))
+                        {
+                            return Err(invalid_schema_error_raw(
+                                "element constraint can only contain `distinct` annotation",
+                            ));
+                        }
+
+                        // verify whether `distinct`annotation is present or not
+                        let require_distinct = value.has_annotation("distinct");
+
+                        // return error if the type reference contains `occurs` constraint
+                        if type_reference.get_occurs_constraint() {
+                            return Err(invalid_schema_error_raw(
+                                "element constraint can not contain type references that contain `occurs` constraint",
+                            ));
+                        }
+
+                        Ok(IslConstraintImpl::Element(type_reference, require_distinct))
+                    }
+                }
             }
             "fields" => {
                 let fields: HashMap<String, IslTypeRefImpl> =

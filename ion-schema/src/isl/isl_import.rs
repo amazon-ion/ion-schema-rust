@@ -23,7 +23,7 @@ impl IslImport {
     pub fn from_ion_element(value: &Element) -> IonSchemaResult<IslImport> {
         let import = try_to!(value.as_struct());
         let id = match import.get("id") {
-            Some(import_id) => try_to!(import_id.as_string()),
+            Some(import_id) => try_to!(import_id.as_text()),
             None => {
                 return Err(invalid_schema_error_raw(
                     "import must have an id field in its definition",

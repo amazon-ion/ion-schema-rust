@@ -449,6 +449,12 @@ mod isl_tests {
                 "#),
         anonymous_type([element(named_type_ref("int"))])
     ),
+    case::distinct_element_constraint(
+        load_anonymous_type_v2_0(r#" // For a schema with distinct element constraint as below:
+                        { element: distinct::int }
+                    "#),
+    isl_type::v_2_0::anonymous_type([isl_constraint::v_2_0::element(named_type_ref("int"), true)])
+    ),
     case::annotations_constraint(
         load_anonymous_type(r#" // For a schema with annotations constraint as below:
                         { annotations: closed::[red, blue, green] }

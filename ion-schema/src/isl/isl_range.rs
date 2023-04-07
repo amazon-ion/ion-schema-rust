@@ -89,6 +89,10 @@ impl Range {
 
     /// Provides a boolean value to specify whether the given value is within the range or not
     pub fn contains(&self, value: &Element) -> bool {
+        if value.is_null() {
+            // if the provided Element is null, then return false
+            return false;
+        }
         match self {
             Range::Integer(int_range) if value.ion_type() == IonType::Int => {
                 int_range.contains(value.as_int().unwrap().to_owned())

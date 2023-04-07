@@ -237,6 +237,13 @@ mod schema_tests {
                  "#).into_iter(),
         1 // this includes named type element_type
     ),
+    case::distinct_element_constraint(
+        load(r#" // For a schema with distinct element constraint as below:
+                        $ion_schema_2_0
+                        type:: { name: distinct_element_type, element: distinct::int }
+                     "#).into_iter(),
+        1 // this includes named type distinct_element_type
+    ),
     case::annotations_constraint(
         load(r#" // For a schema with annotations constraint as below:
                     type:: { name: annotations_type, annotations: closed::[red, blue, green] }
@@ -876,6 +883,37 @@ mod schema_tests {
                                 type::{ name: element_type, element: int }
                         "#),
                 "element_type"
+        ),
+        case::distinct_element_constraint(
+                load(r#"
+                          []
+                          [1]
+                          [1, 2, 3]
+                          ()
+                          (1)
+                          (1 2 3)
+                          { a: 1, b: 2, c: 3 }
+                        "#),
+                load(r#"
+                          null.list
+                          [1.]
+                          [1e0]
+                          [1, 1, 2, 3]
+                          [a::1, b::1, a::2, a::2, 3]
+                          [1, 2, null.int]
+                          (1 2 3 true 4)
+                          (1 1 2 2 3)
+                          (a::1 b::1 a::2 a::2 3)
+                          { a: 1, b: 2, c: true }
+                          { a: 1, b: 1 }
+                          { a: c::1, b: c::1 }
+                          { a: 1, b: 2, c: null.int }
+                        "#),
+                load_schema_from_text(r#" // For a schema with distinct element constraint as below:
+                                $ion_schema_2_0
+                                type::{ name: distinct_element_type, element: distinct::int }
+                        "#),
+                "distinct_element_type"
         ),
         case::element_with_self_ref_type_constraint(
                 load(r#"

@@ -21,7 +21,7 @@
 
 use crate::authority::DocumentAuthority;
 use crate::external::ion_rs::Symbol;
-use crate::isl::isl_constraint::IslConstraint;
+use crate::isl::isl_constraint::{IslConstraint, IslConstraintImpl};
 use crate::isl::isl_import::{IslImport, IslImportType};
 use crate::isl::isl_type::{IslType, IslTypeImpl};
 use crate::isl::{IslSchema, IslVersion};
@@ -793,6 +793,17 @@ impl Resolver {
 
                 if isl_version == IslVersion::V2_0 {
                     isl_user_reserved_fields.validate_field_names_in_type(&isl_type)?;
+                }
+
+                // top level named type definition can not contain `occurs` field as per ISL specification
+                if isl_type
+                    .constraints()
+                    .iter()
+                    .any(|c| matches!(c, IslConstraintImpl::Occurs(_)))
+                {
+                    return invalid_schema_error(
+                        "Top level types must not contain `occurs` field in their definition",
+                    );
                 }
 
                 let constraints = isl_type

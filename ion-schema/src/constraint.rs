@@ -124,8 +124,14 @@ impl Constraint {
     }
 
     /// Creates a [Constraint::Element] referring to the type represented by the provided [TypeId].
+    /// This method assumes that distinct elements are not required. IF you want to have distinct elements use `distinct_element` method instead.
     pub fn element(type_id: TypeId) -> Constraint {
-        Constraint::Element(ElementConstraint::new(type_id))
+        Constraint::Element(ElementConstraint::new(type_id, false))
+    }
+
+    /// Creates a [Constraint::Element] referring to the type represented by the provided [TypeId] where each element is distinct.
+    pub fn distinct_element(type_id: TypeId) -> Constraint {
+        Constraint::Element(ElementConstraint::new(type_id, true))
     }
 
     /// Creates a [Constraint::Annotations] using [str]s and [Element]s specified inside it
@@ -291,14 +297,17 @@ impl Constraint {
             IslConstraintImpl::ContainerLength(isl_length) => Ok(Constraint::ContainerLength(
                 ContainerLengthConstraint::new(isl_length.to_owned()),
             )),
-            IslConstraintImpl::Element(type_reference) => {
+            IslConstraintImpl::Element(type_reference, require_distinct_elements) => {
                 let type_id = IslTypeRefImpl::resolve_type_reference(
                     isl_version,
                     type_reference,
                     type_store,
                     pending_types,
                 )?;
-                Ok(Constraint::Element(ElementConstraint::new(type_id)))
+                Ok(Constraint::Element(ElementConstraint::new(
+                    type_id,
+                    *require_distinct_elements,
+                )))
             }
             IslConstraintImpl::Fields(fields) => {
                 let fields_constraint: FieldsConstraint =
@@ -1239,11 +1248,17 @@ impl ConstraintValidator for CodepointLengthConstraint {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ElementConstraint {
     type_id: TypeId,
+    /// This field is used for ISL 2.0 and it represents whether validation for distinct elements is required or not.
+    /// For ISL 1.0 this is always false as it doesn't support distinct elements validation.
+    required_distinct_elements: bool,
 }
 
 impl ElementConstraint {
-    pub fn new(type_id: TypeId) -> Self {
-        Self { type_id }
+    pub fn new(type_id: TypeId, required_distinct_elements: bool) -> Self {
+        Self {
+            type_id,
+            required_distinct_elements,
+        }
     }
 }
 
@@ -1259,8 +1274,11 @@ impl ConstraintValidator for ElementConstraint {
         // this type_id was validated while creating `ElementConstraint` hence the unwrap here is safe
         let type_def = type_store.get_type_by_id(self.type_id).unwrap();
 
-        // validate element constraint for container types
-        match value {
+        // create a set for checking duplicate elements
+        let mut element_set = vec![];
+
+        // get elements for given container in the form (ion_path_element, element_value)
+        let elements: Vec<(IonPathElement, &Element)> = match value {
             IonSchemaElement::SingleElement(element) => {
                 // Check for null container
                 if element.is_null() {
@@ -1274,31 +1292,24 @@ impl ConstraintValidator for ElementConstraint {
 
                 // validate each element of the given value container
                 match element.ion_type() {
-                    IonType::List | IonType::SExp => {
-                        for (index, val) in element.as_sequence().unwrap().elements().enumerate() {
-                            ion_path.push(IonPathElement::Index(index));
-                            let schema_element: IonSchemaElement = val.into();
-                            if let Err(violation) =
-                                type_def.validate(&schema_element, type_store, ion_path)
-                            {
-                                violations.push(violation);
-                            }
-                            ion_path.pop();
-                        }
-                    }
-                    IonType::Struct => {
-                        for (field_name, val) in element.as_struct().unwrap().iter() {
-                            ion_path
-                                .push(IonPathElement::Field(field_name.text().unwrap().to_owned()));
-                            let schema_element: IonSchemaElement = val.into();
-                            if let Err(violation) =
-                                type_def.validate(&schema_element, type_store, ion_path)
-                            {
-                                violations.push(violation);
-                            }
-                            ion_path.pop();
-                        }
-                    }
+                    IonType::List | IonType::SExp => element
+                        .as_sequence()
+                        .unwrap()
+                        .elements()
+                        .enumerate()
+                        .map(|(index, val)| (IonPathElement::Index(index), val))
+                        .collect(),
+                    IonType::Struct => element
+                        .as_struct()
+                        .unwrap()
+                        .iter()
+                        .map(|(field_name, val)| {
+                            (
+                                IonPathElement::Field(field_name.text().unwrap().to_owned()),
+                                val,
+                            )
+                        })
+                        .collect(),
                     _ => {
                         // return Violation if value is not an Ion container
                         return Err(Violation::new(
@@ -1313,18 +1324,31 @@ impl ConstraintValidator for ElementConstraint {
                     }
                 }
             }
-            IonSchemaElement::Document(document) => {
-                for (index, val) in document.iter().enumerate() {
-                    ion_path.push(IonPathElement::Index(index));
-                    let schema_element: IonSchemaElement = val.into();
+            IonSchemaElement::Document(document) => document
+                .iter()
+                .enumerate()
+                .map(|(index, val)| (IonPathElement::Index(index), val))
+                .collect(),
+        };
 
-                    if let Err(violation) = type_def.validate(&schema_element, type_store, ion_path)
-                    {
-                        violations.push(violation);
-                    }
-                    ion_path.pop();
-                }
+        // validate element constraint
+        for (ion_path_element, val) in elements {
+            ion_path.push(ion_path_element);
+            let schema_element: IonSchemaElement = val.into();
+
+            if let Err(violation) = type_def.validate(&schema_element, type_store, ion_path) {
+                violations.push(violation);
             }
+            if self.required_distinct_elements && element_set.contains(&val) {
+                violations.push(Violation::new(
+                    "element",
+                    ViolationCode::ElementNotDistinct,
+                    format!("expected distinct elements but found duplicate element {val}",),
+                    ion_path,
+                ))
+            }
+            element_set.push(val);
+            ion_path.pop();
         }
 
         if !violations.is_empty() {
