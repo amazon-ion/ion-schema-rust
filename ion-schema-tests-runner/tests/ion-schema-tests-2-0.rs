@@ -15,7 +15,6 @@ ion_schema_tests!(
         "constraints::codepoint_length",
         "constraints::container_length",
         "constraints::contains",
-        "constraints::element.*element_with_nullable_type", // This can be removed once we have implementation for `$null_or` annotation as per ISL 2.0
         "constraints::field_names",
         "constraints::fields",
         "constraints::ieee754_float",

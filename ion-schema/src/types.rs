@@ -276,6 +276,49 @@ impl TypeDefinition {
         }
     }
 
+    /// Provides the validation result for base built in type of the type definition with the given value
+    // This method is only used by nullable type reference for validation, it searches for a base type name which is built in type and nullable.
+    // It returns the result of validation for that nullable base type.
+    pub fn is_valid_for_base_nullable_type(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> bool {
+        // get a nullable built in base type name which can be used to perform validation to check for correct `null.*` type
+        let built_in_type_name = match self {
+            TypeDefinition::Named(_) | TypeDefinition::Anonymous(_) => {
+                // only built in type names are needed for base type
+                None
+            }
+            TypeDefinition::BuiltIn(built_int_type) => match built_int_type {
+                BuiltInTypeDefinition::Atomic(ion_type, nullability) => {
+                    Some(format!("${ion_type}"))
+                }
+                BuiltInTypeDefinition::Derived(type_def) => {
+                    let type_name = type_def.name().as_ref().unwrap().to_string();
+                    if !type_name.starts_with("$") {
+                        Some(format!("${type_name}"))
+                    } else {
+                        Some(type_name)
+                    }
+                }
+            },
+        }
+        .unwrap(); // safe unwrap() because nullable type references are only used for built in types
+
+        // unwrap() here are safe because it has been verified while constructing the schema that built type definition exist in the type store
+        let type_def = type_store
+            .get_type_by_id(
+                type_store
+                    .get_builtin_type_id(built_in_type_name.as_str())
+                    .unwrap(),
+            )
+            .unwrap();
+
+        type_def.is_valid(value, type_store, ion_path)
+    }
+
     /// Returns an occurs constraint as range if it exists in the [`TypeDefinition`] otherwise returns `occurs: required`
     pub fn get_occurs_constraint(&self, validation_constraint_name: &str) -> Range {
         // verify if the type_def contains `occurs` constraint and fill occurs_range
@@ -461,13 +504,29 @@ impl TypeDefinitionImpl {
                 },
             };
 
-            let isl_constraint = IslConstraintImpl::from_ion_element(
-                isl_version,
-                "type",
-                &Element::symbol(Symbol::from("any")),
-                &isl_type_name,
-                &mut vec![],
-            )?;
+            let isl_constraint: IslConstraintImpl = match isl_version {
+                IslVersion::V1_0 => {
+                    // default type for ISL 1.0 is `any`
+                    IslConstraintImpl::from_ion_element(
+                        isl_version,
+                        "type",
+                        &Element::symbol(Symbol::from("any")),
+                        &isl_type_name,
+                        &mut vec![],
+                    )?
+                }
+                IslVersion::V2_0 => {
+                    // default type for ISL 2.0 onwards is `$any`
+                    IslConstraintImpl::from_ion_element(
+                        isl_version,
+                        "type",
+                        &Element::symbol(Symbol::from("$any")),
+                        &isl_type_name,
+                        &mut vec![],
+                    )?
+                }
+            };
+
             let constraint = Constraint::resolve_from_isl_constraint(
                 isl_version,
                 &isl_constraint,

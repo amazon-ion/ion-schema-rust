@@ -373,6 +373,25 @@ mod schema_tests {
                 "#),
             "my_int"
         ),
+        case::null_or_annotation_int_type_constraint(
+            load(r#"
+                        null
+                        null.null
+                        0
+                        -5
+                    "#),
+            load(r#"
+                        null.decimal
+                        a
+                        "hello"
+                        false
+                    "#),
+            load_schema_from_text(r#" // For a schema with named type and `$null_or` annotation as below: 
+                        $ion_schema_2_0
+                        type:: { name: my_int, type: $null_or::int }
+                    "#),
+            "my_int"
+        ),
         case::nullable_annotation_float_type_constraint(
             load(r#"
                     null
