@@ -8,7 +8,7 @@
 
 use crate::import::Import;
 use crate::system::{TypeId, TypeStore};
-use crate::types::{TypeDefinitionImpl, TypeRef};
+use crate::types::{TypeDefinition, TypeDefinitionImpl};
 use std::rc::Rc;
 
 /// A Schema is a collection of zero or more [`TypeRef`]s.
@@ -55,11 +55,11 @@ impl Schema {
 
     /// Returns the requested type, if present in this schema or a a built in type;
     /// otherwise returns None.
-    pub fn get_type<A: AsRef<str>>(&self, name: A) -> Option<TypeRef> {
+    pub fn get_type<A: AsRef<str>>(&self, name: A) -> Option<TypeDefinition> {
         let type_id = self
             .types
             .get_built_in_type_id_or_defined_type_id_by_name(name.as_ref())?;
-        Some(TypeRef::new(*type_id, Rc::clone(&self.types)))
+        Some(TypeDefinition::new(*type_id, Rc::clone(&self.types)))
     }
 
     /// Returns an iterator over the types in this schema.
@@ -95,14 +95,14 @@ impl SchemaTypeIterator {
 }
 
 impl Iterator for SchemaTypeIterator {
-    type Item = TypeRef;
+    type Item = TypeDefinition;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.index >= self.types.len() {
             return None;
         }
         self.index += 1;
-        Some(TypeRef::new(
+        Some(TypeDefinition::new(
             self.types[self.index - 1],
             Rc::clone(&self.type_store),
         ))
@@ -1193,7 +1193,7 @@ mod schema_tests {
         schema: Rc<Schema>,
         type_name: &str,
     ) {
-        let type_ref: TypeRef = schema.get_type(type_name).unwrap();
+        let type_ref: TypeDefinition = schema.get_type(type_name).unwrap();
         // check for validation without any violations
         for valid_value in valid_values.iter() {
             // there is only a single type in each schema defined above hence validate with that type
