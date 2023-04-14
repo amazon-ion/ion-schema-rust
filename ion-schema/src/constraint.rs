@@ -1,7 +1,7 @@
 use crate::ion_path::{IonPath, IonPathElement};
 use crate::isl::isl_constraint::{IslConstraintImpl, IslRegexConstraint};
 use crate::isl::isl_range::{Range, RangeImpl};
-use crate::isl::isl_type_reference::{IslTypeRefImpl, IslTypeRefModifier};
+use crate::isl::isl_type_reference::{IslTypeRefImpl, NullabilityModifier};
 use crate::isl::util::{Annotation, TimestampOffset, TimestampPrecision, ValidValue};
 use crate::isl::IslVersion;
 use crate::nfa::{FinalState, NfaBuilder, NfaEvaluation};
@@ -74,7 +74,7 @@ impl Constraint {
     pub fn type_constraint(type_id: TypeId) -> Constraint {
         Constraint::Type(TypeConstraint::new(TypeReference::new(
             type_id,
-            IslTypeRefModifier::Nothing,
+            NullabilityModifier::Nothing,
         )))
     }
 
@@ -83,7 +83,7 @@ impl Constraint {
         let type_references = type_ids
             .into()
             .iter()
-            .map(|id| TypeReference::new(*id, IslTypeRefModifier::Nothing))
+            .map(|id| TypeReference::new(*id, NullabilityModifier::Nothing))
             .collect();
         Constraint::AllOf(AllOfConstraint::new(type_references))
     }
@@ -93,7 +93,7 @@ impl Constraint {
         let type_references = type_ids
             .into()
             .iter()
-            .map(|id| TypeReference::new(*id, IslTypeRefModifier::Nothing))
+            .map(|id| TypeReference::new(*id, NullabilityModifier::Nothing))
             .collect();
         Constraint::AnyOf(AnyOfConstraint::new(type_references))
     }
@@ -103,7 +103,7 @@ impl Constraint {
         let type_references = type_ids
             .into()
             .iter()
-            .map(|id| TypeReference::new(*id, IslTypeRefModifier::Nothing))
+            .map(|id| TypeReference::new(*id, NullabilityModifier::Nothing))
             .collect();
         Constraint::OneOf(OneOfConstraint::new(type_references))
     }
@@ -112,7 +112,7 @@ impl Constraint {
     pub fn not(type_id: TypeId) -> Constraint {
         Constraint::Not(NotConstraint::new(TypeReference::new(
             type_id,
-            IslTypeRefModifier::Nothing,
+            NullabilityModifier::Nothing,
         )))
     }
 
@@ -121,7 +121,7 @@ impl Constraint {
         let type_references = type_ids
             .into()
             .iter()
-            .map(|id| TypeReference::new(*id, IslTypeRefModifier::Nothing))
+            .map(|id| TypeReference::new(*id, NullabilityModifier::Nothing))
             .collect();
         Constraint::OrderedElements(OrderedElementsConstraint::new(type_references))
     }
@@ -154,7 +154,7 @@ impl Constraint {
     /// This method assumes that distinct elements are not required. IF you want to have distinct elements use `distinct_element` method instead.
     pub fn element(type_id: TypeId) -> Constraint {
         Constraint::Element(ElementConstraint::new(
-            TypeReference::new(type_id, IslTypeRefModifier::Nothing),
+            TypeReference::new(type_id, NullabilityModifier::Nothing),
             false,
         ))
     }
@@ -162,7 +162,7 @@ impl Constraint {
     /// Creates a [Constraint::Element] referring to the type represented by the provided [TypeId] where each element is distinct.
     pub fn distinct_element(type_id: TypeId) -> Constraint {
         Constraint::Element(ElementConstraint::new(
-            TypeReference::new(type_id, IslTypeRefModifier::Nothing),
+            TypeReference::new(type_id, NullabilityModifier::Nothing),
             true,
         ))
     }
@@ -237,7 +237,7 @@ impl Constraint {
             .map(|(field_name, type_id)| {
                 (
                     field_name,
-                    TypeReference::new(type_id, IslTypeRefModifier::Nothing),
+                    TypeReference::new(type_id, NullabilityModifier::Nothing),
                 )
             })
             .collect();
@@ -829,16 +829,16 @@ impl OrderedElementsConstraint {
 
             if state_id == 0 {
                 // add a transition to self for initial state
-                nfa_builder.with_transition(state_id, state_id, type_id, min, max);
+                nfa_builder.with_transition(state_id, state_id, *type_reference, min, max);
                 continue;
             }
 
             // add transition to next state
-            nfa_builder.with_transition(state_id - 1, state_id, type_id, min, max);
+            nfa_builder.with_transition(state_id - 1, state_id, *type_reference, min, max);
 
             if max > 1 {
                 // add a transition to self for states that have  max > 1
-                nfa_builder.with_transition(state_id, state_id, type_id, min, max);
+                nfa_builder.with_transition(state_id, state_id, *type_reference, min, max);
             }
         }
 

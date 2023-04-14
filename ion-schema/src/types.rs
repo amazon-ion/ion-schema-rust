@@ -497,7 +497,7 @@ impl TypeDefinitionImpl {
 
         let isl_struct = isl_type.isl_type_struct.as_ref();
         // add `type: any` as a default type constraint if there is no type constraint found
-        if !found_type_constraint {
+        if !found_type_constraint && isl_version == IslVersion::V1_0 {
             // set the isl type name for any error that is returned while parsing its constraints
             let isl_type_name = match type_name.to_owned() {
                 Some(name) => name,
@@ -507,8 +507,7 @@ impl TypeDefinitionImpl {
                 },
             };
 
-            let isl_constraint: IslConstraintImpl = match isl_version {
-                IslVersion::V1_0 => {
+            let isl_constraint: IslConstraintImpl =
                     // default type for ISL 1.0 is `any`
                     IslConstraintImpl::from_ion_element(
                         isl_version,
@@ -516,19 +515,7 @@ impl TypeDefinitionImpl {
                         &Element::symbol(Symbol::from("any")),
                         &isl_type_name,
                         &mut vec![],
-                    )?
-                }
-                IslVersion::V2_0 => {
-                    // default type for ISL 2.0 onwards is `$any`
-                    IslConstraintImpl::from_ion_element(
-                        isl_version,
-                        "type",
-                        &Element::symbol(Symbol::from("$any")),
-                        &isl_type_name,
-                        &mut vec![],
-                    )?
-                }
-            };
+                    )?;
 
             let constraint = Constraint::resolve_from_isl_constraint(
                 isl_version,

@@ -1,20 +1,21 @@
 use crate::ion_path::IonPath;
-use crate::isl::isl_type_reference::IslTypeRefModifier;
+use crate::isl::isl_type_reference::NullabilityModifier;
 use crate::result::ValidationResult;
 use crate::system::{TypeId, TypeStore};
 use crate::types::TypeValidator;
 use crate::IonSchemaElement;
 use ion_rs::IonType;
 
-/// Provides an internal representation of a schema type reference.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Provides reference to a type definition.
+/// This will be used by constraints to store type references.
+#[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
 pub struct TypeReference {
     type_id: TypeId,
-    type_modifier: IslTypeRefModifier,
+    type_modifier: NullabilityModifier,
 }
 
 impl TypeReference {
-    pub fn new(type_id: TypeId, type_modifier: IslTypeRefModifier) -> Self {
+    pub fn new(type_id: TypeId, type_modifier: NullabilityModifier) -> Self {
         Self {
             type_id,
             type_modifier,
@@ -43,7 +44,7 @@ impl TypeValidator for TypeReference {
         type_store: &TypeStore,
         ion_path: &mut IonPath,
     ) -> ValidationResult {
-        use crate::isl::isl_type_reference::IslTypeRefModifier::*;
+        use crate::isl::isl_type_reference::NullabilityModifier::*;
         let type_def = type_store.get_type_by_id(self.type_id()).unwrap();
         match self.type_modifier {
             Nullable => match value {
