@@ -112,7 +112,7 @@ pub mod v_1_0 {
     {
         IslConstraint::new(
             IslVersion::V1_0,
-            IslConstraintImpl::Fields(fields.map(|(s, t)| (s, t.type_reference)).collect()),
+            IslConstraintImpl::Fields(fields.map(|(s, t)| (s, t.type_reference)).collect(), false),
         )
     }
 
@@ -350,7 +350,7 @@ pub mod v_2_0 {
     {
         IslConstraint::new(
             IslVersion::V2_0,
-            IslConstraintImpl::Fields(fields.map(|(s, t)| (s, t.type_reference)).collect()),
+            IslConstraintImpl::Fields(fields.map(|(s, t)| (s, t.type_reference)).collect(), false),
         )
     }
 
@@ -490,7 +490,10 @@ pub(crate) enum IslConstraintImpl {
     // For ISL 1.0 which doesn't support `distinct` elements this will be (type_reference, false).
     Element(IslTypeRefImpl, bool),
     Exponent(Range),
-    Fields(HashMap<String, IslTypeRefImpl>),
+    // Represents Fields(fields, content_closed)
+    // For ISL 2.0 true/false is specified based on whether `closed::` annotation is present or not
+    // For ISL 1.0 this will always be (fields, false) as it doesn't support `closed::` annotation on fields constraint
+    Fields(HashMap<String, IslTypeRefImpl>, bool),
     Not(IslTypeRefImpl),
     Occurs(Range),
     OneOf(Vec<IslTypeRefImpl>),
@@ -658,7 +661,22 @@ impl IslConstraintImpl {
                         "fields constraint can not be empty",
                     ));
                 }
-                Ok(IslConstraintImpl::Fields(fields))
+                match isl_version {
+                    IslVersion::V1_0 => Ok(IslConstraintImpl::Fields(fields, false)),
+                    IslVersion::V2_0 => {
+                        if value.annotations().count() > 1
+                            || value.annotations().any(|a| a.text() != Some("closed"))
+                        {
+                            return Err(invalid_schema_error_raw(
+                                "fields constraint may have at most one annotation",
+                            ));
+                        }
+                        Ok(IslConstraintImpl::Fields(
+                            fields,
+                            value.has_annotation("closed"),
+                        ))
+                    }
+                }
             }
             "one_of" => {
                 let types: Vec<IslTypeRefImpl> =
@@ -700,7 +718,14 @@ impl IslConstraintImpl {
                             }
                         }
                     }
-                    Int | List => Range::from_ion_element(value, RangeType::NonNegativeInteger)?,
+                    List | Int => {
+                        if value.ion_type() == Int
+                            && value.as_int().unwrap() <= &ion_rs::Int::I64(0)
+                        {
+                            return invalid_schema_error("occurs constraint can not be 0");
+                        }
+                        Range::from_ion_element(value, RangeType::NonNegativeInteger)?
+                    }
                     _ => {
                         return invalid_schema_error(format!(
                             "ion type: {:?} is not supported with occurs constraint",
@@ -888,12 +913,22 @@ impl IslConstraintImpl {
                 value.ion_type()
             )));
         }
-
         value
             .as_struct()
             .unwrap()
             .iter()
             .map(|(f, v)| {
+                if value
+                    .as_struct()
+                    .unwrap()
+                    .get_all(f.text().unwrap())
+                    .count()
+                    > 1
+                {
+                    return invalid_schema_error(
+                        "fields must be a struct with no repeated field names",
+                    );
+                }
                 IslTypeRefImpl::from_ion_element(isl_version, v, inline_imported_types)
                     .map(|t| (f.text().unwrap().to_owned(), t))
             })

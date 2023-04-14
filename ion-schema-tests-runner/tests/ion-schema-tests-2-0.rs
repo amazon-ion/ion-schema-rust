@@ -16,7 +16,6 @@ ion_schema_tests!(
         "constraints::container_length",
         "constraints::contains",
         "constraints::field_names",
-        "constraints::fields",
         "constraints::ieee754_float",
         "constraints::not",
         "constraints::one_of",

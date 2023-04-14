@@ -358,7 +358,11 @@ impl Constraint {
                     *require_distinct_elements,
                 )))
             }
-            IslConstraintImpl::Fields(fields) => {
+            IslConstraintImpl::Fields(fields, content_closed) => {
+                let open_content = match isl_version {
+                    IslVersion::V1_0 => open_content,
+                    IslVersion::V2_0 => !content_closed, // for ISL 2.0 whether open content is allowed or not depends on `fields` constraint
+                };
                 let fields_constraint: FieldsConstraint =
                     FieldsConstraint::resolve_from_isl_constraint(
                         isl_version,
