@@ -10,7 +10,7 @@ use crate::result::{
     ValidationResult,
 };
 use crate::system::{PendingTypes, TypeId, TypeStore};
-use crate::type_reference::TypeReference;
+use crate::type_reference::{TypeReference, VariablyOccurringTypeRef};
 use crate::types::TypeValidator;
 use crate::violation::{Violation, ViolationCode};
 use crate::IonSchemaElement;
@@ -57,7 +57,7 @@ pub enum Constraint {
     Not(NotConstraint),
     OneOf(OneOfConstraint),
     OrderedElements(OrderedElementsConstraint),
-    Occurs(OccursConstraint),
+    Occurs,
     Precision(PrecisionConstraint),
     Regex(RegexConstraint),
     Scale(ScaleConstraint),
@@ -121,7 +121,12 @@ impl Constraint {
         let type_references = type_ids
             .into()
             .iter()
-            .map(|id| TypeReference::new(*id, NullabilityModifier::Nothing))
+            .map(|id| {
+                VariablyOccurringTypeRef::new(
+                    TypeReference::new(*id, NullabilityModifier::Nothing),
+                    Range::required(),
+                )
+            })
             .collect();
         Constraint::OrderedElements(OrderedElementsConstraint::new(type_references))
     }
@@ -237,7 +242,10 @@ impl Constraint {
             .map(|(field_name, type_id)| {
                 (
                     field_name,
-                    TypeReference::new(type_id, NullabilityModifier::Nothing),
+                    VariablyOccurringTypeRef::new(
+                        TypeReference::new(type_id, NullabilityModifier::Nothing),
+                        Range::optional(),
+                    ),
                 )
             })
             .collect();
@@ -388,19 +396,16 @@ impl Constraint {
                 )?;
                 Ok(Constraint::Type(TypeConstraint::new(type_id)))
             }
-            IslConstraintImpl::Occurs(occurs_range) => Ok(Constraint::Occurs(
-                OccursConstraint::new(occurs_range.to_owned()),
-            )),
+            IslConstraintImpl::Occurs(_) => Ok(Constraint::Occurs),
             IslConstraintImpl::OrderedElements(isl_type_references) => {
-                let type_references = Constraint::resolve_type_references(
-                    isl_version,
-                    isl_type_references,
-                    type_store,
-                    pending_types,
-                )?;
-                Ok(Constraint::OrderedElements(OrderedElementsConstraint::new(
-                    type_references,
-                )))
+                Ok(Constraint::OrderedElements(
+                    OrderedElementsConstraint::resolve_from_isl_constraint(
+                        isl_version,
+                        isl_type_references,
+                        type_store,
+                        pending_types,
+                    )?,
+                ))
             }
             IslConstraintImpl::Precision(precision_range) => Ok(Constraint::Precision(
                 PrecisionConstraint::new(precision_range.to_owned()),
@@ -473,7 +478,13 @@ impl Constraint {
             Constraint::Type(type_constraint) => {
                 type_constraint.validate(value, type_store, ion_path)
             }
-            Constraint::Occurs(occurs) => occurs.validate(value, type_store, ion_path),
+            Constraint::Occurs => {
+                // No op
+                // `occurs` does not work as a constraint by its own, it needs to be used with other constraints
+                // e.g. `ordered_elements`, `fields`, etc.
+                // the validation for occurs is done within these other constraints
+                Ok(())
+            }
             Constraint::OrderedElements(ordered_elements) => {
                 ordered_elements.validate(value, type_store, ion_path)
             }
@@ -698,47 +709,15 @@ impl ConstraintValidator for TypeConstraint {
     }
 }
 
-/// Implements an `occurs` constraint of Ion Schema
-/// [occurs]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#type-definitions
-#[derive(Debug, Clone, PartialEq)]
-pub struct OccursConstraint {
-    occurs_range: Range,
-}
-
-impl OccursConstraint {
-    pub fn new(occurs_range: Range) -> Self {
-        Self { occurs_range }
-    }
-
-    pub fn occurs_range(&self) -> &Range {
-        &self.occurs_range
-    }
-}
-
-impl ConstraintValidator for OccursConstraint {
-    fn validate(
-        &self,
-        value: &IonSchemaElement,
-        type_store: &TypeStore,
-        ion_path: &mut IonPath,
-    ) -> ValidationResult {
-        // No op
-        // `occurs` does not work as a constraint by its own, it needs to be used with other constraints
-        // e.g. `ordered_elements`, `fields`, etc.
-        // the validation for occurs is done within these other constraints
-        Ok(())
-    }
-}
-
 /// Implements an `ordered_elements` constraint of Ion Schema
 /// [ordered_elements]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#ordered_elements
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct OrderedElementsConstraint {
-    type_references: Vec<TypeReference>,
+    type_references: Vec<VariablyOccurringTypeRef>,
 }
 
 impl OrderedElementsConstraint {
-    pub fn new(type_references: Vec<TypeReference>) -> Self {
+    pub fn new(type_references: Vec<VariablyOccurringTypeRef>) -> Self {
         Self { type_references }
     }
 
@@ -749,12 +728,21 @@ impl OrderedElementsConstraint {
         type_store: &mut TypeStore,
         pending_types: &mut PendingTypes,
     ) -> IonSchemaResult<Self> {
-        let resolved_types: Vec<TypeReference> = type_references
+        let resolved_types: Vec<VariablyOccurringTypeRef> = type_references
             .iter()
             .map(|t| {
+                // resolve type references and create variably occurring type reference with occurs range
+                // default `occurs` field value for `ordered_elements` constraint is `occurs: required` or `occurs: 1`
                 IslTypeRefImpl::resolve_type_reference(isl_version, t, type_store, pending_types)
+                    .map(|type_ref| {
+                        VariablyOccurringTypeRef::new(
+                            type_ref,
+                            t.get_occurs_range().unwrap_or(Range::required()),
+                        )
+                    })
             })
-            .collect::<IonSchemaResult<Vec<TypeReference>>>()?;
+            .collect::<IonSchemaResult<Vec<VariablyOccurringTypeRef>>>()?;
+
         Ok(OrderedElementsConstraint::new(resolved_types))
     }
 
@@ -805,15 +793,14 @@ impl OrderedElementsConstraint {
     // As shown above visit count for `END` doesn't have final state in it which means the value resulted to be invalid.
     //
     fn build_nfa_from_type_references(
-        type_ids: &[TypeReference],
+        type_ids: &[VariablyOccurringTypeRef],
         type_store: &TypeStore,
     ) -> NfaEvaluation {
         let mut nfa_builder = NfaBuilder::new();
         let mut final_states = HashSet::new();
-        for (state_id, type_reference) in type_ids.iter().enumerate() {
-            let type_id = type_reference.type_id();
-            let type_def = type_store.get_type_by_id(type_id).unwrap();
-            let occurs_range: Range = type_def.get_occurs_constraint("ordered_elements");
+        for (state_id, variably_occurring_type_reference) in type_ids.iter().enumerate() {
+            let type_reference = variably_occurring_type_reference.type_ref();
+            let occurs_range: &Range = variably_occurring_type_reference.occurs_range();
 
             // unwrap here won't lead to panic as the check for non negative range was already done while parsing ordered_elements constraint
             let (min, max) = occurs_range.non_negative_range_boundaries().unwrap();
@@ -829,16 +816,16 @@ impl OrderedElementsConstraint {
 
             if state_id == 0 {
                 // add a transition to self for initial state
-                nfa_builder.with_transition(state_id, state_id, *type_reference, min, max);
+                nfa_builder.with_transition(state_id, state_id, type_reference, min, max);
                 continue;
             }
 
             // add transition to next state
-            nfa_builder.with_transition(state_id - 1, state_id, *type_reference, min, max);
+            nfa_builder.with_transition(state_id - 1, state_id, type_reference, min, max);
 
             if max > 1 {
                 // add a transition to self for states that have  max > 1
-                nfa_builder.with_transition(state_id, state_id, *type_reference, min, max);
+                nfa_builder.with_transition(state_id, state_id, type_reference, min, max);
             }
         }
 
@@ -913,14 +900,14 @@ impl ConstraintValidator for OrderedElementsConstraint {
 
 /// Implements an `fields` constraint of Ion Schema
 /// [fields]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#fields
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FieldsConstraint {
-    fields: HashMap<String, TypeReference>,
+    fields: HashMap<String, VariablyOccurringTypeRef>,
     open_content: bool,
 }
 
 impl FieldsConstraint {
-    pub fn new(fields: HashMap<String, TypeReference>, open_content: bool) -> Self {
+    pub fn new(fields: HashMap<String, VariablyOccurringTypeRef>, open_content: bool) -> Self {
         Self {
             fields,
             open_content,
@@ -940,13 +927,23 @@ impl FieldsConstraint {
         pending_types: &mut PendingTypes,
         open_content: bool, // Indicates if open content is allowed or not for the fields in the container
     ) -> IonSchemaResult<Self> {
-        let resolved_fields: HashMap<String, TypeReference> = fields
+        let resolved_fields: HashMap<String, VariablyOccurringTypeRef> = fields
             .iter()
             .map(|(f, t)| {
+                // resolve type references and create variably occurring type reference with occurs range
+                // default `occurs` field value for `fields` constraint is `occurs: optional` or `occurs: range::[0, 1]`
                 IslTypeRefImpl::resolve_type_reference(isl_version, t, type_store, pending_types)
-                    .map(|type_reference| (f.to_owned(), type_reference))
+                    .map(|type_ref| {
+                        (
+                            f.to_owned(),
+                            VariablyOccurringTypeRef::new(
+                                type_ref,
+                                t.get_occurs_range().unwrap_or(Range::optional()),
+                            ),
+                        )
+                    })
             })
-            .collect::<IonSchemaResult<HashMap<String, TypeReference>>>()?;
+            .collect::<IonSchemaResult<HashMap<String, VariablyOccurringTypeRef>>>()?;
         Ok(FieldsConstraint::new(resolved_fields, open_content))
     }
 }
@@ -981,16 +978,15 @@ impl ConstraintValidator for FieldsConstraint {
         }
 
         // get the values corresponding to the field_name and perform occurs_validation based on the type_def
-        for (field_name, type_reference) in &self.fields {
-            let type_id = type_reference.type_id();
-            let type_def = type_store.get_type_by_id(type_id).unwrap();
+        for (field_name, variably_occurring_type_ref) in &self.fields {
+            let type_reference = variably_occurring_type_ref.type_ref();
             let values: Vec<&Element> = ion_struct.get_all(field_name).collect();
 
             // add parent value for current field in ion path
             ion_path.push(IonPathElement::Field(field_name.to_owned()));
 
             // perform occurs validation for type_def for all values of the given field_name
-            let occurs_range: Range = type_def.get_occurs_constraint("fields");
+            let occurs_range: &Range = variably_occurring_type_ref.occurs_range();
 
             // verify if values follow occurs_range constraint
             if !occurs_range.contains(&(values.len() as i64).into()) {

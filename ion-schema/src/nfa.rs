@@ -337,7 +337,7 @@ impl NfaBuilder {
 
         end_states.insert(Transition {
             destination: end_id,
-            type_ref: type_ref,
+            type_ref,
             min,
             max,
         });

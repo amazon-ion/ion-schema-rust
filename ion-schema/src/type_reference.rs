@@ -1,4 +1,5 @@
 use crate::ion_path::IonPath;
+use crate::isl::isl_range::Range;
 use crate::isl::isl_type_reference::NullabilityModifier;
 use crate::result::ValidationResult;
 use crate::system::{TypeId, TypeStore};
@@ -69,5 +70,30 @@ impl TypeValidator for TypeReference {
             Nothing => {}
         }
         type_def.validate(value, type_store, ion_path)
+    }
+}
+
+/// Provides reference to a type definition that has an `occurs` field.
+/// This will be used by `ordered_elements` and `fields` constraints to store variably occurring type references.
+#[derive(Debug, Clone, PartialEq)]
+pub struct VariablyOccurringTypeRef {
+    type_ref: TypeReference,
+    occurs_range: Range, // represents the range provided by `occurs` field for given type reference
+}
+
+impl VariablyOccurringTypeRef {
+    pub fn new(type_ref: TypeReference, occurs_range: Range) -> Self {
+        Self {
+            type_ref,
+            occurs_range,
+        }
+    }
+
+    pub fn type_ref(&self) -> TypeReference {
+        self.type_ref
+    }
+
+    pub fn occurs_range(&self) -> &Range {
+        &self.occurs_range
     }
 }

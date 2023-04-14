@@ -1,4 +1,5 @@
 use crate::isl::isl_import::{IslImport, IslImportType};
+use crate::isl::isl_range::Range;
 use crate::isl::isl_type::IslTypeImpl;
 use crate::isl::IslVersion;
 use crate::result::{
@@ -104,16 +105,23 @@ pub(crate) enum IslTypeRefImpl {
 }
 
 impl IslTypeRefImpl {
-    /// Verifies if the given type reference contains an `occurs` field or not
+    /// Returns range for `occurs` field if `occurs` is present in the given type reference
+    /// Otherwise, returns `None`
     // This is used to make sure only `ordered_elements` and `fields` constraint can contain `occurs`.
-    // This method returns `false` for `Named` or `TypeImport` type references because `occurs` field is not allowed within named type definitions.
-    pub fn get_occurs_constraint(&self) -> bool {
+    // This method returns `None` for `Named` or `TypeImport` type references because `occurs` field is not allowed within named type definitions.
+    pub fn get_occurs_range(&self) -> Option<Range> {
         match self {
-            IslTypeRefImpl::Anonymous(anonymous_type_def, modifier) => anonymous_type_def
-                .constraints()
-                .iter()
-                .any(|c| matches!(c, IslConstraintImpl::Occurs(_))),
-            _ => false,
+            IslTypeRefImpl::Anonymous(anonymous_type_def, _) => {
+                if let Some(IslConstraintImpl::Occurs(occurs)) = anonymous_type_def
+                    .constraints()
+                    .iter()
+                    .find(|c| matches!(c, IslConstraintImpl::Occurs(_)))
+                {
+                    return Some(occurs.to_owned());
+                }
+                None
+            }
+            _ => None,
         }
     }
 

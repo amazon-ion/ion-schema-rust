@@ -1,7 +1,6 @@
 use crate::constraint::Constraint;
 use crate::ion_path::IonPath;
 use crate::isl::isl_constraint::IslConstraintImpl;
-use crate::isl::isl_range::Range;
 use crate::isl::isl_type::IslTypeImpl;
 use crate::isl::IslVersion;
 use crate::result::{IonSchemaResult, ValidationResult};
@@ -318,26 +317,6 @@ impl TypeDefinitionKind {
             .unwrap();
 
         type_def.is_valid(value, type_store, ion_path)
-    }
-
-    /// Returns an occurs constraint as range if it exists in the [`TypeDefinition`] otherwise returns `occurs: required`
-    pub fn get_occurs_constraint(&self, validation_constraint_name: &str) -> Range {
-        // verify if the type_def contains `occurs` constraint and fill occurs_range
-        // Otherwise if there is no `occurs` constraint specified then use `occurs: required`
-        if let Some(Constraint::Occurs(occurs)) = self
-            .constraints()
-            .iter()
-            .find(|c| matches!(c, Constraint::Occurs(_)))
-        {
-            return occurs.occurs_range().to_owned();
-        }
-        // by default, if there is no `occurs` constraint for given type_def
-        // then use `occurs:optional` if its `fields` constraint validation
-        // otherwise, use `occurs: required` if its `ordered_elements` constraint validation
-        if validation_constraint_name == "fields" {
-            return Range::optional();
-        }
-        Range::required()
     }
 }
 
