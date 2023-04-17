@@ -427,6 +427,12 @@ mod isl_tests {
                 "#),
         anonymous_type([fields(vec![("name".to_owned(), named_type_ref("string")), ("id".to_owned(), named_type_ref("int"))].into_iter())]),
     ),
+    case::field_names_constraint(
+        load_anonymous_type_v2_0(r#" // For a schema with field_names constraint as below:
+                        { field_names: distinct::symbol }
+                    "#),
+        isl_type::v_2_0::anonymous_type([isl_constraint::v_2_0::field_names(isl_type_reference::v_2_0::named_type_ref("symbol"), true)]),
+    ),
     case::contains_constraint(
         load_anonymous_type(r#" // For a schema with contains constraint as below:
                     { contains: [true, 1, "hello"] }

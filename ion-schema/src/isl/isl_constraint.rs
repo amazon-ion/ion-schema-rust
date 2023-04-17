@@ -354,6 +354,14 @@ pub mod v_2_0 {
         )
     }
 
+    /// Creates an [IslConstraint::FieldNames] using the [IslTypeRef] referenced inside it and considers whether distinct elements are required or not
+    pub fn field_names(isl_type: IslTypeRef, require_distinct_field_names: bool) -> IslConstraint {
+        IslConstraint::new(
+            IslVersion::V2_0,
+            IslConstraintImpl::FieldNames(isl_type.type_reference, require_distinct_field_names),
+        )
+    }
+
     /// Creates an [IslConstraint::Not] using the [IslTypeRef] referenced inside it
     pub fn not(isl_type: IslTypeRef) -> IslConstraint {
         IslConstraint::new(
@@ -494,6 +502,10 @@ pub(crate) enum IslConstraintImpl {
     // For ISL 2.0 true/false is specified based on whether `closed::` annotation is present or not
     // For ISL 1.0 this will always be (fields, false) as it doesn't support `closed::` annotation on fields constraint
     Fields(HashMap<String, IslTypeRefImpl>, bool),
+    // Represents FieldNames(type_reference, expected_distinct).
+    // For ISL 2.0 true/false is specified based on whether `distinct` annotation is present or not.
+    // For ISL 1.0 which doesn't support `field_names` constraint this will be (type_reference, false).
+    FieldNames(IslTypeRefImpl, bool),
     Not(IslTypeRefImpl),
     Occurs(Range),
     OneOf(Vec<IslTypeRefImpl>),
@@ -645,6 +657,42 @@ impl IslConstraintImpl {
                         }
 
                         Ok(IslConstraintImpl::Element(type_reference, require_distinct))
+                    }
+                }
+            }
+            "field_names" => {
+                let type_reference =
+                    IslTypeRefImpl::from_ion_element(isl_version, value, inline_imported_types)?;
+                match isl_version {
+                    IslVersion::V1_0 => {
+                        // for ISL 1.0 `field_names` constraint does not exist hence `field_names` will be considered as open content
+                        Ok(IslConstraintImpl::Unknown(
+                            constraint_name.to_string(),
+                            value.to_owned(),
+                        ))
+                    }
+                    IslVersion::V2_0 => {
+                        // return error if there are any annotations other than `distinct`
+                        if value.annotations().any(|a| a.text() != Some("distinct")) {
+                            return Err(invalid_schema_error_raw(
+                                "element constraint can only contain `distinct` annotation",
+                            ));
+                        }
+
+                        // verify whether `distinct`annotation is present or not
+                        let require_distinct = value.has_annotation("distinct");
+
+                        // return error if the type reference contains `occurs` constraint
+                        if type_reference.get_occurs_range().is_some() {
+                            return Err(invalid_schema_error_raw(
+                                "field_names constraint can not contain type references that contain `occurs` constraint",
+                            ));
+                        }
+
+                        Ok(IslConstraintImpl::FieldNames(
+                            type_reference,
+                            require_distinct,
+                        ))
                     }
                 }
             }

@@ -207,6 +207,13 @@ mod schema_tests {
             "#).into_iter(),
         1 // this includes named type fields_type
     ),
+    case::field_names_constraint(
+        load(r#" // For a schema with field_names constraint as below:
+                    $ion_schema_2_0
+                    type:: { name: field_names_type, field_names: distinct::symbol } 
+            "#).into_iter(),
+        1 // this includes named type field_names_type
+    ),
     case::contains_constraint(
         load(r#" // For a schema with contains constraint as below:
                 type:: { name: contains_type, contains: [true, 1, "hello"] }
@@ -776,6 +783,25 @@ mod schema_tests {
                         type:: { name: fields_type, fields: closed::{ name: { type: string, occurs: range::[0,2] }, id: int } }
                 "#),
                 "fields_type"
+        ),
+        case::field_names_constraint(
+                load(r#"
+                     { name: "Ion", id: 1 }
+                     { id: 1 }
+                     { name: "Ion" }
+                     { }
+                "#),
+                load(r#"
+                    null.struct
+                    null
+                    { name: "Ion", id: 1, name: "Schema" }
+                    { name: "Ion", id: 1, id: 2 }
+                "#),
+                load_schema_from_text(r#" // For a schema with field_names constraint as below:
+                        $ion_schema_2_0
+                        type:: { name: field_names_type, field_names: distinct::symbol }
+                "#),
+                "field_names_type"
         ),
         case::contains_constraint(
                 load(r#"

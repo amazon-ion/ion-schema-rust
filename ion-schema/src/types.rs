@@ -699,6 +699,13 @@ mod type_definition_tests {
         anonymous_type([fields(vec![("name".to_owned(), named_type_ref("string")), ("id".to_owned(), named_type_ref("int"))].into_iter())]),
     TypeDefinitionKind::anonymous([Constraint::fields(vec![("name".to_owned(), 4), ("id".to_owned(), 0)].into_iter()), Constraint::type_constraint(34)])
     ),
+    case::field_names_constraint(
+        /* For a schema with field_names constraint as below:
+            { field_names: distinct::symbol }
+        */
+    isl_type::v_2_0::anonymous_type([isl_constraint::v_2_0::field_names(named_type_ref("symbol"), true)]),
+    TypeDefinitionKind::anonymous([Constraint::distinct_field_names(5), Constraint::type_constraint(34)])
+    ),
     case::contains_constraint(
         /* For a schema with contains constraint as below:
             { contains: [true, 1, "hello"] }

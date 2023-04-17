@@ -15,7 +15,7 @@ use crate::types::TypeValidator;
 use crate::violation::{Violation, ViolationCode};
 use crate::IonSchemaElement;
 use ion_rs::element::Element;
-use ion_rs::{Int, IonType};
+use ion_rs::{Int, IonType, Symbol};
 use regex::{Regex, RegexBuilder};
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
@@ -53,6 +53,7 @@ pub enum Constraint {
     ContainerLength(ContainerLengthConstraint),
     Element(ElementConstraint),
     Exponent(ExponentConstraint),
+    FieldNames(FieldNamesConstraint),
     Fields(FieldsConstraint),
     Not(NotConstraint),
     OneOf(OneOfConstraint),
@@ -252,6 +253,22 @@ impl Constraint {
         Constraint::Fields(FieldsConstraint::new(fields, true))
     }
 
+    /// Creates a [Constraint::FieldNames] referring to the type represented by the provided [TypeId] where each field name is distinct.
+    pub fn distinct_field_names(type_id: TypeId) -> Constraint {
+        Constraint::FieldNames(FieldNamesConstraint::new(
+            TypeReference::new(type_id, NullabilityModifier::Nothing),
+            true,
+        ))
+    }
+
+    /// Creates a [Constraint::FieldNames] referring to the type represented by the provided [TypeId] where each field name.
+    pub fn field_names(type_id: TypeId) -> Constraint {
+        Constraint::FieldNames(FieldNamesConstraint::new(
+            TypeReference::new(type_id, NullabilityModifier::Nothing),
+            false,
+        ))
+    }
+
     /// Creates a [Constraint::ValidValues] using the [Element]s specified inside it
     /// Returns an IonSchemaError if any of the Elements have an annotation other than `range`
     pub fn valid_values_with_values(values: Vec<Element>) -> IonSchemaResult<Constraint> {
@@ -356,6 +373,18 @@ impl Constraint {
                 Ok(Constraint::Element(ElementConstraint::new(
                     type_id,
                     *require_distinct_elements,
+                )))
+            }
+            IslConstraintImpl::FieldNames(isl_type_reference, distinct) => {
+                let type_reference = IslTypeRefImpl::resolve_type_reference(
+                    isl_version,
+                    isl_type_reference,
+                    type_store,
+                    pending_types,
+                )?;
+                Ok(Constraint::FieldNames(FieldNamesConstraint::new(
+                    type_reference,
+                    *distinct,
                 )))
             }
             IslConstraintImpl::Fields(fields, content_closed) => {
@@ -476,6 +505,9 @@ impl Constraint {
                 container_length.validate(value, type_store, ion_path)
             }
             Constraint::Element(element) => element.validate(value, type_store, ion_path),
+            Constraint::FieldNames(field_names) => {
+                field_names.validate(value, type_store, ion_path)
+            }
             Constraint::Fields(fields) => fields.validate(value, type_store, ion_path),
             Constraint::Not(not) => not.validate(value, type_store, ion_path),
             Constraint::OneOf(one_of) => one_of.validate(value, type_store, ion_path),
@@ -1032,6 +1064,117 @@ impl ConstraintValidator for FieldsConstraint {
             ));
         }
         Ok(())
+    }
+}
+
+/// Implements an `field_names` constraint of Ion Schema
+/// [field_names]: https://amazon-ion.github.io/ion-schema/docs/isl-2-0/spec#field_names
+#[derive(Debug, Clone, PartialEq)]
+pub struct FieldNamesConstraint {
+    type_reference: TypeReference,
+    requires_distinct: bool,
+}
+
+impl FieldNamesConstraint {
+    pub fn new(type_reference: TypeReference, requires_distinct: bool) -> Self {
+        Self {
+            type_reference,
+            requires_distinct,
+        }
+    }
+}
+
+impl ConstraintValidator for FieldNamesConstraint {
+    fn validate(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> ValidationResult {
+        let mut violations: Vec<Violation> = vec![];
+
+        // create a set for checking duplicate elements
+        let mut element_set = vec![];
+
+        // get elements for given container in the form (ion_path_element, element_value)
+        let elements: Vec<(IonPathElement, &Element)> = match value {
+            IonSchemaElement::SingleElement(element) => {
+                // Check for null struct
+                if element.is_null() {
+                    return Err(Violation::new(
+                        "field_names",
+                        ViolationCode::TypeMismatched,
+                        "expected a struct but found null",
+                        ion_path,
+                    ));
+                }
+
+                return match element.as_struct() {
+                    Some(struct_value) => {
+                        let field_names: Vec<(IonPathElement, &Symbol)> = struct_value
+                            .iter()
+                            .map(|(field_name, val)| {
+                                (
+                                    IonPathElement::Field(field_name.text().unwrap().to_owned()),
+                                    field_name,
+                                )
+                            })
+                            .collect();
+                        // validate field_names constraint
+                        for (ion_path_element, field_name) in field_names {
+                            ion_path.push(ion_path_element);
+                            let schema_element: IonSchemaElement =
+                                (&Element::symbol(field_name)).into();
+
+                            if let Err(violation) =
+                                self.type_reference
+                                    .validate(&schema_element, type_store, ion_path)
+                            {
+                                violations.push(violation);
+                            }
+                            if self.requires_distinct && element_set.contains(&field_name) {
+                                violations.push(Violation::new(
+                                    "field_names",
+                                    ViolationCode::ElementNotDistinct,
+                                    format!("expected distinct field names but found duplicate field name {field_name}", ),
+                                    ion_path,
+                                ))
+                            }
+                            element_set.push(field_name);
+                            ion_path.pop();
+                        }
+                        if !violations.is_empty() {
+                            return Err(Violation::with_violations(
+                                "field_names",
+                                ViolationCode::ElementMismatched,
+                                "one or more field names don't satisfy field_names constraint",
+                                ion_path,
+                                violations,
+                            ));
+                        }
+                        Ok(())
+                    }
+                    None => {
+                        // return Violation if value is not a struct
+                        Err(Violation::new(
+                            "field_names",
+                            ViolationCode::TypeMismatched,
+                            format!("expected a struct but found {}", element.ion_type()),
+                            ion_path,
+                        ))
+                    }
+                };
+            }
+            IonSchemaElement::Document(_) => {
+                // return Violation if value is not a struct
+                return Err(Violation::new(
+                    "field_names",
+                    ViolationCode::TypeMismatched,
+                    "expected a struct but found document",
+                    ion_path,
+                ));
+            }
+        };
     }
 }
 
