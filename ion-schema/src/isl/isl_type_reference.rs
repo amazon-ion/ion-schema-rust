@@ -132,6 +132,25 @@ impl IslTypeRefImpl {
         inline_imported_types: &mut Vec<IslImportType>,
     ) -> IonSchemaResult<Self> {
         use crate::isl::isl_type_reference::NullabilityModifier::*;
+        let nullability = if value.has_annotation("nullable") {
+            if isl_version == IslVersion::V1_0 {
+                Nullable
+            } else {
+                return invalid_schema_error(
+                    "`nullable::` modifier is not supported since ISL 2.0",
+                );
+            }
+        } else if value.has_annotation("$null_or") {
+            if isl_version != IslVersion::V1_0 {
+                NullOr
+            } else {
+                return invalid_schema_error(
+                    "`$null_or::` modifier is not supported before ISL 2.0",
+                );
+            }
+        } else {
+            Nothing
+        };
         match value.ion_type() {
             IonType::Symbol => {
                 if value.is_null() {
@@ -149,16 +168,11 @@ impl IslTypeRefImpl {
                     })?;
 
                 // check for nullable type reference
-                if value.has_annotation("nullable") {
-                    if isl_version == IslVersion::V2_0 {
-                        return invalid_schema_error(
-                            "`nullable::` modifier is not supported since ISL 2.0",
-                        )
-                    }
-
+                if nullability == Nullable {
                     return match type_name {
-                        // TODO: currently it only allows for built in types to be defined with `nullable` annotation for `document` and all other type references it returns an error
-                        "int" | "float" | "bool" | "decimal" | "string" | "symbol" | "blob" | "clob" | "timestamp" | "struct" | "sexp" | "list" | "text" | "lob" | "number" | "any" | "nothing" => {
+                        // TODO: currently it only allows for built in types (other than `document`) to be defined with `nullable` annotation. For `document` and all other type references it returns an error.
+                        "int" | "float" | "bool" | "decimal" | "string" | "symbol" | "blob" | "clob" | "timestamp" | "struct" | "sexp" | "list" | "text" | "lob" | "number" | "any" | "nothing" |
+                        "$int" | "$float" | "$bool" | "$decimal" | "$string" | "$symbol" | "$blob" | "$clob" | "$timestamp" | "$struct" | "$sexp" | "$list" | "$text" | "$lob" | "$number" | "$any" => {
                             Ok(IslTypeRefImpl::Named(type_name.to_owned(), Nullable))
                         }
                         _ => {
@@ -169,17 +183,7 @@ impl IslTypeRefImpl {
                     }
                 }
 
-                // check for `$null_or` type reference
-                if value.has_annotation("$null_or") {
-                    if isl_version == IslVersion::V1_0 {
-                        return invalid_schema_error(
-                            "`$null_or::` modifier is not supported before ISL 2.0",
-                        )
-                    }
-                    return Ok(IslTypeRefImpl::Named(type_name.to_owned(), NullOr))
-                }
-
-                Ok(IslTypeRefImpl::Named(type_name.to_owned(), Nothing))
+                Ok(IslTypeRefImpl::Named(type_name.to_owned(), nullability))
             }
             IonType::Struct => {
                 if value.is_null() {
@@ -187,29 +191,13 @@ impl IslTypeRefImpl {
                         "a base or alias type reference can not be null.struct",
                     )
                 }
-                let mut isl_type_ref_modifier = Nothing;
 
                 // check for nullable type reference
-                if value.has_annotation("nullable") {
-                    if isl_version == IslVersion::V2_0 {
-                        return invalid_schema_error(
-                            "`nullable::` modifier is not supported since ISL 2.0",
-                        )
-                    }
-                    // TODO: currently it only allows for built in types to be defined with `nullable` annotation for `document` and all other type references it returns an error
+                if nullability == Nullable {
+                    // TODO: currently it only allows for built in types (other than `document`) to be defined with `nullable` annotation. For `document` and all other type references it returns an error.
                     return invalid_schema_error(
                         "`nullable` modifier is only supported for built-in types",
                     )
-                }
-
-                // check for `$null_or` type reference
-                if value.has_annotation("$null_or") {
-                    if isl_version == IslVersion::V1_0 {
-                        return invalid_schema_error(
-                            "`$null_or::` modifier is not supported before ISL 2.0",
-                        )
-                    }
-                    isl_type_ref_modifier = NullOr
                 }
 
                 let value_struct = try_to!(value.as_struct());
@@ -217,14 +205,14 @@ impl IslTypeRefImpl {
                 if value_struct.get("id").is_none() {
                     let type_def =IslTypeImpl::from_owned_element(isl_version, value, inline_imported_types)?;
                     // if type reference contains `occurs` field and has modifier `$null_or` then return an error
-                    if isl_type_ref_modifier == NullabilityModifier::NullOr && type_def.constraints()
+                    if nullability == NullOr && type_def.constraints()
                         .iter()
                         .any(|c| matches!(c, IslConstraintImpl::Occurs(_))) {
                         return invalid_schema_error(
                             "`$null_or` annotation is not supported for a type reference with an explicit `occurs` field",
                         )
                     }
-                    return Ok(IslTypeRefImpl::Anonymous(type_def, isl_type_ref_modifier))
+                    return Ok(IslTypeRefImpl::Anonymous(type_def, nullability))
                 }
                 // if it is an inline import type store it as import type reference
                  let isl_import_type = match IslImport::from_ion_element(value)? {
@@ -239,7 +227,7 @@ impl IslTypeRefImpl {
                 // if an inline import type is encountered add it in the inline_imports_types
                 // this will help resolve these inline imports before we start loading the schema types that uses them as reference
                 inline_imported_types.push(isl_import_type.to_owned());
-                Ok(IslTypeRefImpl::TypeImport(isl_import_type, isl_type_ref_modifier))
+                Ok(IslTypeRefImpl::TypeImport(isl_import_type, nullability))
             },
             _ => Err(invalid_schema_error_raw(
                 "type reference can either be a symbol(For base/alias type reference) or a struct (for anonymous type reference)",
