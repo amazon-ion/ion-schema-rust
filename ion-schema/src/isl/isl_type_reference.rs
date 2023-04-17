@@ -172,7 +172,7 @@ impl IslTypeRefImpl {
                     return match type_name {
                         // TODO: currently it only allows for built in types (other than `document`) to be defined with `nullable` annotation. For `document` and all other type references it returns an error.
                         "int" | "float" | "bool" | "decimal" | "string" | "symbol" | "blob" | "clob" | "timestamp" | "struct" | "sexp" | "list" | "text" | "lob" | "number" | "any" | "nothing" |
-                        "$int" | "$float" | "$bool" | "$decimal" | "$string" | "$symbol" | "$blob" | "$clob" | "$timestamp" | "$struct" | "$sexp" | "$list" | "$text" | "$lob" | "$number" | "$any" => {
+                        "$null" | "$int" | "$float" | "$bool" | "$decimal" | "$string" | "$symbol" | "$blob" | "$clob" | "$timestamp" | "$struct" | "$sexp" | "$list" | "$text" | "$lob" | "$number" | "$any" => {
                             Ok(IslTypeRefImpl::Named(type_name.to_owned(), Nullable))
                         }
                         _ => {
