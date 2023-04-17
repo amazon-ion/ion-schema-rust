@@ -1,5 +1,6 @@
 use crate::ion_path::IonPath;
-use crate::system::{TypeId, TypeStore};
+use crate::system::TypeStore;
+use crate::type_reference::TypeReference;
 use crate::types::TypeValidator;
 use crate::IonSchemaElement;
 use ion_rs::element::Element;
@@ -15,9 +16,9 @@ type StateId = usize;
 pub struct Transition {
     // represents destination state for the transition
     destination: StateId,
-    // represents the type_id for the destination state
+    // represents the type_ref for the destination state
     // this will be used to validate if an Ion value can be accepted at destination state or not
-    type_id: TypeId,
+    type_ref: TypeReference,
     // minimum occurrence allowed for destination state
     // this will be used to verify if destination state is optional through check min == 0
     // and it will also be used when destination state is same as source state to verify minimum occurrence for the state
@@ -27,12 +28,14 @@ pub struct Transition {
 }
 
 impl Transition {
-    /// Verify if the given Ion value is valid for the transition's type_id or not
+    /// Verify if the given Ion value is valid for the transition's type_ref or not
     pub fn is_valid_for_ion_value(&self, element: &Element, type_store: &TypeStore) -> bool {
         let schema_element: IonSchemaElement = element.into();
-        let type_def = type_store.get_type_by_id(self.type_id).unwrap();
 
-        match type_def.validate(&schema_element, type_store, &mut IonPath::default()) {
+        match self
+            .type_ref
+            .validate(&schema_element, type_store, &mut IonPath::default())
+        {
             Ok(_) => true,
             Err(violation) => false,
         }
@@ -322,7 +325,7 @@ impl NfaBuilder {
         &mut self,
         start_id: StateId,
         end_id: StateId,
-        type_id: TypeId,
+        type_ref: TypeReference,
         min: usize,
         max: usize,
     ) {
@@ -334,7 +337,7 @@ impl NfaBuilder {
 
         end_states.insert(Transition {
             destination: end_id,
-            type_id,
+            type_ref,
             min,
             max,
         });

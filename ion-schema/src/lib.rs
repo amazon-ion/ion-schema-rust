@@ -33,6 +33,7 @@ mod nfa;
 pub mod result;
 pub mod schema;
 pub mod system;
+mod type_reference;
 pub mod types;
 pub mod violation;
 

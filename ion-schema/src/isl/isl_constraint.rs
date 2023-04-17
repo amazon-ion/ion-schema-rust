@@ -635,7 +635,7 @@ impl IslConstraintImpl {
                         let require_distinct = value.has_annotation("distinct");
 
                         // return error if the type reference contains `occurs` constraint
-                        if type_reference.get_occurs_constraint() {
+                        if type_reference.get_occurs_range().is_some() {
                             return Err(invalid_schema_error_raw(
                                 "element constraint can not contain type references that contain `occurs` constraint",
                             ));

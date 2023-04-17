@@ -259,9 +259,11 @@ mod isl_tests {
     use ion_rs::types::decimal::*;
     use ion_rs::types::integer::Int as IntegerValue;
     use ion_rs::types::timestamp::Timestamp;
+    use ion_rs::IonType;
     use ion_rs::Symbol;
     use rstest::*;
     use std::io::Write;
+
     // helper function to create NamedIslType for isl tests using ISL 1.0
     fn load_named_type(text: &str) -> IslType {
         let type_def = IslTypeImpl::from_owned_element(
@@ -345,7 +347,13 @@ mod isl_tests {
         load_anonymous_type(r#" // For a schema with `nullable` annotation`
                 {type: nullable::int}
             "#),
-        anonymous_type([type_constraint(anonymous_type_ref([any_of([named_type_ref("$null"), named_type_ref("$int")]),type_constraint(named_type_ref("$any"))]))])
+        anonymous_type([type_constraint(nullable_built_in_type_ref(IonType::Int))])
+    ),
+    case::type_constraint_with_null_or_annotation(
+        load_anonymous_type_v2_0(r#" // For a schema with `$null_or` annotation`
+                    {type: $null_or::int}
+                "#),
+        isl_type::v_2_0::anonymous_type([isl_constraint::v_2_0::type_constraint(isl_type_reference::v_2_0::null_or_named_type_ref("int"))])
     ),
     case::type_constraint_with_named_type(
         load_named_type(r#" // For a schema with named type
