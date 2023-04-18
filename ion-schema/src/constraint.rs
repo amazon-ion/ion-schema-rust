@@ -53,6 +53,7 @@ pub enum Constraint {
     ContainerLength(ContainerLengthConstraint),
     Element(ElementConstraint),
     Exponent(ExponentConstraint),
+    FieldNames(FieldNamesConstraint),
     Fields(FieldsConstraint),
     Not(NotConstraint),
     OneOf(OneOfConstraint),
@@ -155,20 +156,11 @@ impl Constraint {
         )))
     }
 
-    /// Creates a [Constraint::Element] referring to the type represented by the provided [TypeId].
-    /// This method assumes that distinct elements are not required. IF you want to have distinct elements use `distinct_element` method instead.
-    pub fn element(type_id: TypeId) -> Constraint {
+    /// Creates a [Constraint::Element] referring to the type represented by the provided [TypeId] and the boolean represents whether distinct elements are required or not.
+    pub fn element(type_id: TypeId, requires_distinct: bool) -> Constraint {
         Constraint::Element(ElementConstraint::new(
             TypeReference::new(type_id, NullabilityModifier::Nothing),
-            false,
-        ))
-    }
-
-    /// Creates a [Constraint::Element] referring to the type represented by the provided [TypeId] where each element is distinct.
-    pub fn distinct_element(type_id: TypeId) -> Constraint {
-        Constraint::Element(ElementConstraint::new(
-            TypeReference::new(type_id, NullabilityModifier::Nothing),
-            true,
+            requires_distinct,
         ))
     }
 
@@ -250,6 +242,14 @@ impl Constraint {
             })
             .collect();
         Constraint::Fields(FieldsConstraint::new(fields, true))
+    }
+
+    /// Creates a [Constraint::FieldNames] referring to the type represented by the provided [TypeId] and the boolean represents whether each field name should be distinct or not.
+    pub fn field_names(type_id: TypeId, requires_distinct: bool) -> Constraint {
+        Constraint::FieldNames(FieldNamesConstraint::new(
+            TypeReference::new(type_id, NullabilityModifier::Nothing),
+            requires_distinct,
+        ))
     }
 
     /// Creates a [Constraint::ValidValues] using the [Element]s specified inside it
@@ -358,7 +358,23 @@ impl Constraint {
                     *require_distinct_elements,
                 )))
             }
-            IslConstraintImpl::Fields(fields) => {
+            IslConstraintImpl::FieldNames(isl_type_reference, distinct) => {
+                let type_reference = IslTypeRefImpl::resolve_type_reference(
+                    isl_version,
+                    isl_type_reference,
+                    type_store,
+                    pending_types,
+                )?;
+                Ok(Constraint::FieldNames(FieldNamesConstraint::new(
+                    type_reference,
+                    *distinct,
+                )))
+            }
+            IslConstraintImpl::Fields(fields, content_closed) => {
+                let open_content = match isl_version {
+                    IslVersion::V1_0 => open_content,
+                    IslVersion::V2_0 => !content_closed, // for ISL 2.0 whether open content is allowed or not depends on `fields` constraint
+                };
                 let fields_constraint: FieldsConstraint =
                     FieldsConstraint::resolve_from_isl_constraint(
                         isl_version,
@@ -472,6 +488,9 @@ impl Constraint {
                 container_length.validate(value, type_store, ion_path)
             }
             Constraint::Element(element) => element.validate(value, type_store, ion_path),
+            Constraint::FieldNames(field_names) => {
+                field_names.validate(value, type_store, ion_path)
+            }
             Constraint::Fields(fields) => fields.validate(value, type_store, ion_path),
             Constraint::Not(not) => not.validate(value, type_store, ion_path),
             Constraint::OneOf(one_of) => one_of.validate(value, type_store, ion_path),
@@ -1023,6 +1042,76 @@ impl ConstraintValidator for FieldsConstraint {
                 "fields",
                 ViolationCode::FieldsNotMatched,
                 "value didn't satisfy fields constraint",
+                ion_path,
+                violations,
+            ));
+        }
+        Ok(())
+    }
+}
+
+/// Implements an `field_names` constraint of Ion Schema
+/// [field_names]: https://amazon-ion.github.io/ion-schema/docs/isl-2-0/spec#field_names
+#[derive(Debug, Clone, PartialEq)]
+pub struct FieldNamesConstraint {
+    type_reference: TypeReference,
+    requires_distinct: bool,
+}
+
+impl FieldNamesConstraint {
+    pub fn new(type_reference: TypeReference, requires_distinct: bool) -> Self {
+        Self {
+            type_reference,
+            requires_distinct,
+        }
+    }
+}
+
+impl ConstraintValidator for FieldNamesConstraint {
+    fn validate(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> ValidationResult {
+        let mut violations: Vec<Violation> = vec![];
+
+        // create a set for checking duplicate field names
+        let mut field_name_set = HashSet::new();
+
+        let ion_struct = value
+            .expect_element_of_type(&[IonType::Struct], "field_names", ion_path)?
+            .as_struct()
+            .unwrap();
+
+        for (field_name, _) in ion_struct.iter() {
+            ion_path.push(IonPathElement::Field(field_name.text().unwrap().to_owned()));
+            let schema_element: IonSchemaElement = (&Element::symbol(field_name)).into();
+
+            if let Err(violation) =
+                self.type_reference
+                    .validate(&schema_element, type_store, ion_path)
+            {
+                violations.push(violation);
+            }
+            if self.requires_distinct && !field_name_set.insert(field_name.text().unwrap()) {
+                violations.push(Violation::new(
+                    "field_names",
+                    ViolationCode::FieldNamesNotDistinct,
+                    format!(
+                        "expected distinct field names but found duplicate field name {field_name}",
+                    ),
+                    ion_path,
+                ))
+            }
+            ion_path.pop();
+        }
+
+        if !violations.is_empty() {
+            return Err(Violation::with_violations(
+                "field_names",
+                ViolationCode::FieldNamesMismatched,
+                "one or more field names don't satisfy field_names constraint",
                 ion_path,
                 violations,
             ));

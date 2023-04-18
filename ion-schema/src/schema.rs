@@ -207,6 +207,13 @@ mod schema_tests {
             "#).into_iter(),
         1 // this includes named type fields_type
     ),
+    case::field_names_constraint(
+        load(r#" // For a schema with field_names constraint as below:
+                    $ion_schema_2_0
+                    type:: { name: field_names_type, field_names: distinct::symbol } 
+            "#).into_iter(),
+        1 // this includes named type field_names_type
+    ),
     case::contains_constraint(
         load(r#" // For a schema with contains constraint as below:
                 type:: { name: contains_type, contains: [true, 1, "hello"] }
@@ -740,6 +747,25 @@ mod schema_tests {
         ),
         case::fields_constraint_with_closed_content(
                 load(r#"
+                         { name: "Ion", id: 1 }
+                         { id: 1 }
+                         { name: "Ion" }
+                         { name: "Ion", id: 1, name: "Schema" }
+                         { } // This is valid because all fields are optional
+                         { greetings: "hello" } // This is valid because open content is allowed by default
+                    "#),
+                load(r#"
+                        null.struct
+                        null
+                        { name: "Ion", id: 1, id: 2 }
+                    "#),
+                load_schema_from_text(r#" // For a schema with fields constraint as below:
+                            type:: { name: fields_type,  fields: { name: { type: string, occurs: range::[0,2] }, id: int } }
+                    "#),
+                "fields_type"
+        ),
+        case::fields_constraint_with_closed_annotation(
+                load(r#"
                      { name: "Ion", id: 1 }
                      { id: 1 }
                      { name: "Ion" }
@@ -752,10 +778,30 @@ mod schema_tests {
                     { name: "Ion", id: 1, id: 2 }
                     { greetings: "hello" }
                 "#),
-                load_schema_from_text(r#" // For a schema with fields constraint as below:
-                        type:: { name: fields_type,  content: closed, fields: { name: { type: string, occurs: range::[0,2] }, id: int } }
+                load_schema_from_text(r#" // For a schema with fields constraint with `closed` annotation as below:
+                        $ion_schema_2_0
+                        type:: { name: fields_type, fields: closed::{ name: { type: string, occurs: range::[0,2] }, id: int } }
                 "#),
                 "fields_type"
+        ),
+        case::field_names_constraint(
+                load(r#"
+                     { name: "Ion", id: 1 }
+                     { id: 1 }
+                     { name: "Ion" }
+                     { }
+                "#),
+                load(r#"
+                    null.struct
+                    null
+                    { name: "Ion", id: 1, name: "Schema" }
+                    { name: "Ion", id: 1, id: 2 }
+                "#),
+                load_schema_from_text(r#" // For a schema with field_names constraint as below:
+                        $ion_schema_2_0
+                        type:: { name: field_names_type, field_names: distinct::symbol }
+                "#),
+                "field_names_type"
         ),
         case::contains_constraint(
                 load(r#"
