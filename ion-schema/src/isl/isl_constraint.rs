@@ -544,16 +544,16 @@ impl IslConstraintImpl {
             }
             "annotations" => {
                 if value.is_null() {
-                    return Err(invalid_schema_error_raw(
+                    return invalid_schema_error(
                         "annotations constraint was a null instead of a list",
-                    ));
+                    );
                 }
 
                 if value.ion_type() != IonType::List {
-                    return Err(invalid_schema_error_raw(format!(
+                    return invalid_schema_error(format!(
                         "annotations constraint was a {:?} instead of a list",
                         value.ion_type()
-                    )));
+                    ));
                 }
 
                 Ok(IslConstraintImpl::Annotations(value.try_into()?))
@@ -578,16 +578,16 @@ impl IslConstraintImpl {
             )?)),
             "contains" => {
                 if value.is_null() {
-                    return Err(invalid_schema_error_raw(
+                    return invalid_schema_error(
                         "contains constraint was a null instead of a list",
-                    ));
+                    );
                 }
 
                 if value.ion_type() != IonType::List {
-                    return Err(invalid_schema_error_raw(format!(
+                    return invalid_schema_error(format!(
                         "contains constraint was a {:?} instead of a list",
                         value.ion_type()
-                    )));
+                    ));
                 }
 
                 let values: Vec<Element> = value
@@ -600,23 +600,23 @@ impl IslConstraintImpl {
             }
             "content" => {
                 if value.is_null() {
-                    return Err(invalid_schema_error_raw(
+                    return invalid_schema_error(
                         "content constraint was a null instead of a symbol `closed`",
-                    ));
+                    );
                 }
 
                 if value.ion_type() != IonType::Symbol {
-                    return Err(invalid_schema_error_raw(format!(
+                    return invalid_schema_error(format!(
                         "content constraint was a {:?} instead of a symbol `closed`",
                         value.ion_type()
-                    )));
+                    ));
                 }
 
                 if let Some(closed) = value.as_text() {
                     if closed != "closed" {
-                        return Err(invalid_schema_error_raw(format!(
+                        return invalid_schema_error(format!(
                             "content constraint was a {closed} instead of a symbol `closed`"
-                        )));
+                        ));
                     }
                 }
 
@@ -641,9 +641,9 @@ impl IslConstraintImpl {
                             .annotations()
                             .any(|a| a.text() != Some("distinct") && a.text() != Some("$null_or"))
                         {
-                            return Err(invalid_schema_error_raw(
+                            return invalid_schema_error(
                                 "element constraint can only contain `distinct` annotation",
-                            ));
+                            );
                         }
 
                         // verify whether `distinct`annotation is present or not
@@ -651,9 +651,9 @@ impl IslConstraintImpl {
 
                         // return error if the type reference contains `occurs` constraint
                         if type_reference.get_occurs_range().is_some() {
-                            return Err(invalid_schema_error_raw(
+                            return invalid_schema_error(
                                 "element constraint can not contain type references that contain `occurs` constraint",
-                            ));
+                            );
                         }
 
                         Ok(IslConstraintImpl::Element(type_reference, require_distinct))
@@ -673,25 +673,24 @@ impl IslConstraintImpl {
                     }
                     IslVersion::V2_0 => {
                         // return error if there are any annotations other than `distinct`
-                        if value.annotations().any(|a| a.text() != Some("distinct")) {
-                            return Err(invalid_schema_error_raw(
+                        if value.annotations().count() > 1
+                            || value.annotations().any(|a| a.text() != Some("distinct"))
+                        {
+                            return invalid_schema_error(
                                 "field_names constraint can only contain `distinct` annotation",
-                            ));
+                            );
                         }
-
-                        // verify whether `distinct`annotation is present or not
-                        let require_distinct = value.has_annotation("distinct");
 
                         // return error if the type reference contains `occurs` constraint
                         if type_reference.get_occurs_range().is_some() {
-                            return Err(invalid_schema_error_raw(
+                            return invalid_schema_error(
                                 "field_names constraint can not contain type references that contain `occurs` constraint",
-                            ));
+                            );
                         }
 
                         Ok(IslConstraintImpl::FieldNames(
                             type_reference,
-                            require_distinct,
+                            value.has_annotation("distinct"),
                         ))
                     }
                 }
@@ -705,9 +704,7 @@ impl IslConstraintImpl {
                     )?;
 
                 if fields.is_empty() {
-                    return Err(invalid_schema_error_raw(
-                        "fields constraint can not be empty",
-                    ));
+                    return invalid_schema_error("fields constraint can not be empty");
                 }
                 match isl_version {
                     IslVersion::V1_0 => Ok(IslConstraintImpl::Fields(fields, false)),
@@ -715,9 +712,9 @@ impl IslConstraintImpl {
                         if value.annotations().count() > 1
                             || value.annotations().any(|a| a.text() != Some("closed"))
                         {
-                            return Err(invalid_schema_error_raw(
+                            return invalid_schema_error(
                                 "fields constraint may only be annotated with 'closed'",
-                            ));
+                            );
                         }
                         Ok(IslConstraintImpl::Fields(
                             fields,
@@ -924,16 +921,16 @@ impl IslConstraintImpl {
     ) -> IonSchemaResult<Vec<IslTypeRefImpl>> {
         //TODO: create a method/macro for this ion type check which can be reused
         if value.is_null() {
-            return Err(invalid_schema_error_raw(format!(
+            return invalid_schema_error(format!(
                 "{constraint_name} constraint was a null instead of a list"
-            )));
+            ));
         }
         if value.ion_type() != IonType::List {
-            return Err(invalid_schema_error_raw(format!(
+            return invalid_schema_error(format!(
                 "{} constraint was a {:?} instead of a list",
                 constraint_name,
                 value.ion_type()
-            )));
+            ));
         }
         value
             .as_sequence()
@@ -950,16 +947,14 @@ impl IslConstraintImpl {
         inline_imported_types: &mut Vec<IslImportType>,
     ) -> IonSchemaResult<HashMap<String, IslTypeRefImpl>> {
         if value.is_null() {
-            return Err(invalid_schema_error_raw(
-                "fields constraint was a null instead of a struct",
-            ));
+            return invalid_schema_error("fields constraint was a null instead of a struct");
         }
 
         if value.ion_type() != IonType::Struct {
-            return Err(invalid_schema_error_raw(format!(
+            return invalid_schema_error(format!(
                 "fields constraint was a {:?} instead of a struct",
                 value.ion_type()
-            )));
+            ));
         }
 
         let fields_map = value

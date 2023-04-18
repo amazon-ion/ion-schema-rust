@@ -1079,66 +1079,44 @@ impl ConstraintValidator for FieldNamesConstraint {
         // create a set for checking duplicate field names
         let mut field_name_set = HashSet::new();
 
-        match value {
-            IonSchemaElement::SingleElement(element) if element.ion_type() == IonType::Struct => {
-                // Check for null struct
-                if element.is_null() {
-                    return Err(Violation::new(
-                        "field_names",
-                        ViolationCode::TypeMismatched,
-                        "expected a struct but found null",
-                        ion_path,
-                    ));
-                }
+        let ion_struct = value
+            .expect_element_of_type(&[IonType::Struct], "field_names", ion_path)?
+            .as_struct()
+            .unwrap();
 
-                for (field_name, _) in element.as_struct().unwrap().iter() {
-                    ion_path.push(IonPathElement::Field(field_name.text().unwrap().to_owned()));
-                    let schema_element: IonSchemaElement = (&Element::symbol(field_name)).into();
+        for (field_name, _) in ion_struct.iter() {
+            ion_path.push(IonPathElement::Field(field_name.text().unwrap().to_owned()));
+            let schema_element: IonSchemaElement = (&Element::symbol(field_name)).into();
 
-                    if let Err(violation) =
-                        self.type_reference
-                            .validate(&schema_element, type_store, ion_path)
-                    {
-                        violations.push(violation);
-                    }
-                    if self.requires_distinct && !field_name_set.insert(field_name.text().unwrap())
-                    {
-                        violations.push(Violation::new(
-                            "field_names",
-                            ViolationCode::ElementNotDistinct,
-                            format!("expected distinct field names but found duplicate field name {field_name}", ),
-                            ion_path,
-                        ))
-                    }
-                    ion_path.pop();
-                }
-                if !violations.is_empty() {
-                    return Err(Violation::with_violations(
-                        "field_names",
-                        ViolationCode::ElementMismatched,
-                        "one or more field names don't satisfy field_names constraint",
-                        ion_path,
-                        violations,
-                    ));
-                }
-                Ok(())
+            if let Err(violation) =
+                self.type_reference
+                    .validate(&schema_element, type_store, ion_path)
+            {
+                violations.push(violation);
             }
-            IonSchemaElement::SingleElement(element) => {
-                // return Violation if value is not a struct
-                Err(Violation::new(
+            if self.requires_distinct && !field_name_set.insert(field_name.text().unwrap()) {
+                violations.push(Violation::new(
                     "field_names",
-                    ViolationCode::TypeMismatched,
-                    format!("expected a struct but found {}", element.ion_type()),
+                    ViolationCode::ElementNotDistinct,
+                    format!(
+                        "expected distinct field names but found duplicate field name {field_name}",
+                    ),
                     ion_path,
                 ))
             }
-            IonSchemaElement::Document(_) => Err(Violation::new(
-                "field_names",
-                ViolationCode::TypeMismatched,
-                "expected a struct but found document",
-                ion_path,
-            )),
+            ion_path.pop();
         }
+
+        if !violations.is_empty() {
+            return Err(Violation::with_violations(
+                "field_names",
+                ViolationCode::ElementMismatched,
+                "one or more field names don't satisfy field_names constraint",
+                ion_path,
+                violations,
+            ));
+        }
+        Ok(())
     }
 }
 
