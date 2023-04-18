@@ -1097,7 +1097,7 @@ impl ConstraintValidator for FieldNamesConstraint {
             if self.requires_distinct && !field_name_set.insert(field_name.text().unwrap()) {
                 violations.push(Violation::new(
                     "field_names",
-                    ViolationCode::ElementNotDistinct,
+                    ViolationCode::FieldNamesNotDistinct,
                     format!(
                         "expected distinct field names but found duplicate field name {field_name}",
                     ),
@@ -1110,7 +1110,7 @@ impl ConstraintValidator for FieldNamesConstraint {
         if !violations.is_empty() {
             return Err(Violation::with_violations(
                 "field_names",
-                ViolationCode::ElementMismatched,
+                ViolationCode::FieldNamesMismatched,
                 "one or more field names don't satisfy field_names constraint",
                 ion_path,
                 violations,
