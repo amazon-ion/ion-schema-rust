@@ -704,7 +704,7 @@ mod type_definition_tests {
             { field_names: distinct::symbol }
         */
     isl_type::v_2_0::anonymous_type([isl_constraint::v_2_0::field_names(named_type_ref("symbol"), true)]),
-    TypeDefinitionKind::anonymous([Constraint::distinct_field_names(5), Constraint::type_constraint(34)])
+    TypeDefinitionKind::anonymous([Constraint::field_names(5, true), Constraint::type_constraint(34)])
     ),
     case::contains_constraint(
         /* For a schema with contains constraint as below:
@@ -739,14 +739,14 @@ mod type_definition_tests {
             { element: int }
         */
         anonymous_type([element(named_type_ref("int"))]),
-    TypeDefinitionKind::anonymous([Constraint::element(0), Constraint::type_constraint(34)])
+    TypeDefinitionKind::anonymous([Constraint::element(0, false), Constraint::type_constraint(34)])
     ),
     case::distinct_element_constraint(
         /* For a schema with distinct element constraint as below:
             { element: distinct::int }
         */
         isl_type::v_2_0::anonymous_type([isl_constraint::v_2_0::element(named_type_ref("int"), true)]),
-    TypeDefinitionKind::anonymous([Constraint::distinct_element(0), Constraint::type_constraint(34)])
+    TypeDefinitionKind::anonymous([Constraint::element(0, true), Constraint::type_constraint(34)])
     ),
     case::annotations_constraint(
         /* For a schema with annotations constraint as below:

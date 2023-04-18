@@ -675,7 +675,7 @@ impl IslConstraintImpl {
                         // return error if there are any annotations other than `distinct`
                         if value.annotations().any(|a| a.text() != Some("distinct")) {
                             return Err(invalid_schema_error_raw(
-                                "element constraint can only contain `distinct` annotation",
+                                "field_names constraint can only contain `distinct` annotation",
                             ));
                         }
 
@@ -716,7 +716,7 @@ impl IslConstraintImpl {
                             || value.annotations().any(|a| a.text() != Some("closed"))
                         {
                             return Err(invalid_schema_error_raw(
-                                "fields constraint may have at most one annotation",
+                                "fields constraint may only be annotated with 'closed'",
                             ));
                         }
                         Ok(IslConstraintImpl::Fields(
@@ -961,26 +961,23 @@ impl IslConstraintImpl {
                 value.ion_type()
             )));
         }
-        value
+
+        let fields_map = value
             .as_struct()
             .unwrap()
             .iter()
             .map(|(f, v)| {
-                if value
-                    .as_struct()
-                    .unwrap()
-                    .get_all(f.text().unwrap())
-                    .count()
-                    > 1
-                {
-                    return invalid_schema_error(
-                        "fields must be a struct with no repeated field names",
-                    );
-                }
                 IslTypeRefImpl::from_ion_element(isl_version, v, inline_imported_types)
                     .map(|t| (f.text().unwrap().to_owned(), t))
             })
-            .collect::<IonSchemaResult<HashMap<String, IslTypeRefImpl>>>()
+            .collect::<IonSchemaResult<HashMap<String, IslTypeRefImpl>>>()?;
+
+        // verify the map length with struct length to check for duplicates
+        if fields_map.len() < value.as_struct().unwrap().len() {
+            return invalid_schema_error("fields must be a struct with no repeated field names");
+        }
+
+        Ok(fields_map)
     }
 }
 
