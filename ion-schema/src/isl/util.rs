@@ -1,8 +1,8 @@
 use crate::isl::isl_range::{Range, RangeType};
 use crate::result::{invalid_schema_error, IonSchemaError};
+use ion_rs::element::Element;
 use ion_rs::types::timestamp::Precision;
-use ion_rs::value::owned::{text_token, Element};
-use ion_rs::value::IonElement;
+use ion_rs::Symbol;
 use ion_rs::Timestamp;
 use num_traits::abs;
 use std::cmp::Ordering;
@@ -170,12 +170,12 @@ impl TryFrom<&Element> for ValidValue {
     type Error = IonSchemaError;
 
     fn try_from(value: &Element) -> Result<Self, Self::Error> {
-        if value.annotations().any(|a| a == &text_token("range")) {
+        if value.annotations().any(|a| a == &Symbol::from("range")) {
             Ok(ValidValue::Range(Range::from_ion_element(
                 value,
                 RangeType::NumberOrTimestamp,
             )?))
-        } else if value.annotations().any(|a| a != &text_token("range")) {
+        } else if value.annotations().any(|a| a != &Symbol::from("range")) {
             invalid_schema_error(
                 "Annotations are not allowed for valid_values constraint except `range` annotation",
             )

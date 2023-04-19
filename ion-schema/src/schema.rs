@@ -8,7 +8,7 @@
 
 use crate::import::Import;
 use crate::system::{TypeId, TypeStore};
-use crate::types::{TypeDefinitionImpl, TypeRef};
+use crate::types::{TypeDefinition, TypeDefinitionImpl};
 use std::sync::Arc;
 
 /// A Schema is a collection of zero or more [`TypeRef`]s.
@@ -55,11 +55,11 @@ impl Schema {
 
     /// Returns the requested type, if present in this schema or a a built in type;
     /// otherwise returns None.
-    pub fn get_type<A: AsRef<str>>(&self, name: A) -> Option<TypeRef> {
+    pub fn get_type<A: AsRef<str>>(&self, name: A) -> Option<TypeDefinition> {
         let type_id = self
             .types
             .get_built_in_type_id_or_defined_type_id_by_name(name.as_ref())?;
-        Some(TypeRef::new(*type_id, Arc::clone(&self.types)))
+        Some(TypeDefinition::new(*type_id, Arc::clone(&self.types)))
     }
 
     /// Returns an iterator over the types in this schema.
@@ -95,14 +95,14 @@ impl SchemaTypeIterator {
 }
 
 impl Iterator for SchemaTypeIterator {
-    type Item = TypeRef;
+    type Item = TypeDefinition;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.index >= self.types.len() {
             return None;
         }
         self.index += 1;
-        Some(TypeRef::new(
+        Some(TypeDefinition::new(
             self.types[self.index - 1],
             Arc::clone(&self.type_store),
         ))
@@ -112,35 +112,25 @@ impl Iterator for SchemaTypeIterator {
 #[cfg(test)]
 mod schema_tests {
     use super::*;
+    use crate::authority::MapDocumentAuthority;
     use crate::isl::IslVersion;
-    use crate::system::Resolver;
-    use ion_rs::value::owned::Element;
-    use ion_rs::value::reader::element_reader;
-    use ion_rs::value::reader::ElementReader;
+    use crate::system::{Resolver, SchemaSystem};
+    use ion_rs::element::Element;
     use rstest::*;
     use std::sync::Arc;
 
     // helper function to be used by schema tests
     fn load(text: &str) -> Vec<Element> {
-        element_reader()
-            .read_all(text.as_bytes())
-            .expect("parsing failed unexpectedly")
+        Element::read_all(text.as_bytes()).expect("parsing failed unexpectedly")
     }
 
     // helper function to be used by validation tests
     fn load_schema_from_text(text: &str) -> Arc<Schema> {
-        let owned_elements = load(text).into_iter();
-        // create a type_store and resolver instance to be used for loading Elements as schema
-        let type_store = &mut TypeStore::default();
-        let mut resolver = Resolver::new(vec![]);
-
-        // create a isl from owned_elements and create a schema from isl
-        let isl =
-            resolver.isl_schema_from_elements(IslVersion::V1_0, owned_elements, "my_schema.isl");
-
-        resolver
-            .schema_from_isl_schema(IslVersion::V1_0, isl.unwrap(), type_store, None)
-            .unwrap()
+        // map with (id, ion content)
+        let map_authority = [("sample.isl", text)];
+        let mut schema_system =
+            SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
+        schema_system.load_schema("sample.isl").unwrap()
     }
 
     #[rstest(
@@ -218,6 +208,13 @@ mod schema_tests {
             "#).into_iter(),
         1 // this includes named type fields_type
     ),
+    case::field_names_constraint(
+        load(r#" // For a schema with field_names constraint as below:
+                    $ion_schema_2_0
+                    type:: { name: field_names_type, field_names: distinct::symbol } 
+            "#).into_iter(),
+        1 // this includes named type field_names_type
+    ),
     case::contains_constraint(
         load(r#" // For a schema with contains constraint as below:
                 type:: { name: contains_type, contains: [true, 1, "hello"] }
@@ -248,6 +245,13 @@ mod schema_tests {
                  "#).into_iter(),
         1 // this includes named type element_type
     ),
+    case::distinct_element_constraint(
+        load(r#" // For a schema with distinct element constraint as below:
+                        $ion_schema_2_0
+                        type:: { name: distinct_element_type, element: distinct::int }
+                     "#).into_iter(),
+        1 // this includes named type distinct_element_type
+    ),
     case::annotations_constraint(
         load(r#" // For a schema with annotations constraint as below:
                     type:: { name: annotations_type, annotations: closed::[red, blue, green] }
@@ -265,6 +269,13 @@ mod schema_tests {
                     type:: { name: scale_type, scale: 2 }
                  "#).into_iter(),
         1 // this includes named type scale_type
+    ),
+    case::exponent_constraint(
+        load(r#" // For a schema with exponent constraint as below:
+                    $ion_schema_2_0
+                    type:: { name: exponent_type, exponent: -2 }
+                 "#).into_iter(),
+        1 // this includes named type exponent_type
     ),
     case::timestamp_precision_constraint(
         load(r#" // For a schema with timestamp_precision constraint as below:
@@ -368,6 +379,25 @@ mod schema_tests {
             load_schema_from_text(r#" // For a schema with named type and `nullable` annotation as below: 
                     type:: { name: my_int, type: nullable::int }
                 "#),
+            "my_int"
+        ),
+        case::null_or_annotation_int_type_constraint(
+            load(r#"
+                        null
+                        null.null
+                        0
+                        -5
+                    "#),
+            load(r#"
+                        null.decimal
+                        a
+                        "hello"
+                        false
+                    "#),
+            load_schema_from_text(r#" // For a schema with named type and `$null_or` annotation as below: 
+                        $ion_schema_2_0
+                        type:: { name: my_int, type: $null_or::int }
+                    "#),
             "my_int"
         ),
         case::nullable_annotation_float_type_constraint(
@@ -718,6 +748,25 @@ mod schema_tests {
         ),
         case::fields_constraint_with_closed_content(
                 load(r#"
+                         { name: "Ion", id: 1 }
+                         { id: 1 }
+                         { name: "Ion" }
+                         { name: "Ion", id: 1, name: "Schema" }
+                         { } // This is valid because all fields are optional
+                         { greetings: "hello" } // This is valid because open content is allowed by default
+                    "#),
+                load(r#"
+                        null.struct
+                        null
+                        { name: "Ion", id: 1, id: 2 }
+                    "#),
+                load_schema_from_text(r#" // For a schema with fields constraint as below:
+                            type:: { name: fields_type,  fields: { name: { type: string, occurs: range::[0,2] }, id: int } }
+                    "#),
+                "fields_type"
+        ),
+        case::fields_constraint_with_closed_annotation(
+                load(r#"
                      { name: "Ion", id: 1 }
                      { id: 1 }
                      { name: "Ion" }
@@ -730,10 +779,30 @@ mod schema_tests {
                     { name: "Ion", id: 1, id: 2 }
                     { greetings: "hello" }
                 "#),
-                load_schema_from_text(r#" // For a schema with fields constraint as below:
-                        type:: { name: fields_type,  content: closed, fields: { name: { type: string, occurs: range::[0,2] }, id: int } }
+                load_schema_from_text(r#" // For a schema with fields constraint with `closed` annotation as below:
+                        $ion_schema_2_0
+                        type:: { name: fields_type, fields: closed::{ name: { type: string, occurs: range::[0,2] }, id: int } }
                 "#),
                 "fields_type"
+        ),
+        case::field_names_constraint(
+                load(r#"
+                     { name: "Ion", id: 1 }
+                     { id: 1 }
+                     { name: "Ion" }
+                     { }
+                "#),
+                load(r#"
+                    null.struct
+                    null
+                    { name: "Ion", id: 1, name: "Schema" }
+                    { name: "Ion", id: 1, id: 2 }
+                "#),
+                load_schema_from_text(r#" // For a schema with field_names constraint as below:
+                        $ion_schema_2_0
+                        type:: { name: field_names_type, field_names: distinct::symbol }
+                "#),
+                "field_names_type"
         ),
         case::contains_constraint(
                 load(r#"
@@ -881,6 +950,37 @@ mod schema_tests {
                         "#),
                 "element_type"
         ),
+        case::distinct_element_constraint(
+                load(r#"
+                          []
+                          [1]
+                          [1, 2, 3]
+                          ()
+                          (1)
+                          (1 2 3)
+                          { a: 1, b: 2, c: 3 }
+                        "#),
+                load(r#"
+                          null.list
+                          [1.]
+                          [1e0]
+                          [1, 1, 2, 3]
+                          [a::1, b::1, a::2, a::2, 3]
+                          [1, 2, null.int]
+                          (1 2 3 true 4)
+                          (1 1 2 2 3)
+                          (a::1 b::1 a::2 a::2 3)
+                          { a: 1, b: 2, c: true }
+                          { a: 1, b: 1 }
+                          { a: c::1, b: c::1 }
+                          { a: 1, b: 2, c: null.int }
+                        "#),
+                load_schema_from_text(r#" // For a schema with distinct element constraint as below:
+                                $ion_schema_2_0
+                                type::{ name: distinct_element_type, element: distinct::int }
+                        "#),
+                "distinct_element_type"
+        ),
         case::element_with_self_ref_type_constraint(
                 load(r#"
                           5
@@ -986,6 +1086,28 @@ mod schema_tests {
                                 type::{ name: scale_type, scale: range::[min, 4] }
                         "#),
             "scale_type"
+        ),
+        case::exponent_constraint(
+            load(r#"
+                      0.4
+                      0.42
+                      0.432
+                      0.4321
+                      43d3
+                      0d0
+                    "#),
+            load(r#"
+                      null
+                      null.null
+                      null.decimal
+                      null.symbol
+                      0.43210
+                    "#),
+            load_schema_from_text(r#" // For a schema with exponent constraint as below:
+                            $ion_schema_2_0
+                            type::{ name: exponent_type, exponent: range::[-4, 4] }
+                    "#),
+            "exponent_type"
         ),
         case::timestamp_precision_constraint(
             load(r#"
@@ -1118,7 +1240,7 @@ mod schema_tests {
         schema: Arc<Schema>,
         type_name: &str,
     ) {
-        let type_ref: TypeRef = schema.get_type(type_name).unwrap();
+        let type_ref: TypeDefinition = schema.get_type(type_name).unwrap();
         // check for validation without any violations
         for valid_value in valid_values.iter() {
             // there is only a single type in each schema defined above hence validate with that type

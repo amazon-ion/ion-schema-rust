@@ -1,11 +1,11 @@
 use ion_schema::authority::{DocumentAuthority, MapDocumentAuthority};
-use ion_schema::external::ion_rs::value::owned::Element;
-use ion_schema::external::ion_rs::value::reader::{element_reader, ElementReader};
+
+use ion_schema::external::ion_rs::element::Element;
 use ion_schema::external::ion_rs::IonResult;
 use ion_schema::result::IonSchemaResult;
 use ion_schema::schema::Schema;
 use ion_schema::system::SchemaSystem;
-use ion_schema::types::TypeRef;
+use ion_schema::types::TypeDefinition;
 use std::str;
 use std::sync::Arc;
 use wasm_bindgen::prelude::*;
@@ -20,7 +20,7 @@ macro_rules! log {
 }
 
 fn load(text: &str) -> IonResult<Element> {
-    element_reader().read_one(text.as_bytes())
+    Element::read_one(text.as_bytes())
 }
 
 #[wasm_bindgen]
@@ -137,7 +137,7 @@ pub fn validate(ion: &str, schema: &str, schema_type: &str) -> SchemaValidationR
     log!("loaded schema successfully!");
 
     // Retrieve a particular type from this schema
-    let type_ref_result: Option<TypeRef> = schema.get_type(schema_type);
+    let type_ref_result: Option<TypeDefinition> = schema.get_type(schema_type);
 
     let type_ref = match &type_ref_result {
         Some(type_ref) => type_ref,

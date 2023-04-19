@@ -21,7 +21,7 @@
 
 use crate::authority::DocumentAuthority;
 use crate::external::ion_rs::Symbol;
-use crate::isl::isl_constraint::IslConstraint;
+use crate::isl::isl_constraint::{IslConstraint, IslConstraintImpl};
 use crate::isl::isl_import::{IslImport, IslImportType};
 use crate::isl::isl_type::{IslType, IslTypeImpl};
 use crate::isl::{IslSchema, IslVersion};
@@ -30,12 +30,11 @@ use crate::result::{
     IonSchemaResult,
 };
 use crate::schema::Schema;
-use crate::types::{BuiltInTypeDefinition, Nullability, TypeDefinition, TypeDefinitionImpl};
+use crate::types::{BuiltInTypeDefinition, Nullability, TypeDefinitionImpl, TypeDefinitionKind};
 use crate::UserReservedFields;
+use ion_rs::element::Element;
+use ion_rs::element::IonSequence;
 use ion_rs::types::IonType::Struct;
-use ion_rs::value::owned::{text_token, Element};
-use ion_rs::value::reader::{element_reader, ElementReader};
-use ion_rs::value::{IonElement, IonSequence, IonStruct};
 use ion_rs::IonType;
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
@@ -81,7 +80,7 @@ pub struct PendingTypes {
     builtin_type_ids_by_name: HashMap<String, TypeId>,
     ids_by_name: HashMap<String, TypeId>,
     parent: Option<(String, TypeId)>,
-    types_by_id: Vec<Option<TypeDefinition>>, // a None in this vector represents a not-yet-resolved type
+    types_by_id: Vec<Option<TypeDefinitionKind>>, // a None in this vector represents a not-yet-resolved type
 }
 
 impl PendingTypes {
@@ -182,14 +181,14 @@ impl PendingTypes {
             Some(id) => self.types_by_id[*id]
                 .to_owned()
                 .and_then(|type_def| match type_def {
-                    TypeDefinition::Named(named_type_def) => Some(Ok(named_type_def)),
-                    TypeDefinition::Anonymous(_) => {
+                    TypeDefinitionKind::Named(named_type_def) => Some(Ok(named_type_def)),
+                    TypeDefinitionKind::Anonymous(_) => {
                         unreachable!(
                             "The TypeDefinition for the imported type '{}' was Anonymous.",
                             import_type_name
                         )
                     }
-                    TypeDefinition::BuiltIn(_) => {
+                    TypeDefinitionKind::BuiltIn(_) => {
                         unreachable!(
                             "The TypeDefinition for the imported type '{}' was a builtin type.",
                             import_type_name
@@ -198,14 +197,14 @@ impl PendingTypes {
                 }),
             None => match type_store.get_type_id_by_name(import_type_name) {
                 Some(id) => match type_store.types_by_id[*id].to_owned() {
-                    TypeDefinition::Named(named_type_def) => Some(Ok(named_type_def)),
-                    TypeDefinition::Anonymous(_) => {
+                    TypeDefinitionKind::Named(named_type_def) => Some(Ok(named_type_def)),
+                    TypeDefinitionKind::Anonymous(_) => {
                         unreachable!(
                             "The TypeDefinition for the imported type '{}' was Anonymous.",
                             import_type_name
                         )
                     }
-                    TypeDefinition::BuiltIn(_) => {
+                    TypeDefinitionKind::BuiltIn(_) => {
                         unreachable!(
                             "The TypeDefinition for the imported type '{}' was a builtin type.",
                             import_type_name
@@ -230,7 +229,7 @@ impl PendingTypes {
             })?;
 
             match type_def {
-                TypeDefinition::Named(named_type_def) => {
+                TypeDefinitionKind::Named(named_type_def) => {
                     // check if the type definitions that are not yet resolved actually exists within the schema
                     // we can use the isl_type_names to make sure if they exists, otherwise return error.
                     if named_type_def.is_deferred_type_def()
@@ -244,10 +243,12 @@ impl PendingTypes {
                     }
                     type_store.add_named_type(named_type_def)
                 }
-                TypeDefinition::Anonymous(anonymous_type_def) => {
+                TypeDefinitionKind::Anonymous(anonymous_type_def) => {
                     type_store.add_anonymous_type(anonymous_type_def)
                 }
-                TypeDefinition::BuiltIn(builtin_type) => type_store.add_builtin_type(&builtin_type),
+                TypeDefinitionKind::BuiltIn(builtin_type) => {
+                    type_store.add_builtin_type(&builtin_type)
+                }
             };
         }
         Ok(())
@@ -271,7 +272,7 @@ impl PendingTypes {
             })?;
 
             match type_def.to_owned() {
-                TypeDefinition::Named(named_type_def) => {
+                TypeDefinitionKind::Named(named_type_def) => {
                     match isl_imported_type_name {
                         None => {
                             // check if the type definitions that are not yet resolved actually exists within the schema
@@ -307,14 +308,14 @@ impl PendingTypes {
                             // import all types into types_by_id of type_store which will help resolving the given import type
                             type_store
                                 .types_by_id
-                                .push(TypeDefinition::Named(named_type_def));
+                                .push(TypeDefinitionKind::Named(named_type_def));
                         }
                     }
                 }
-                TypeDefinition::Anonymous(anonymous_type_def) => {
+                TypeDefinitionKind::Anonymous(anonymous_type_def) => {
                     type_store.add_anonymous_type(anonymous_type_def);
                 }
-                TypeDefinition::BuiltIn(builtin_type) => {
+                TypeDefinitionKind::BuiltIn(builtin_type) => {
                     type_store.add_builtin_type(&builtin_type);
                 }
             };
@@ -341,7 +342,7 @@ impl PendingTypes {
     }
 
     /// Updates the unresolved named type that was added as None while loading types in a schema
-    /// with a resolved [TypeDefinition]
+    /// with a resolved [`TypeDefinitionKind`]
     pub(crate) fn update_named_type(
         &mut self,
         type_id: TypeId,
@@ -356,7 +357,7 @@ impl PendingTypes {
             None => {
                 let type_id = type_id - type_store.types_by_id.len();
                 self.ids_by_name.insert(name.to_owned(), type_id);
-                self.types_by_id[type_id] = Some(TypeDefinition::Named(type_def));
+                self.types_by_id[type_id] = Some(TypeDefinitionKind::Named(type_def));
                 type_id + type_store.types_by_id.len()
             }
             Some(exists) => exists,
@@ -364,7 +365,7 @@ impl PendingTypes {
     }
 
     /// Updates the unresolved anonymous type that was added as None while loading types in a schema
-    /// with a resolved [`TypeDefinition`]
+    /// with a resolved [`TypeDefinitionKind`]
     pub(crate) fn update_anonymous_type(
         &mut self,
         type_id: TypeId,
@@ -372,7 +373,7 @@ impl PendingTypes {
         type_store: &mut TypeStore,
     ) -> TypeId {
         self.types_by_id[type_id - type_store.types_by_id.len()] =
-            Some(TypeDefinition::Anonymous(type_def));
+            Some(TypeDefinitionKind::Anonymous(type_def));
         type_id
     }
 
@@ -422,7 +423,7 @@ impl PendingTypes {
     ) -> TypeId {
         let type_id = self.types_by_id.len();
         self.ids_by_name.insert(alias.to_owned(), type_id);
-        self.types_by_id.push(Some(TypeDefinition::Named(
+        self.types_by_id.push(Some(TypeDefinitionKind::Named(
             TypeDefinitionImpl::new_deferred_type_def(alias.to_owned()),
         )));
         type_id + type_store.types_by_id.len()
@@ -438,12 +439,12 @@ static DERIVED_ISL_TYPES: [&str; 10] = [
     "type::{ name: $lob, one_of: [ $blob, $clob ] }",
     "type::{ name: $number, one_of: [ $decimal, $float, $int ] }",
     "type::{ name: $text, one_of: [ $string, $symbol ] }",
-    "type::{ name: $any, one_of: [ $blob, $bool, $clob, $decimal,
-                                    $float, $int, $string, $symbol, $timestamp,
-                                    $list, $sexp, $struct, $null ] }",
     // this is just a place holder for document type,
     // IonSchemaElement::Document(_) type is used to verify the correctness on the validation side
     "type::{ name: document }",
+    "type::{ name: $any, one_of: [ $blob, $bool, $clob, $decimal,
+                                    $float, $int, $string, $symbol, $timestamp,
+                                    $list, $sexp, $struct, $null, document ] }",
     "type::{ name: nothing, not: $any }",
     "type::{ name: any, one_of: [ blob, bool, clob, decimal,
                                     float, int, string, symbol, timestamp,
@@ -452,13 +453,13 @@ static DERIVED_ISL_TYPES: [&str; 10] = [
 
 pub type TypeId = usize;
 
-/// Defines a cache that can be used to store resolved [`TypeDefinition`]s of a [`Schema`]
+/// Defines a cache that can be used to store resolved [`TypeDefinitionKind`]s of a [`Schema`]
 #[derive(Debug, Clone)]
 pub struct TypeStore {
     builtin_type_ids_by_name: HashMap<String, TypeId>, // stores all the builtin types used within this schema
     imported_type_ids_by_name: HashMap<String, TypeId>, // stores all the imported types of a schema
     ids_by_name: HashMap<String, TypeId>, // stores named types defined within the schema
-    types_by_id: Vec<TypeDefinition>,
+    types_by_id: Vec<TypeDefinitionKind>,
 }
 
 impl Default for TypeStore {
@@ -486,18 +487,7 @@ impl TypeStore {
         // TODO: this array can be turned into an iterator implementation in ion-rust for IonType
         use IonType::*;
         let built_in_atomic_types: [IonType; 12] = [
-            Integer,
-            Float,
-            Decimal,
-            Timestamp,
-            String,
-            Symbol,
-            Boolean,
-            Blob,
-            Clob,
-            SExpression,
-            List,
-            Struct,
+            Int, Float, Decimal, Timestamp, String, Symbol, Bool, Blob, Clob, SExp, List, Struct,
         ];
         // add all the atomic ion types that doesn't allow nulls [type_ids: 0 - 11]
         for atomic_type in built_in_atomic_types {
@@ -523,9 +513,7 @@ impl TypeStore {
         for text in DERIVED_ISL_TYPES {
             let isl_type = IslTypeImpl::from_owned_element(
                 isl_version,
-                &element_reader()
-                    .read_one(text.as_bytes())
-                    .expect("parsing failed unexpectedly"),
+                &Element::read_one(text.as_bytes()).expect("parsing failed unexpectedly"),
                 &mut vec![],
             )
             .unwrap();
@@ -552,7 +540,7 @@ impl TypeStore {
 
     /// Provides the [`Type`] associated with given name if it exists in the [`TypeStore`]  
     /// Otherwise returns None
-    pub(crate) fn get_type_by_name(&self, name: &str) -> Option<&TypeDefinition> {
+    pub(crate) fn get_type_by_name(&self, name: &str) -> Option<&TypeDefinitionKind> {
         self.ids_by_name
             .get(name)
             .and_then(|id| self.types_by_id.get(*id))
@@ -569,16 +557,9 @@ impl TypeStore {
         &self,
         name: &str,
     ) -> Option<&TypeId> {
-        let type_name = match name {
-            "int" => "integer",
-            "bool" => "boolean",
-            "$int" => "$integer",
-            "$bool" => "$boolean",
-            _ => name,
-        };
         self.ids_by_name
             .get(name)
-            .or_else(|| self.builtin_type_ids_by_name.get(type_name))
+            .or_else(|| self.builtin_type_ids_by_name.get(name))
     }
 
     /// Provides the [`TypeId`] associated with given name if it exists in the [`TypeStore`] as a type
@@ -592,13 +573,6 @@ impl TypeStore {
     /// Provides the [`TypeId`] associated with given type name if it exists in the [`TypeStore`]  
     /// Otherwise returns None
     pub(crate) fn get_builtin_type_id(&self, type_name: &str) -> Option<TypeId> {
-        let type_name = match type_name {
-            "int" => "integer",
-            "bool" => "boolean",
-            "$int" => "$integer",
-            "$bool" => "$boolean",
-            _ => type_name,
-        };
         self.builtin_type_ids_by_name
             .get(type_name)
             .map(|t| t.to_owned())
@@ -606,7 +580,7 @@ impl TypeStore {
 
     /// Provides the [`Type`] associated with given [`TypeId`] if it exists in the [`TypeStore`]  
     /// Otherwise returns None
-    pub(crate) fn get_type_by_id(&self, id: TypeId) -> Option<&TypeDefinition> {
+    pub(crate) fn get_type_by_id(&self, id: TypeId) -> Option<&TypeDefinitionKind> {
         self.types_by_id.get(id)
     }
 
@@ -619,7 +593,7 @@ impl TypeStore {
         }
         let type_id = self.types_by_id.len();
         self.ids_by_name.insert(name.to_owned(), type_id);
-        self.types_by_id.push(TypeDefinition::Named(type_def));
+        self.types_by_id.push(TypeDefinitionKind::Named(type_def));
         type_id
     }
 
@@ -632,11 +606,12 @@ impl TypeStore {
         name: &str,
     ) -> Option<TypeId> {
         if let Some(exists) = self.ids_by_name.get(name) {
-            if let Some(TypeDefinition::Named(existing_type_def)) = self.get_type_by_id(*exists) {
+            if let Some(TypeDefinitionKind::Named(existing_type_def)) = self.get_type_by_id(*exists)
+            {
                 // if existing_type_def is a deferred type def then this is the definition for it,
                 // resolve the deferred type definition here by replacing with given type definition
                 if existing_type_def.is_deferred_type_def() {
-                    self.types_by_id[*exists] = TypeDefinition::Named(type_def);
+                    self.types_by_id[*exists] = TypeDefinitionKind::Named(type_def);
                 }
             }
             return Some(*exists);
@@ -664,8 +639,9 @@ impl TypeStore {
         let type_id = self.types_by_id.len();
         self.builtin_type_ids_by_name
             .insert(builtin_type_name, type_id);
-        self.types_by_id
-            .push(TypeDefinition::BuiltIn(builtin_type_definition.to_owned()));
+        self.types_by_id.push(TypeDefinitionKind::BuiltIn(
+            builtin_type_definition.to_owned(),
+        ));
         type_id
     }
 
@@ -687,14 +663,15 @@ impl TypeStore {
         let type_id = self.types_by_id.len();
         self.imported_type_ids_by_name
             .insert(name.to_owned(), type_id);
-        self.types_by_id.push(TypeDefinition::Named(type_def));
+        self.types_by_id.push(TypeDefinitionKind::Named(type_def));
         type_id
     }
 
     /// Adds the [`Type`] in the [`TypeStore`] and returns the [`TypeId`] for it
     pub(crate) fn add_anonymous_type(&mut self, type_def: TypeDefinitionImpl) -> TypeId {
         let type_id = self.types_by_id.len();
-        self.types_by_id.push(TypeDefinition::Anonymous(type_def));
+        self.types_by_id
+            .push(TypeDefinitionKind::Anonymous(type_def));
         type_id
     }
 }
@@ -734,7 +711,7 @@ impl Resolver {
         );
 
         for isl_type in &isl_types {
-            // convert [IslType] into [TypeDefinition]
+            // convert [IslType] into [TypeDefinitionKind]
             match &isl_type.name() {
                 Some(isl_type_name) => {
                     // verify that the ISL type doesn't contain constraints from another ISL version
@@ -787,12 +764,11 @@ impl Resolver {
             let annotations: Vec<&Symbol> = value.annotations().collect();
 
             // load header for schema
-            if annotations.contains(&&text_token("schema_header")) {
+            if annotations.contains(&&Symbol::from("schema_header")) {
                 found_header = true;
                 let schema_header = try_to!(value.as_struct());
-                if let Some(imports) = schema_header.get("imports").and_then(|it| it.as_sequence())
-                {
-                    for import in imports.iter() {
+                if let Some(imports) = schema_header.get("imports").and_then(|it| it.as_list()) {
+                    for import in imports.elements() {
                         let isl_import = IslImport::from_ion_element(import)?;
                         isl_imports.push(isl_import);
                     }
@@ -809,7 +785,7 @@ impl Resolver {
                 }
             }
             // load types for schema
-            else if annotations.contains(&&text_token("type")) {
+            else if annotations.contains(&&Symbol::from("type")) {
                 // convert Element to IslType
                 let isl_type: IslTypeImpl =
                     IslTypeImpl::from_owned_element(isl_version, &value, &mut isl_inline_imports)?;
@@ -824,6 +800,17 @@ impl Resolver {
                     isl_user_reserved_fields.validate_field_names_in_type(&isl_type)?;
                 }
 
+                // top level named type definition can not contain `occurs` field as per ISL specification
+                if isl_type
+                    .constraints()
+                    .iter()
+                    .any(|c| matches!(c, IslConstraintImpl::Occurs(_)))
+                {
+                    return invalid_schema_error(
+                        "Top level types must not contain `occurs` field in their definition",
+                    );
+                }
+
                 let constraints = isl_type
                     .constraints()
                     .iter()
@@ -832,7 +819,7 @@ impl Resolver {
                 isl_types.push(IslType::new(isl_type, constraints));
             }
             // load footer for schema
-            else if annotations.contains(&&text_token("schema_footer")) {
+            else if annotations.contains(&&Symbol::from("schema_footer")) {
                 found_footer = true;
                 if isl_version == IslVersion::V2_0 {
                     let schema_footer = try_to!(value.as_struct());
@@ -924,7 +911,7 @@ impl Resolver {
                     return invalid_schema_error(format!("ISL type: {isl_type_name} contains constraints from other ISL version. Only use {isl_version} constraints for this method."));
                 }
 
-                // convert IslType to TypeDefinition
+                // convert IslType to TypeDefinitionKind
                 let type_id: TypeId =
                     TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
                         isl_version,
@@ -1058,10 +1045,10 @@ impl Resolver {
             }
             // verify if value is an ISL version marker and if it has valid format
             if value.ion_type() == IonType::Symbol
-                && isl_version_marker.is_match(value.as_str().unwrap())
+                && isl_version_marker.is_match(value.as_text().unwrap())
             {
                 // This implementation supports Ion Schema 1.0 and Ion Schema 2.0
-                return match value.as_str().unwrap() {
+                return match value.as_text().unwrap() {
                     "$ion_schema_1_0" => Ok(IslVersion::V1_0),
                     "$ion_schema_2_0" => Ok(IslVersion::V2_0),
                     _ => invalid_schema_error(format!(
@@ -1934,7 +1921,7 @@ mod schema_system_tests {
         let mut schema_system =
             SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
         let schema = schema_system.load_isl_schema("sample.isl")?;
-        let expected_open_content = element_reader().read_all(
+        let expected_open_content = Element::read_all(
             r#"
                 open_content_1::{
                     unknown_constraint: "this is an open content struct"

@@ -1,14 +1,12 @@
 use crate::generator::util::*;
 use crate::model::{TestCaseDetails, TestCaseVec};
-use ion_rs::value::owned::Element;
-use ion_rs::value::reader::element_reader;
-use ion_rs::value::reader::ElementReader;
-use ion_rs::value::IonElement;
+use ion_rs::element::Element;
 use ion_rs::IonType;
 use ion_schema::isl::IslVersion;
 use proc_macro2::{Literal, TokenStream, TokenTree};
 use quote::{format_ident, quote};
 use regex::Regex;
+use std::convert::TryInto;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -123,8 +121,7 @@ fn generate_test_cases_for_file(ctx: Context) -> TokenStream {
     // get the schema content from given schema file path
     let ion_content = fs::read(ctx.current_dir.as_path())
         .unwrap_or_else(|e| panic!("Unable to read {path_string} – {e}"));
-    let schema_content = element_reader()
-        .read_all(&ion_content)
+    let schema_content = Element::read_all(&ion_content)
         .unwrap_or_else(|e| panic!("Error in {path_string} – {e:?}"));
 
     let isl_version = find_isl_version(&schema_content);
@@ -190,10 +187,10 @@ fn find_isl_version(schema_content: &[Element]) -> IslVersion {
         }
         // verify if value is an ISL version marker and if it has valid format
         if value.ion_type() == IonType::Symbol
-            && isl_version_marker.is_match(value.as_str().unwrap())
+            && isl_version_marker.is_match(value.as_text().unwrap())
         {
             // This implementation supports Ion Schema 1.0 and Ion Schema 2.0
-            return match value.as_str().unwrap() {
+            return match value.as_text().unwrap() {
                 "$ion_schema_1_0" => IslVersion::V1_0,
                 "$ion_schema_2_0" => IslVersion::V2_0,
                 _ => unimplemented!("Unsupported Ion Schema Language version: {}", value),
@@ -268,7 +265,7 @@ fn generate_preamble(root_dir_path: &Path) -> TokenStream {
     let root_dir_token = TokenTree::from(Literal::string(root_dir_path.to_str().unwrap()));
 
     quote! {
-        use ion_rs::value::{IonElement, IonSequence};
+        use ion_rs::element::{IonSequence};
         use std::hash::{Hash, Hasher};
 
         /// Gets the root directory for the test suite.
@@ -324,12 +321,11 @@ fn generate_preamble(root_dir_path: &Path) -> TokenStream {
         fn __assert_value_validity_for_type(value_ion: &str, schema_id: &str, type_id: &str, expect_valid: bool) -> Result<(), String> {
             let schema = __new_schema_system().load_schema(schema_id).unwrap();
             let isl_type = schema.get_type(type_id).unwrap();
-            let reader : &dyn ion_rs::value::reader::ElementReader = &ion_rs::value::reader::element_reader();
-            let value: ion_rs::value::owned::Element = reader.read_one(value_ion.as_bytes()).unwrap();
-            let prepared_value: ion_schema::IonSchemaElement = if value.has_annotation("document") && value.ion_type() == ion_rs::IonType::SExpression {
+            let value: ion_rs::element::Element = ion_rs::element::Element::read_one(value_ion.as_bytes()).unwrap();
+            let prepared_value: ion_schema::IonSchemaElement = if value.has_annotation("document") && value.ion_type() == ion_rs::IonType::SExp {
                 let element_vec = value.as_sequence()
                     .unwrap_or_else(|| unreachable!("We already confirmed that this is a s-expression."))
-                    .iter()
+                    .elements()
                     .map(|it| it.to_owned())
                     .collect::<Vec<_>>();
                 ion_schema::IonSchemaElement::Document(element_vec)

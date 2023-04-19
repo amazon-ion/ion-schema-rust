@@ -62,7 +62,10 @@ impl fmt::Display for Violation {
 pub enum ViolationCode {
     AllTypesNotMatched,
     AnnotationMismatched,
-    ElementMismatched, // this is used for mismatched elements in containers
+    ElementMismatched,     // this is used for mismatched elements in containers
+    ElementNotDistinct,    // this is used for elements that are not distinct in containers
+    FieldNamesMismatched,  // this is used for mismatched field names in a struct
+    FieldNamesNotDistinct, // this is used for field names that are not distinct in a struct
     FieldsNotMatched,
     InvalidLength, // this is ued for any length related constraints (e.g. container_length, byte_length, codepoint_length)
     InvalidNull,   // if the value is a null for type references that doesn't allow null
@@ -88,6 +91,9 @@ impl fmt::Display for ViolationCode {
                 ViolationCode::AllTypesNotMatched => "all_types_not_matched",
                 ViolationCode::AnnotationMismatched => "annotation_mismatched",
                 ViolationCode::ElementMismatched => "element_mismatched",
+                ViolationCode::ElementNotDistinct => "element_not_distinct",
+                ViolationCode::FieldNamesMismatched => "field_names_mismatched",
+                ViolationCode::FieldNamesNotDistinct => "field_names_not_distinct",
                 ViolationCode::FieldsNotMatched => "fields_not_matched",
                 ViolationCode::InvalidLength => "invalid_length",
                 ViolationCode::InvalidNull => "invalid_null",

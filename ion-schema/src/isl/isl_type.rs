@@ -2,8 +2,8 @@ use crate::isl::isl_constraint::{IslConstraint, IslConstraintImpl};
 use crate::isl::isl_import::IslImportType;
 use crate::isl::IslVersion;
 use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
-use ion_rs::value::owned::{text_token, Element};
-use ion_rs::value::{IonElement, IonStruct};
+use ion_rs::element::Element;
+use ion_rs::Symbol;
 
 /// Provides public facing APIs for constructing ISL types programmatically for ISL 1.0
 pub mod v_1_0 {
@@ -146,7 +146,7 @@ impl IslTypeImpl {
         inline_imported_types: &mut Vec<IslImportType>, // stores the inline_imports that are discovered while loading this ISL type
     ) -> IonSchemaResult<Self> {
         let mut constraints = vec![];
-        let contains_annotations = ion.annotations().any(|x| x == &text_token("type"));
+        let contains_annotations = ion.annotations().any(|x| x == &Symbol::from("type"));
 
         let ion_struct = try_to!(ion.as_struct());
 
@@ -157,7 +157,7 @@ impl IslTypeImpl {
             ));
         }
         let type_name: Option<String> = match ion_struct.get("name") {
-            Some(name_element) => match name_element.as_sym() {
+            Some(name_element) => match name_element.as_symbol() {
                 Some(name_symbol) => match name_symbol.text() {
                     None => {
                         return Err(invalid_schema_error_raw(

@@ -1,7 +1,7 @@
 use crate::ion_path::{IonPath, IonPathElement};
 use crate::isl::isl_constraint::{IslConstraintImpl, IslRegexConstraint};
 use crate::isl::isl_range::{Range, RangeImpl};
-use crate::isl::isl_type_reference::IslTypeRefImpl;
+use crate::isl::isl_type_reference::{IslTypeRefImpl, NullabilityModifier};
 use crate::isl::util::{Annotation, TimestampOffset, TimestampPrecision, ValidValue};
 use crate::isl::IslVersion;
 use crate::nfa::{FinalState, NfaBuilder, NfaEvaluation};
@@ -10,17 +10,18 @@ use crate::result::{
     ValidationResult,
 };
 use crate::system::{PendingTypes, TypeId, TypeStore};
+use crate::type_reference::{TypeReference, VariablyOccurringTypeRef};
 use crate::types::TypeValidator;
 use crate::violation::{Violation, ViolationCode};
 use crate::IonSchemaElement;
-use ion_rs::value::owned::Element;
-use ion_rs::value::{IonElement, IonSequence, IonStruct};
-use ion_rs::{Integer, IonType};
+use ion_rs::element::Element;
+use ion_rs::{Int, IonType};
 use regex::{Regex, RegexBuilder};
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use std::fmt::{Display, Formatter};
 use std::iter::Peekable;
+use std::ops::Neg;
 use std::str::Chars;
 use std::sync::Arc;
 
@@ -51,11 +52,13 @@ pub enum Constraint {
     ContentClosed,
     ContainerLength(ContainerLengthConstraint),
     Element(ElementConstraint),
+    Exponent(ExponentConstraint),
+    FieldNames(FieldNamesConstraint),
     Fields(FieldsConstraint),
     Not(NotConstraint),
     OneOf(OneOfConstraint),
     OrderedElements(OrderedElementsConstraint),
-    Occurs(OccursConstraint),
+    Occurs,
     Precision(PrecisionConstraint),
     Regex(RegexConstraint),
     Scale(ScaleConstraint),
@@ -70,32 +73,63 @@ pub enum Constraint {
 impl Constraint {
     /// Creates a [Constraint::Type] referring to the type represented by the provided [TypeId].
     pub fn type_constraint(type_id: TypeId) -> Constraint {
-        Constraint::Type(TypeConstraint::new(type_id))
+        Constraint::Type(TypeConstraint::new(TypeReference::new(
+            type_id,
+            NullabilityModifier::Nothing,
+        )))
     }
 
     /// Creates a [Constraint::AllOf] referring to the types represented by the provided [TypeId]s.
     pub fn all_of<A: Into<Vec<TypeId>>>(type_ids: A) -> Constraint {
-        Constraint::AllOf(AllOfConstraint::new(type_ids.into()))
+        let type_references = type_ids
+            .into()
+            .iter()
+            .map(|id| TypeReference::new(*id, NullabilityModifier::Nothing))
+            .collect();
+        Constraint::AllOf(AllOfConstraint::new(type_references))
     }
 
     /// Creates a [Constraint::AnyOf] referring to the types represented by the provided [TypeId]s.
     pub fn any_of<A: Into<Vec<TypeId>>>(type_ids: A) -> Constraint {
-        Constraint::AnyOf(AnyOfConstraint::new(type_ids.into()))
+        let type_references = type_ids
+            .into()
+            .iter()
+            .map(|id| TypeReference::new(*id, NullabilityModifier::Nothing))
+            .collect();
+        Constraint::AnyOf(AnyOfConstraint::new(type_references))
     }
 
     /// Creates a [Constraint::OneOf] referring to the types represented by the provided [TypeId]s.
     pub fn one_of<A: Into<Vec<TypeId>>>(type_ids: A) -> Constraint {
-        Constraint::OneOf(OneOfConstraint::new(type_ids.into()))
+        let type_references = type_ids
+            .into()
+            .iter()
+            .map(|id| TypeReference::new(*id, NullabilityModifier::Nothing))
+            .collect();
+        Constraint::OneOf(OneOfConstraint::new(type_references))
     }
 
     /// Creates a [Constraint::Not] referring to the type represented by the provided [TypeId].
     pub fn not(type_id: TypeId) -> Constraint {
-        Constraint::Not(NotConstraint::new(type_id))
+        Constraint::Not(NotConstraint::new(TypeReference::new(
+            type_id,
+            NullabilityModifier::Nothing,
+        )))
     }
 
     /// Creates a [Constraint::OrderedElements] referring to the types represented by the provided [TypeId]s.
     pub fn ordered_elements<A: Into<Vec<TypeId>>>(type_ids: A) -> Constraint {
-        Constraint::OrderedElements(OrderedElementsConstraint::new(type_ids.into()))
+        let type_references = type_ids
+            .into()
+            .iter()
+            .map(|id| {
+                VariablyOccurringTypeRef::new(
+                    TypeReference::new(*id, NullabilityModifier::Nothing),
+                    Range::required(),
+                )
+            })
+            .collect();
+        Constraint::OrderedElements(OrderedElementsConstraint::new(type_references))
     }
 
     /// Creates a [Constraint::Contains] referring to [Elements] specified inside it
@@ -122,9 +156,12 @@ impl Constraint {
         )))
     }
 
-    /// Creates a [Constraint::Element] referring to the type represented by the provided [TypeId].
-    pub fn element(type_id: TypeId) -> Constraint {
-        Constraint::Element(ElementConstraint::new(type_id))
+    /// Creates a [Constraint::Element] referring to the type represented by the provided [TypeId] and the boolean represents whether distinct elements are required or not.
+    pub fn element(type_id: TypeId, requires_distinct: bool) -> Constraint {
+        Constraint::Element(ElementConstraint::new(
+            TypeReference::new(type_id, NullabilityModifier::Nothing),
+            requires_distinct,
+        ))
     }
 
     /// Creates a [Constraint::Annotations] using [str]s and [Element]s specified inside it
@@ -137,7 +174,7 @@ impl Constraint {
             .into_iter()
             .map(|a| {
                 Annotation::new(
-                    a.as_str().unwrap().to_owned(),
+                    a.as_text().unwrap().to_owned(),
                     Annotation::is_annotation_required(
                         &a,
                         annotations_modifiers.contains(&"required"),
@@ -160,8 +197,12 @@ impl Constraint {
     }
 
     /// Creates a [Constraint::Scale] from a [Range] specifying a precision range.
-    pub fn scale(scale: RangeImpl<Integer>) -> Constraint {
+    pub fn scale(scale: RangeImpl<Int>) -> Constraint {
         Constraint::Scale(ScaleConstraint::new(Range::Integer(scale)))
+    }
+    /// Creates a [Constraint::Exponent] from a [Range] specifying an exponent range.
+    pub fn exponent(exponent: RangeImpl<Int>) -> Constraint {
+        Constraint::Exponent(ExponentConstraint::new(Range::Integer(exponent)))
     }
 
     /// Creates a [Constraint::TimestampPrecision] from a [Range] specifying a precision range.
@@ -189,7 +230,26 @@ impl Constraint {
     where
         I: Iterator<Item = (String, TypeId)>,
     {
-        Constraint::Fields(FieldsConstraint::new(fields.collect(), true))
+        let fields = fields
+            .map(|(field_name, type_id)| {
+                (
+                    field_name,
+                    VariablyOccurringTypeRef::new(
+                        TypeReference::new(type_id, NullabilityModifier::Nothing),
+                        Range::optional(),
+                    ),
+                )
+            })
+            .collect();
+        Constraint::Fields(FieldsConstraint::new(fields, true))
+    }
+
+    /// Creates a [Constraint::FieldNames] referring to the type represented by the provided [TypeId] and the boolean represents whether each field name should be distinct or not.
+    pub fn field_names(type_id: TypeId, requires_distinct: bool) -> Constraint {
+        Constraint::FieldNames(FieldNamesConstraint::new(
+            TypeReference::new(type_id, NullabilityModifier::Nothing),
+            requires_distinct,
+        ))
     }
 
     /// Creates a [Constraint::ValidValues] using the [Element]s specified inside it
@@ -219,19 +279,19 @@ impl Constraint {
         Ok(Constraint::Regex(regex.try_into()?))
     }
 
-    /// Resolves all ISL type references to corresponding [TypeId]s
-    fn resolve_type_references_to_type_ids(
+    /// Resolves all ISL type references to corresponding [TypeReference]s
+    fn resolve_type_references(
         isl_version: IslVersion,
         type_references: &[IslTypeRefImpl],
         type_store: &mut TypeStore,
         pending_types: &mut PendingTypes,
-    ) -> IonSchemaResult<Vec<TypeId>> {
+    ) -> IonSchemaResult<Vec<TypeReference>> {
         type_references
             .iter()
             .map(|t| {
                 IslTypeRefImpl::resolve_type_reference(isl_version, t, type_store, pending_types)
             })
-            .collect::<IonSchemaResult<Vec<TypeId>>>()
+            .collect::<IonSchemaResult<Vec<TypeReference>>>()
     }
 
     /// Parse an [IslConstraint] to a [Constraint]
@@ -244,14 +304,14 @@ impl Constraint {
     ) -> IonSchemaResult<Constraint> {
         // TODO: add more constraints below
         match isl_constraint {
-            IslConstraintImpl::AllOf(type_references) => {
-                let type_ids = Constraint::resolve_type_references_to_type_ids(
+            IslConstraintImpl::AllOf(isl_type_references) => {
+                let type_references = Constraint::resolve_type_references(
                     isl_version,
-                    type_references,
+                    isl_type_references,
                     type_store,
                     pending_types,
                 )?;
-                Ok(Constraint::AllOf(AllOfConstraint::new(type_ids)))
+                Ok(Constraint::AllOf(AllOfConstraint::new(type_references)))
             }
             IslConstraintImpl::Annotations(isl_annotations) => {
                 Ok(Constraint::Annotations(AnnotationsConstraint::new(
@@ -260,14 +320,14 @@ impl Constraint {
                     isl_annotations.annotations.to_owned(),
                 )))
             }
-            IslConstraintImpl::AnyOf(type_references) => {
-                let type_ids = Constraint::resolve_type_references_to_type_ids(
+            IslConstraintImpl::AnyOf(isl_type_references) => {
+                let type_references = Constraint::resolve_type_references(
                     isl_version,
-                    type_references,
+                    isl_type_references,
                     type_store,
                     pending_types,
                 )?;
-                Ok(Constraint::AnyOf(AnyOfConstraint::new(type_ids)))
+                Ok(Constraint::AnyOf(AnyOfConstraint::new(type_references)))
             }
             IslConstraintImpl::ByteLength(byte_length) => Ok(Constraint::ByteLength(
                 ByteLengthConstraint::new(byte_length.to_owned()),
@@ -286,16 +346,35 @@ impl Constraint {
             IslConstraintImpl::ContainerLength(isl_length) => Ok(Constraint::ContainerLength(
                 ContainerLengthConstraint::new(isl_length.to_owned()),
             )),
-            IslConstraintImpl::Element(type_reference) => {
+            IslConstraintImpl::Element(type_reference, require_distinct_elements) => {
                 let type_id = IslTypeRefImpl::resolve_type_reference(
                     isl_version,
                     type_reference,
                     type_store,
                     pending_types,
                 )?;
-                Ok(Constraint::Element(ElementConstraint::new(type_id)))
+                Ok(Constraint::Element(ElementConstraint::new(
+                    type_id,
+                    *require_distinct_elements,
+                )))
             }
-            IslConstraintImpl::Fields(fields) => {
+            IslConstraintImpl::FieldNames(isl_type_reference, distinct) => {
+                let type_reference = IslTypeRefImpl::resolve_type_reference(
+                    isl_version,
+                    isl_type_reference,
+                    type_store,
+                    pending_types,
+                )?;
+                Ok(Constraint::FieldNames(FieldNamesConstraint::new(
+                    type_reference,
+                    *distinct,
+                )))
+            }
+            IslConstraintImpl::Fields(fields, content_closed) => {
+                let open_content = match isl_version {
+                    IslVersion::V1_0 => open_content,
+                    IslVersion::V2_0 => !content_closed, // for ISL 2.0 whether open content is allowed or not depends on `fields` constraint
+                };
                 let fields_constraint: FieldsConstraint =
                     FieldsConstraint::resolve_from_isl_constraint(
                         isl_version,
@@ -306,14 +385,14 @@ impl Constraint {
                     )?;
                 Ok(Constraint::Fields(fields_constraint))
             }
-            IslConstraintImpl::OneOf(type_references) => {
-                let type_ids = Constraint::resolve_type_references_to_type_ids(
+            IslConstraintImpl::OneOf(isl_type_references) => {
+                let type_references = Constraint::resolve_type_references(
                     isl_version,
-                    type_references,
+                    isl_type_references,
                     type_store,
                     pending_types,
                 )?;
-                Ok(Constraint::OneOf(OneOfConstraint::new(type_ids)))
+                Ok(Constraint::OneOf(OneOfConstraint::new(type_references)))
             }
             IslConstraintImpl::Not(type_reference) => {
                 let type_id = IslTypeRefImpl::resolve_type_reference(
@@ -333,24 +412,16 @@ impl Constraint {
                 )?;
                 Ok(Constraint::Type(TypeConstraint::new(type_id)))
             }
-            IslConstraintImpl::Occurs(occurs_range) => Ok(Constraint::Occurs(
-                OccursConstraint::new(occurs_range.to_owned()),
-            )),
-            IslConstraintImpl::OrderedElements(type_references) => {
-                let type_ids: Vec<TypeId> = type_references
-                    .iter()
-                    .map(|t| {
-                        IslTypeRefImpl::resolve_type_reference(
-                            isl_version,
-                            t,
-                            type_store,
-                            pending_types,
-                        )
-                    })
-                    .collect::<IonSchemaResult<Vec<TypeId>>>()?;
-                Ok(Constraint::OrderedElements(OrderedElementsConstraint::new(
-                    type_ids,
-                )))
+            IslConstraintImpl::Occurs(_) => Ok(Constraint::Occurs),
+            IslConstraintImpl::OrderedElements(isl_type_references) => {
+                Ok(Constraint::OrderedElements(
+                    OrderedElementsConstraint::resolve_from_isl_constraint(
+                        isl_version,
+                        isl_type_references,
+                        type_store,
+                        pending_types,
+                    )?,
+                ))
             }
             IslConstraintImpl::Precision(precision_range) => Ok(Constraint::Precision(
                 PrecisionConstraint::new(precision_range.to_owned()),
@@ -364,6 +435,9 @@ impl Constraint {
                     timestamp_offset.valid_offsets().to_vec(),
                 )))
             }
+            IslConstraintImpl::Exponent(exponent_range) => Ok(Constraint::Exponent(
+                ExponentConstraint::new(exponent_range.to_owned()),
+            )),
             IslConstraintImpl::TimestampPrecision(timestamp_precision_range) => {
                 Ok(Constraint::TimestampPrecision(
                     TimestampPrecisionConstraint::new(timestamp_precision_range.to_owned()),
@@ -414,19 +488,29 @@ impl Constraint {
                 container_length.validate(value, type_store, ion_path)
             }
             Constraint::Element(element) => element.validate(value, type_store, ion_path),
+            Constraint::FieldNames(field_names) => {
+                field_names.validate(value, type_store, ion_path)
+            }
             Constraint::Fields(fields) => fields.validate(value, type_store, ion_path),
             Constraint::Not(not) => not.validate(value, type_store, ion_path),
             Constraint::OneOf(one_of) => one_of.validate(value, type_store, ion_path),
             Constraint::Type(type_constraint) => {
                 type_constraint.validate(value, type_store, ion_path)
             }
-            Constraint::Occurs(occurs) => occurs.validate(value, type_store, ion_path),
+            Constraint::Occurs => {
+                // No op
+                // `occurs` does not work as a constraint by its own, it needs to be used with other constraints
+                // e.g. `ordered_elements`, `fields`, etc.
+                // the validation for occurs is done within these other constraints
+                Ok(())
+            }
             Constraint::OrderedElements(ordered_elements) => {
                 ordered_elements.validate(value, type_store, ion_path)
             }
             Constraint::Precision(precision) => precision.validate(value, type_store, ion_path),
             Constraint::Regex(regex) => regex.validate(value, type_store, ion_path),
             Constraint::Scale(scale) => scale.validate(value, type_store, ion_path),
+            Constraint::Exponent(exponent) => exponent.validate(value, type_store, ion_path),
             Constraint::TimestampOffset(timestamp_offset) => {
                 timestamp_offset.validate(value, type_store, ion_path)
             }
@@ -452,12 +536,12 @@ impl Constraint {
 /// [all_of]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#all_of
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AllOfConstraint {
-    type_ids: Vec<TypeId>,
+    type_references: Vec<TypeReference>,
 }
 
 impl AllOfConstraint {
-    pub fn new(type_ids: Vec<TypeId>) -> Self {
-        Self { type_ids }
+    pub fn new(type_references: Vec<TypeReference>) -> Self {
+        Self { type_references }
     }
 }
 
@@ -470,10 +554,9 @@ impl ConstraintValidator for AllOfConstraint {
     ) -> ValidationResult {
         let mut violations: Vec<Violation> = vec![];
         let mut valid_types = vec![];
-        for type_id in &self.type_ids {
-            let type_def = type_store.get_type_by_id(*type_id).unwrap();
-            match type_def.validate(value, type_store, ion_path) {
-                Ok(_) => valid_types.push(type_id),
+        for type_reference in &self.type_references {
+            match type_reference.validate(value, type_store, ion_path) {
+                Ok(_) => valid_types.push(type_reference.type_id()),
                 Err(violation) => violations.push(violation),
             }
         }
@@ -484,7 +567,7 @@ impl ConstraintValidator for AllOfConstraint {
                 format!(
                     "value matches {} types, expected {}",
                     valid_types.len(),
-                    self.type_ids.len()
+                    self.type_references.len()
                 ),
                 ion_path,
                 violations,
@@ -498,12 +581,12 @@ impl ConstraintValidator for AllOfConstraint {
 /// [any_of]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#any_of
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AnyOfConstraint {
-    type_ids: Vec<TypeId>,
+    type_references: Vec<TypeReference>,
 }
 
 impl AnyOfConstraint {
-    pub fn new(type_ids: Vec<TypeId>) -> Self {
-        Self { type_ids }
+    pub fn new(type_references: Vec<TypeReference>) -> Self {
+        Self { type_references }
     }
 }
 
@@ -516,10 +599,9 @@ impl ConstraintValidator for AnyOfConstraint {
     ) -> ValidationResult {
         let mut violations: Vec<Violation> = vec![];
         let mut valid_types = vec![];
-        for type_id in &self.type_ids {
-            let type_def = type_store.get_type_by_id(*type_id).unwrap();
-            match type_def.validate(value, type_store, ion_path) {
-                Ok(_) => valid_types.push(type_id),
+        for type_reference in &self.type_references {
+            match type_reference.validate(value, type_store, ion_path) {
+                Ok(_) => valid_types.push(type_reference.type_id()),
                 Err(violation) => violations.push(violation),
             }
         }
@@ -541,12 +623,12 @@ impl ConstraintValidator for AnyOfConstraint {
 /// [one_of]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#one_of
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OneOfConstraint {
-    type_ids: Vec<TypeId>,
+    type_references: Vec<TypeReference>,
 }
 
 impl OneOfConstraint {
-    pub fn new(type_ids: Vec<TypeId>) -> Self {
-        Self { type_ids }
+    pub fn new(type_references: Vec<TypeReference>) -> Self {
+        Self { type_references }
     }
 }
 
@@ -559,10 +641,9 @@ impl ConstraintValidator for OneOfConstraint {
     ) -> ValidationResult {
         let mut violations: Vec<Violation> = vec![];
         let mut valid_types = vec![];
-        for type_id in &self.type_ids {
-            let type_def = type_store.get_type_by_id(*type_id).unwrap();
-            match type_def.validate(value, type_store, ion_path) {
-                Ok(_) => valid_types.push(type_id),
+        for type_reference in &self.type_references {
+            match type_reference.validate(value, type_store, ion_path) {
+                Ok(_) => valid_types.push(type_reference.type_id()),
                 Err(violation) => violations.push(violation),
             }
         }
@@ -591,12 +672,12 @@ impl ConstraintValidator for OneOfConstraint {
 /// [type]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#not
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NotConstraint {
-    type_id: TypeId,
+    type_reference: TypeReference,
 }
 
 impl NotConstraint {
-    pub fn new(type_id: TypeId) -> Self {
-        Self { type_id }
+    pub fn new(type_reference: TypeReference) -> Self {
+        Self { type_reference }
     }
 }
 
@@ -607,8 +688,7 @@ impl ConstraintValidator for NotConstraint {
         type_store: &TypeStore,
         ion_path: &mut IonPath,
     ) -> ValidationResult {
-        let type_def = type_store.get_type_by_id(self.type_id).unwrap();
-        let violation = type_def.validate(value, type_store, ion_path);
+        let violation = self.type_reference.validate(value, type_store, ion_path);
         match violation {
             Err(violation) => Ok(()),
             Ok(_) => {
@@ -628,12 +708,12 @@ impl ConstraintValidator for NotConstraint {
 /// [type]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#type
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypeConstraint {
-    type_id: TypeId,
+    pub(crate) type_reference: TypeReference,
 }
 
 impl TypeConstraint {
-    pub fn new(type_id: TypeId) -> Self {
-        Self { type_id }
+    pub fn new(type_reference: TypeReference) -> Self {
+        Self { type_reference }
     }
 }
 
@@ -644,53 +724,20 @@ impl ConstraintValidator for TypeConstraint {
         type_store: &TypeStore,
         ion_path: &mut IonPath,
     ) -> ValidationResult {
-        let type_def = type_store.get_type_by_id(self.type_id).unwrap();
-        type_def.validate(value, type_store, ion_path)
-    }
-}
-
-/// Implements an `occurs` constraint of Ion Schema
-/// [occurs]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#type-definitions
-#[derive(Debug, Clone, PartialEq)]
-pub struct OccursConstraint {
-    occurs_range: Range,
-}
-
-impl OccursConstraint {
-    pub fn new(occurs_range: Range) -> Self {
-        Self { occurs_range }
-    }
-
-    pub fn occurs_range(&self) -> &Range {
-        &self.occurs_range
-    }
-}
-
-impl ConstraintValidator for OccursConstraint {
-    fn validate(
-        &self,
-        value: &IonSchemaElement,
-        type_store: &TypeStore,
-        ion_path: &mut IonPath,
-    ) -> ValidationResult {
-        // No op
-        // `occurs` does not work as a constraint by its own, it needs to be used with other constraints
-        // e.g. `ordered_elements`, `fields`, etc.
-        // the validation for occurs is done within these other constraints
-        Ok(())
+        self.type_reference.validate(value, type_store, ion_path)
     }
 }
 
 /// Implements an `ordered_elements` constraint of Ion Schema
 /// [ordered_elements]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#ordered_elements
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct OrderedElementsConstraint {
-    type_ids: Vec<TypeId>,
+    type_references: Vec<VariablyOccurringTypeRef>,
 }
 
 impl OrderedElementsConstraint {
-    pub fn new(type_ids: Vec<TypeId>) -> Self {
-        Self { type_ids }
+    pub fn new(type_references: Vec<VariablyOccurringTypeRef>) -> Self {
+        Self { type_references }
     }
 
     /// Tries to create an [OrderedElements] constraint from the given Element
@@ -700,12 +747,21 @@ impl OrderedElementsConstraint {
         type_store: &mut TypeStore,
         pending_types: &mut PendingTypes,
     ) -> IonSchemaResult<Self> {
-        let resolved_types: Vec<TypeId> = type_references
+        let resolved_types: Vec<VariablyOccurringTypeRef> = type_references
             .iter()
             .map(|t| {
+                // resolve type references and create variably occurring type reference with occurs range
+                // default `occurs` field value for `ordered_elements` constraint is `occurs: required` or `occurs: 1`
                 IslTypeRefImpl::resolve_type_reference(isl_version, t, type_store, pending_types)
+                    .map(|type_ref| {
+                        VariablyOccurringTypeRef::new(
+                            type_ref,
+                            t.get_occurs_range().unwrap_or(Range::required()),
+                        )
+                    })
             })
-            .collect::<IonSchemaResult<Vec<TypeId>>>()?;
+            .collect::<IonSchemaResult<Vec<VariablyOccurringTypeRef>>>()?;
+
         Ok(OrderedElementsConstraint::new(resolved_types))
     }
 
@@ -755,12 +811,15 @@ impl OrderedElementsConstraint {
     // +------------------------------+
     // As shown above visit count for `END` doesn't have final state in it which means the value resulted to be invalid.
     //
-    fn build_nfa_from_type_ids(type_ids: &[TypeId], type_store: &TypeStore) -> NfaEvaluation {
+    fn build_nfa_from_type_references(
+        type_ids: &[VariablyOccurringTypeRef],
+        type_store: &TypeStore,
+    ) -> NfaEvaluation {
         let mut nfa_builder = NfaBuilder::new();
         let mut final_states = HashSet::new();
-        for (state_id, type_id) in type_ids.iter().enumerate() {
-            let type_def = type_store.get_type_by_id(*type_id).unwrap();
-            let occurs_range: Range = type_def.get_occurs_constraint("ordered_elements");
+        for (state_id, variably_occurring_type_reference) in type_ids.iter().enumerate() {
+            let type_reference = variably_occurring_type_reference.type_ref();
+            let occurs_range: &Range = variably_occurring_type_reference.occurs_range();
 
             // unwrap here won't lead to panic as the check for non negative range was already done while parsing ordered_elements constraint
             let (min, max) = occurs_range.non_negative_range_boundaries().unwrap();
@@ -776,16 +835,16 @@ impl OrderedElementsConstraint {
 
             if state_id == 0 {
                 // add a transition to self for initial state
-                nfa_builder.with_transition(state_id, state_id, *type_id, min, max);
+                nfa_builder.with_transition(state_id, state_id, type_reference, min, max);
                 continue;
             }
 
             // add transition to next state
-            nfa_builder.with_transition(state_id - 1, state_id, *type_id, min, max);
+            nfa_builder.with_transition(state_id - 1, state_id, type_reference, min, max);
 
             if max > 1 {
                 // add a transition to self for states that have  max > 1
-                nfa_builder.with_transition(state_id, state_id, *type_id, min, max);
+                nfa_builder.with_transition(state_id, state_id, type_reference, min, max);
             }
         }
 
@@ -820,14 +879,16 @@ impl ConstraintValidator for OrderedElementsConstraint {
                         violations,
                     ));
                 }
-                Some(sequence) => sequence.iter().map(|a| a.to_owned()).collect(),
+                Some(sequence) => sequence.elements().map(|a| a.to_owned()).collect(),
             },
             IonSchemaElement::Document(document) => document.to_owned(),
         };
 
         // build nfa for validation
-        let mut nfa_evaluation =
-            OrderedElementsConstraint::build_nfa_from_type_ids(&self.type_ids, type_store);
+        let mut nfa_evaluation = OrderedElementsConstraint::build_nfa_from_type_references(
+            &self.type_references,
+            type_store,
+        );
 
         if !values.is_empty() && nfa_evaluation.nfa.get_final_states().is_empty() {
             return Err(Violation::with_violations(
@@ -858,14 +919,14 @@ impl ConstraintValidator for OrderedElementsConstraint {
 
 /// Implements an `fields` constraint of Ion Schema
 /// [fields]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#fields
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FieldsConstraint {
-    fields: HashMap<String, TypeId>,
+    fields: HashMap<String, VariablyOccurringTypeRef>,
     open_content: bool,
 }
 
 impl FieldsConstraint {
-    pub fn new(fields: HashMap<String, TypeId>, open_content: bool) -> Self {
+    pub fn new(fields: HashMap<String, VariablyOccurringTypeRef>, open_content: bool) -> Self {
         Self {
             fields,
             open_content,
@@ -885,13 +946,23 @@ impl FieldsConstraint {
         pending_types: &mut PendingTypes,
         open_content: bool, // Indicates if open content is allowed or not for the fields in the container
     ) -> IonSchemaResult<Self> {
-        let resolved_fields: HashMap<String, TypeId> = fields
+        let resolved_fields: HashMap<String, VariablyOccurringTypeRef> = fields
             .iter()
             .map(|(f, t)| {
+                // resolve type references and create variably occurring type reference with occurs range
+                // default `occurs` field value for `fields` constraint is `occurs: optional` or `occurs: range::[0, 1]`
                 IslTypeRefImpl::resolve_type_reference(isl_version, t, type_store, pending_types)
-                    .map(|type_id| (f.to_owned(), type_id))
+                    .map(|type_ref| {
+                        (
+                            f.to_owned(),
+                            VariablyOccurringTypeRef::new(
+                                type_ref,
+                                t.get_occurs_range().unwrap_or(Range::optional()),
+                            ),
+                        )
+                    })
             })
-            .collect::<IonSchemaResult<HashMap<String, TypeId>>>()?;
+            .collect::<IonSchemaResult<HashMap<String, VariablyOccurringTypeRef>>>()?;
         Ok(FieldsConstraint::new(resolved_fields, open_content))
     }
 }
@@ -926,15 +997,15 @@ impl ConstraintValidator for FieldsConstraint {
         }
 
         // get the values corresponding to the field_name and perform occurs_validation based on the type_def
-        for (field_name, type_id) in &self.fields {
-            let type_def = type_store.get_type_by_id(*type_id).unwrap();
+        for (field_name, variably_occurring_type_ref) in &self.fields {
+            let type_reference = variably_occurring_type_ref.type_ref();
             let values: Vec<&Element> = ion_struct.get_all(field_name).collect();
 
             // add parent value for current field in ion path
             ion_path.push(IonPathElement::Field(field_name.to_owned()));
 
             // perform occurs validation for type_def for all values of the given field_name
-            let occurs_range: Range = type_def.get_occurs_constraint("fields");
+            let occurs_range: &Range = variably_occurring_type_ref.occurs_range();
 
             // verify if values follow occurs_range constraint
             if !occurs_range.contains(&(values.len() as i64).into()) {
@@ -954,7 +1025,9 @@ impl ConstraintValidator for FieldsConstraint {
             // verify if all the values for this field name are valid according to type_def
             for value in values {
                 let schema_element: IonSchemaElement = value.into();
-                if let Err(violation) = type_def.validate(&schema_element, type_store, ion_path) {
+                if let Err(violation) =
+                    type_reference.validate(&schema_element, type_store, ion_path)
+                {
                     violations.push(violation);
                 }
             }
@@ -969,6 +1042,76 @@ impl ConstraintValidator for FieldsConstraint {
                 "fields",
                 ViolationCode::FieldsNotMatched,
                 "value didn't satisfy fields constraint",
+                ion_path,
+                violations,
+            ));
+        }
+        Ok(())
+    }
+}
+
+/// Implements an `field_names` constraint of Ion Schema
+/// [field_names]: https://amazon-ion.github.io/ion-schema/docs/isl-2-0/spec#field_names
+#[derive(Debug, Clone, PartialEq)]
+pub struct FieldNamesConstraint {
+    type_reference: TypeReference,
+    requires_distinct: bool,
+}
+
+impl FieldNamesConstraint {
+    pub fn new(type_reference: TypeReference, requires_distinct: bool) -> Self {
+        Self {
+            type_reference,
+            requires_distinct,
+        }
+    }
+}
+
+impl ConstraintValidator for FieldNamesConstraint {
+    fn validate(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> ValidationResult {
+        let mut violations: Vec<Violation> = vec![];
+
+        // create a set for checking duplicate field names
+        let mut field_name_set = HashSet::new();
+
+        let ion_struct = value
+            .expect_element_of_type(&[IonType::Struct], "field_names", ion_path)?
+            .as_struct()
+            .unwrap();
+
+        for (field_name, _) in ion_struct.iter() {
+            ion_path.push(IonPathElement::Field(field_name.text().unwrap().to_owned()));
+            let schema_element: IonSchemaElement = (&Element::symbol(field_name)).into();
+
+            if let Err(violation) =
+                self.type_reference
+                    .validate(&schema_element, type_store, ion_path)
+            {
+                violations.push(violation);
+            }
+            if self.requires_distinct && !field_name_set.insert(field_name.text().unwrap()) {
+                violations.push(Violation::new(
+                    "field_names",
+                    ViolationCode::FieldNamesNotDistinct,
+                    format!(
+                        "expected distinct field names but found duplicate field name {field_name}",
+                    ),
+                    ion_path,
+                ))
+            }
+            ion_path.pop();
+        }
+
+        if !violations.is_empty() {
+            return Err(Violation::with_violations(
+                "field_names",
+                ViolationCode::FieldNamesMismatched,
+                "one or more field names don't satisfy field_names constraint",
                 ion_path,
                 violations,
             ));
@@ -1019,7 +1162,7 @@ impl ConstraintValidator for ContainsConstraint {
                             ion_path,
                         ));
                     }
-                    Some(ion_sequence) => ion_sequence.iter().map(|a| a.to_owned()).collect(),
+                    Some(ion_sequence) => ion_sequence.elements().map(|a| a.to_owned()).collect(),
                 }
             }
             IonSchemaElement::Document(document) => document.to_owned(),
@@ -1088,9 +1231,7 @@ impl ConstraintValidator for ContainerLengthConstraint {
                 }
 
                 match element.ion_type() {
-                    IonType::List | IonType::SExpression => {
-                        element.as_sequence().unwrap().iter().count()
-                    }
+                    IonType::List | IonType::SExp => element.as_sequence().unwrap().len(),
                     IonType::Struct => element.as_struct().unwrap().iter().count(),
                     _ => {
                         // return Violation if value is not an Ion container
@@ -1153,7 +1294,7 @@ impl ConstraintValidator for ByteLengthConstraint {
         // get the size of given bytes
         let size = value
             .expect_element_of_type(&[IonType::Blob, IonType::Clob], "byte_length", ion_path)?
-            .as_bytes()
+            .as_lob()
             .unwrap()
             .len();
 
@@ -1205,7 +1346,7 @@ impl ConstraintValidator for CodepointLengthConstraint {
                 "codepoint_length",
                 ion_path,
             )?
-            .as_str()
+            .as_text()
             .unwrap()
             .chars()
             .count();
@@ -1231,12 +1372,18 @@ impl ConstraintValidator for CodepointLengthConstraint {
 /// [element]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#element
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ElementConstraint {
-    type_id: TypeId,
+    type_reference: TypeReference,
+    /// This field is used for ISL 2.0 and it represents whether validation for distinct elements is required or not.
+    /// For ISL 1.0 this is always false as it doesn't support distinct elements validation.
+    required_distinct_elements: bool,
 }
 
 impl ElementConstraint {
-    pub fn new(type_id: TypeId) -> Self {
-        Self { type_id }
+    pub fn new(type_reference: TypeReference, required_distinct_elements: bool) -> Self {
+        Self {
+            type_reference,
+            required_distinct_elements,
+        }
     }
 }
 
@@ -1249,11 +1396,11 @@ impl ConstraintValidator for ElementConstraint {
     ) -> ValidationResult {
         let mut violations: Vec<Violation> = vec![];
 
-        // this type_id was validated while creating `ElementConstraint` hence the unwrap here is safe
-        let type_def = type_store.get_type_by_id(self.type_id).unwrap();
+        // create a set for checking duplicate elements
+        let mut element_set = vec![];
 
-        // validate element constraint for container types
-        match value {
+        // get elements for given container in the form (ion_path_element, element_value)
+        let elements: Vec<(IonPathElement, &Element)> = match value {
             IonSchemaElement::SingleElement(element) => {
                 // Check for null container
                 if element.is_null() {
@@ -1267,31 +1414,24 @@ impl ConstraintValidator for ElementConstraint {
 
                 // validate each element of the given value container
                 match element.ion_type() {
-                    IonType::List | IonType::SExpression => {
-                        for (index, val) in element.as_sequence().unwrap().iter().enumerate() {
-                            ion_path.push(IonPathElement::Index(index));
-                            let schema_element: IonSchemaElement = val.into();
-                            if let Err(violation) =
-                                type_def.validate(&schema_element, type_store, ion_path)
-                            {
-                                violations.push(violation);
-                            }
-                            ion_path.pop();
-                        }
-                    }
-                    IonType::Struct => {
-                        for (field_name, val) in element.as_struct().unwrap().iter() {
-                            ion_path
-                                .push(IonPathElement::Field(field_name.text().unwrap().to_owned()));
-                            let schema_element: IonSchemaElement = val.into();
-                            if let Err(violation) =
-                                type_def.validate(&schema_element, type_store, ion_path)
-                            {
-                                violations.push(violation);
-                            }
-                            ion_path.pop();
-                        }
-                    }
+                    IonType::List | IonType::SExp => element
+                        .as_sequence()
+                        .unwrap()
+                        .elements()
+                        .enumerate()
+                        .map(|(index, val)| (IonPathElement::Index(index), val))
+                        .collect(),
+                    IonType::Struct => element
+                        .as_struct()
+                        .unwrap()
+                        .iter()
+                        .map(|(field_name, val)| {
+                            (
+                                IonPathElement::Field(field_name.text().unwrap().to_owned()),
+                                val,
+                            )
+                        })
+                        .collect(),
                     _ => {
                         // return Violation if value is not an Ion container
                         return Err(Violation::new(
@@ -1306,18 +1446,34 @@ impl ConstraintValidator for ElementConstraint {
                     }
                 }
             }
-            IonSchemaElement::Document(document) => {
-                for (index, val) in document.iter().enumerate() {
-                    ion_path.push(IonPathElement::Index(index));
-                    let schema_element: IonSchemaElement = val.into();
+            IonSchemaElement::Document(document) => document
+                .iter()
+                .enumerate()
+                .map(|(index, val)| (IonPathElement::Index(index), val))
+                .collect(),
+        };
 
-                    if let Err(violation) = type_def.validate(&schema_element, type_store, ion_path)
-                    {
-                        violations.push(violation);
-                    }
-                    ion_path.pop();
-                }
+        // validate element constraint
+        for (ion_path_element, val) in elements {
+            ion_path.push(ion_path_element);
+            let schema_element: IonSchemaElement = val.into();
+
+            if let Err(violation) =
+                self.type_reference
+                    .validate(&schema_element, type_store, ion_path)
+            {
+                violations.push(violation);
             }
+            if self.required_distinct_elements && element_set.contains(&val) {
+                violations.push(Violation::new(
+                    "element",
+                    ViolationCode::ElementNotDistinct,
+                    format!("expected distinct elements but found duplicate element {val}",),
+                    ion_path,
+                ))
+            }
+            element_set.push(val);
+            ion_path.pop();
         }
 
         if !violations.is_empty() {
@@ -1596,7 +1752,7 @@ impl ConstraintValidator for ScaleConstraint {
     ) -> ValidationResult {
         // get scale of decimal value
         let value_scale = value
-            .expect_element_of_type(&[IonType::Decimal], "precision", ion_path)?
+            .expect_element_of_type(&[IonType::Decimal], "scale", ion_path)?
             .as_decimal()
             .unwrap()
             .scale();
@@ -1610,6 +1766,55 @@ impl ConstraintValidator for ScaleConstraint {
                 "scale",
                 ViolationCode::InvalidLength,
                 format!("expected scale {scale_range} found {value_scale}"),
+                ion_path,
+            ));
+        }
+
+        Ok(())
+    }
+}
+
+/// Implements Ion Schema's `exponent` constraint
+/// [exponent]: https://amazon-ion.github.io/ion-schema/docs/isl-2-0/spec#exponent
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExponentConstraint {
+    exponent_range: Range,
+}
+
+impl ExponentConstraint {
+    pub fn new(exponent_range: Range) -> Self {
+        Self { exponent_range }
+    }
+
+    pub fn exponent(&self) -> &Range {
+        &self.exponent_range
+    }
+}
+
+impl ConstraintValidator for ExponentConstraint {
+    fn validate(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> ValidationResult {
+        // get exponent of decimal value
+        let value_exponent = value
+            .expect_element_of_type(&[IonType::Decimal], "exponent", ion_path)?
+            .as_decimal()
+            .unwrap()
+            .scale()
+            .neg();
+
+        // get isl decimal exponent as a range
+        let exponent_range: &Range = self.exponent();
+
+        // return a Violation if the value didn't follow exponent constraint
+        if !exponent_range.contains(&(value_exponent).into()) {
+            return Err(Violation::new(
+                "exponent",
+                ViolationCode::InvalidLength,
+                format!("expected exponent {exponent_range} found {value_exponent}"),
                 ion_path,
             ));
         }
@@ -1722,7 +1927,7 @@ impl ConstraintValidator for ValidValuesConstraint {
                 for valid_value in &self.valid_values {
                     match valid_value {
                         ValidValue::Range(range) => match value.ion_type() {
-                            IonType::Integer
+                            IonType::Int
                             | IonType::Float
                             | IonType::Decimal
                             | IonType::Timestamp => {
@@ -1734,9 +1939,9 @@ impl ConstraintValidator for ValidValuesConstraint {
                         },
                         ValidValue::Element(element) => {
                             // get value without annotations
-                            let value = value.to_owned().with_annotations(vec![]);
+                            let value = value.value();
 
-                            if element == &value {
+                            if element.value() == value {
                                 return Ok(());
                             }
                         }
@@ -1931,7 +2136,7 @@ impl ConstraintValidator for RegexConstraint {
         // get string value and return violation if its not a string or symbol type
         let string_value = value
             .expect_element_of_type(&[IonType::String, IonType::Symbol], "regex", ion_path)?
-            .as_str()
+            .as_text()
             .unwrap();
 
         // create regular expression
@@ -2014,7 +2219,7 @@ impl ConstraintValidator for Utf8ByteLengthConstraint {
                 "utf8_byte_length",
                 ion_path,
             )?
-            .as_str()
+            .as_text()
             .unwrap()
             .len();
 

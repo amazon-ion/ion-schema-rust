@@ -1,5 +1,4 @@
-use ion_rs::value::owned::{Element, Sequence, Struct};
-use ion_rs::value::{IonElement, IonSequence, IonStruct};
+use ion_rs::element::{Element, IonSequence, List, Struct};
 use std::ops::Deref;
 
 // Represents a single test case.
@@ -60,11 +59,11 @@ impl TryFrom<Element> for TestCaseVec {
                     .to_string()
                     .len();
 
-                for (i, value) in valid_schemas.iter().enumerate() {
+                for (i, value) in valid_schemas.elements().enumerate() {
                     let schema_text = value
                         .as_sequence()
                         .ok_or(format!("Malformed test case; the valid schemas must be embedded as s-expressions: {value}"))?
-                        .iter()
+                        .elements()
                         .fold("".to_string(), |s, e| format!("{s}\n{e}"));
                     the_vec_of_test_cases.push(TestCase {
                         description: format!("{base_description} [{i:0width$}]"),
@@ -76,11 +75,11 @@ impl TryFrom<Element> for TestCaseVec {
                 }
 
                 let i0 = valid_schemas.len();
-                for (i, value) in invalid_schemas.iter().enumerate() {
+                for (i, value) in invalid_schemas.elements().enumerate() {
                     let schema_text = value
                         .as_sequence()
                         .ok_or(format!("Malformed test case; the invalid schemas must be embedded as s-expressions: {value}"))?
-                        .iter()
+                        .elements()
                         .fold("".to_string(), |s, e| format!("{s}\n{e}"));
                     the_vec_of_test_cases.push(TestCase {
                         description: format!("{base_description} [{:0width$}]", i0 + i),
@@ -92,8 +91,8 @@ impl TryFrom<Element> for TestCaseVec {
                 }
             } else if test_case_struct.get("invalid_types").is_some() {
                 let invalid_types = test_case_struct.get_required_list_field("invalid_types")?;
-                let width = invalid_types.iter().count().to_string().len();
-                for (i, value) in invalid_types.iter().enumerate() {
+                let width = invalid_types.elements().count().to_string().len();
+                for (i, value) in invalid_types.elements().enumerate() {
                     the_vec_of_test_cases.push(TestCase {
                         description: format!("{base_description} [{i:0width$}]"),
                         details: TestCaseDetails::InvalidType {
@@ -113,7 +112,7 @@ impl TryFrom<Element> for TestCaseVec {
             let valid_values =
                 test_case_struct.get_optional_list_field("should_accept_as_valid")?;
             let width = valid_values.len().to_string().len();
-            for (i, value) in valid_values.iter().enumerate() {
+            for (i, value) in valid_values.elements().enumerate() {
                 the_vec_of_test_cases.push(TestCase {
                     description: format!("value should be valid for type {type_id} [{i:0width$}]"),
                     details: TestCaseDetails::Value {
@@ -127,7 +126,7 @@ impl TryFrom<Element> for TestCaseVec {
             let invalid_values =
                 test_case_struct.get_optional_list_field("should_reject_as_invalid")?;
             let width = invalid_values.len().to_string().len();
-            for (i, value) in invalid_values.iter().enumerate() {
+            for (i, value) in invalid_values.elements().enumerate() {
                 the_vec_of_test_cases.push(TestCase {
                     description: format!(
                         "value should be invalid for type {type_id} [{i:0width$}]"
@@ -161,25 +160,25 @@ impl TryFrom<Element> for TestCaseVec {
 // Helpers to DRY up the code when getting values from the test case struct
 trait StructUtils {
     fn get_required_text_field(&self, field_name: &str) -> Result<&str, String>;
-    fn get_required_list_field(&self, field_name: &str) -> Result<Sequence, String>;
-    fn get_optional_list_field(&self, field_name: &str) -> Result<Sequence, String>;
+    fn get_required_list_field(&self, field_name: &str) -> Result<List, String>;
+    fn get_optional_list_field(&self, field_name: &str) -> Result<List, String>;
 }
 
 impl StructUtils for Struct {
     fn get_required_text_field(&self, field_name: &str) -> Result<&str, String> {
         if self.get_all(field_name).count() > 1 {
-            return Err(format!(
+            Err(format!(
                 "Malformed test case - field '{}' is repeated: {}",
                 field_name,
                 Element::from(self.clone())
-            ));
+            ))
         } else {
             let field = self.get(field_name).ok_or(format!(
                 "Malformed test case - field '{}' is missing: {}",
                 field_name,
                 Element::from(self.clone())
             ))?;
-            field.as_str().ok_or(format!(
+            field.as_text().ok_or(format!(
                 "Malformed test case - field '{}' must be text: {}",
                 field_name,
                 Element::from(self.clone())
@@ -187,7 +186,7 @@ impl StructUtils for Struct {
         }
     }
 
-    fn get_required_list_field(&self, field_name: &str) -> Result<Sequence, String> {
+    fn get_required_list_field(&self, field_name: &str) -> Result<List, String> {
         if self.get(field_name).is_none() {
             Err(format!(
                 "Malformed test case - field '{}' is missing: {}",
@@ -199,7 +198,7 @@ impl StructUtils for Struct {
         }
     }
 
-    fn get_optional_list_field(&self, field_name: &str) -> Result<Sequence, String> {
+    fn get_optional_list_field(&self, field_name: &str) -> Result<List, String> {
         if self.get_all(field_name).count() > 1 {
             Err(format!(
                 "Malformed test case - field '{}' is repeated: {}",
@@ -207,14 +206,14 @@ impl StructUtils for Struct {
                 Element::from(self.clone())
             ))
         } else if let Some(field) = self.get(field_name) {
-            let seq = field.as_sequence().ok_or(format!(
+            let list = field.as_list().ok_or(format!(
                 "Malformed test case - field '{}' must be a list: {}",
                 field_name,
                 Element::from(self.clone())
             ))?;
-            Ok(seq.clone())
+            Ok(list.clone())
         } else {
-            Ok(Sequence::new(vec![]))
+            Ok(Element::list_builder().build())
         }
     }
 }

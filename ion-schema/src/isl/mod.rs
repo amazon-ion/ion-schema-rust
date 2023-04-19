@@ -75,7 +75,7 @@
 use crate::isl::isl_import::{IslImport, IslImportType};
 use crate::isl::isl_type::IslType;
 use crate::UserReservedFields;
-use ion_rs::value::owned::Element;
+use ion_rs::element::Element;
 use std::fmt::{Display, Formatter};
 
 pub mod isl_constraint;
@@ -253,24 +253,22 @@ mod isl_tests {
     use crate::isl::isl_type_reference::v_1_0::*;
     use crate::isl::util::TimestampPrecision;
     use crate::isl::IslVersion;
+    use crate::isl::*;
     use crate::result::IonSchemaResult;
+    use ion_rs::element::Element;
     use ion_rs::types::decimal::*;
-    use ion_rs::types::integer::Integer as IntegerValue;
+    use ion_rs::types::integer::Int as IntegerValue;
     use ion_rs::types::timestamp::Timestamp;
-    use ion_rs::value::owned::text_token;
-    use ion_rs::value::owned::Element;
-    use ion_rs::value::reader::element_reader;
-    use ion_rs::value::reader::ElementReader;
+    use ion_rs::IonType;
+    use ion_rs::Symbol;
     use rstest::*;
     use std::io::Write;
 
-    // helper function to create NamedIslType for isl tests
+    // helper function to create NamedIslType for isl tests using ISL 1.0
     fn load_named_type(text: &str) -> IslType {
         let type_def = IslTypeImpl::from_owned_element(
             IslVersion::V1_0,
-            &element_reader()
-                .read_one(text.as_bytes())
-                .expect("parsing failed unexpectedly"),
+            &Element::read_one(text.as_bytes()).expect("parsing failed unexpectedly"),
             &mut vec![],
         )
         .unwrap();
@@ -282,13 +280,11 @@ mod isl_tests {
         IslType::new(type_def, constraints)
     }
 
-    // helper function to create AnonymousIslType for isl tests
+    // helper function to create AnonymousIslType for isl tests using ISL 1.0
     fn load_anonymous_type(text: &str) -> IslType {
         let type_def = IslTypeImpl::from_owned_element(
             IslVersion::V1_0,
-            &element_reader()
-                .read_one(text.as_bytes())
-                .expect("parsing failed unexpectedly"),
+            &Element::read_one(text.as_bytes()).expect("parsing failed unexpectedly"),
             &mut vec![],
         )
         .unwrap();
@@ -296,6 +292,22 @@ mod isl_tests {
             .constraints()
             .iter()
             .map(|c| IslConstraint::new(IslVersion::V1_0, c.to_owned()))
+            .collect();
+        IslType::new(type_def, constraints)
+    }
+
+    // helper function to create AnonymousIslType for isl tests using ISL 2.0
+    fn load_anonymous_type_v2_0(text: &str) -> IslType {
+        let type_def = IslTypeImpl::from_owned_element(
+            IslVersion::V2_0,
+            &Element::read_one(text.as_bytes()).expect("parsing failed unexpectedly"),
+            &mut vec![],
+        )
+        .unwrap();
+        let constraints = type_def
+            .constraints()
+            .iter()
+            .map(|c| IslConstraint::new(IslVersion::V2_0, c.to_owned()))
             .collect();
         IslType::new(type_def, constraints)
     }
@@ -317,7 +329,7 @@ mod isl_tests {
             type_def.open_content(),
             vec![(
                 "unknown_constraint".to_owned(),
-                element_reader().read_one(r#""this is an open content field value""#.as_bytes())?
+                Element::read_one(r#""this is an open content field value""#.as_bytes())?
             )]
         );
         Ok(())
@@ -335,7 +347,13 @@ mod isl_tests {
         load_anonymous_type(r#" // For a schema with `nullable` annotation`
                 {type: nullable::int}
             "#),
-        anonymous_type([type_constraint(anonymous_type_ref([any_of([named_type_ref("$null"), named_type_ref("$int")]),type_constraint(named_type_ref("$any"))]))])
+        anonymous_type([type_constraint(nullable_built_in_type_ref(IonType::Int))])
+    ),
+    case::type_constraint_with_null_or_annotation(
+        load_anonymous_type_v2_0(r#" // For a schema with `$null_or` annotation`
+                    {type: $null_or::int}
+                "#),
+        isl_type::v_2_0::anonymous_type([isl_constraint::v_2_0::type_constraint(isl_type_reference::v_2_0::null_or_named_type_ref("int"))])
     ),
     case::type_constraint_with_named_type(
         load_named_type(r#" // For a schema with named type
@@ -409,6 +427,12 @@ mod isl_tests {
                 "#),
         anonymous_type([fields(vec![("name".to_owned(), named_type_ref("string")), ("id".to_owned(), named_type_ref("int"))].into_iter())]),
     ),
+    case::field_names_constraint(
+        load_anonymous_type_v2_0(r#" // For a schema with field_names constraint as below:
+                        { field_names: distinct::symbol }
+                    "#),
+        isl_type::v_2_0::anonymous_type([isl_constraint::v_2_0::field_names(isl_type_reference::v_2_0::named_type_ref("symbol"), true)]),
+    ),
     case::contains_constraint(
         load_anonymous_type(r#" // For a schema with contains constraint as below:
                     { contains: [true, 1, "hello"] }
@@ -439,11 +463,17 @@ mod isl_tests {
                 "#),
         anonymous_type([element(named_type_ref("int"))])
     ),
+    case::distinct_element_constraint(
+        load_anonymous_type_v2_0(r#" // For a schema with distinct element constraint as below:
+                        { element: distinct::int }
+                    "#),
+    isl_type::v_2_0::anonymous_type([isl_constraint::v_2_0::element(named_type_ref("int"), true)])
+    ),
     case::annotations_constraint(
         load_anonymous_type(r#" // For a schema with annotations constraint as below:
                         { annotations: closed::[red, blue, green] }
                     "#),
-        anonymous_type([annotations(vec!["closed"], vec![text_token("red").into(), text_token("blue").into(), text_token("green").into()])])
+        anonymous_type([annotations(vec!["closed"], vec![Symbol::from("red").into(), Symbol::from("blue").into(), Symbol::from("green").into()])])
     ),
     case::precision_constraint(
         load_anonymous_type(r#" // For a schema with precision constraint as below:
@@ -457,6 +487,12 @@ mod isl_tests {
                     "#),
         anonymous_type([scale(IntegerValue::I64(2).into())])
     ),
+    case::exponent_constraint(
+        load_anonymous_type_v2_0(r#" // For a schema with exponent constraint as below:
+                        { exponent: -2 }
+                    "#),
+        isl_type::v_2_0::anonymous_type([isl_constraint::v_2_0::exponent(IntegerValue::I64(-2).into())])
+    ),
     case::timestamp_precision_constraint(
         load_anonymous_type(r#" // For a schema with timestamp_precision constraint as below:
                             { timestamp_precision: year }
@@ -467,7 +503,7 @@ mod isl_tests {
         load_anonymous_type(r#" // For a schema with valid_values constraint as below:
                         { valid_values: [2, 3.5, 5e7, "hello", hi] }
                     "#),
-        anonymous_type([valid_values_with_values(vec![2.into(), Decimal::new(35, -1).into(), 5e7.into(), "hello".to_owned().into(), text_token("hi").into()]).unwrap()])
+        anonymous_type([valid_values_with_values(vec![2.into(), Decimal::new(35, -1).into(), 5e7.into(), "hello".to_owned().into(), Symbol::from("hi").into()]).unwrap()])
     ),
     case::valid_values_with_range_constraint(
         load_anonymous_type(r#" // For a schema with valid_values constraint as below:
@@ -519,9 +555,7 @@ mod isl_tests {
     // helper function to create a range
     fn load_range(text: &str) -> IonSchemaResult<Range> {
         Range::from_ion_element(
-            &element_reader()
-                .read_one(text.as_bytes())
-                .expect("parsing failed unexpectedly"),
+            &Element::read_one(text.as_bytes()).expect("parsing failed unexpectedly"),
             RangeType::Any,
         )
     }
@@ -529,9 +563,7 @@ mod isl_tests {
     // helper function to create a timestamp precision range
     fn load_timestamp_precision_range(text: &str) -> IonSchemaResult<Range> {
         Range::from_ion_element(
-            &element_reader()
-                .read_one(text.as_bytes())
-                .expect("parsing failed unexpectedly"),
+            &Element::read_one(text.as_bytes()).expect("parsing failed unexpectedly"),
             RangeType::TimestampPrecision,
         )
     }
@@ -539,9 +571,7 @@ mod isl_tests {
     // helper function to create a timestamp precision range
     fn load_number_range(text: &str) -> IonSchemaResult<Range> {
         Range::from_ion_element(
-            &element_reader()
-                .read_one(text.as_bytes())
-                .expect("parsing failed unexpectedly"),
+            &Element::read_one(text.as_bytes()).expect("parsing failed unexpectedly"),
             RangeType::NumberOrTimestamp,
         )
     }
@@ -832,7 +862,7 @@ mod isl_tests {
             Decimal::new(204, -1),
             Decimal::new(505, -1)
         ).unwrap(),
-        "range::[ 204d-1, 505d-1 ]"
+        "range::[ 20.4, 50.5 ]"
     ),
     case::range_with_timestamp(
         TimestampRange::new(
