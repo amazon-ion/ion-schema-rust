@@ -1064,6 +1064,11 @@ impl Resolver {
 }
 
 /// Provides functions for instantiating instances of [`Schema`].
+///
+/// [`SchemaSystem`] is *[Send and Sync]* i.e. it is safe to send it to another thread and to be shared between threads.
+/// For cases when one does need thread-safe interior mutability, they can use the explicit locking via [`std::sync::Mutex`] and [`std::sync::RwLock`].
+///
+/// [Send and Sync]: https://doc.rust-lang.org/nomicon/send-and-sync.html
 pub struct SchemaSystem {
     resolver: Resolver,
 }
@@ -2108,5 +2113,29 @@ mod schema_system_tests {
 
         // verify the resolved schema generated from the ISL 2.0 model that contains ISL 1.0 constraints is invalid
         assert!(&schema.is_err());
+    }
+
+    #[test]
+    fn test_send_schema() {
+        fn assert_send<T: Send>() {}
+        assert_send::<Schema>();
+    }
+
+    #[test]
+    fn test_sync_schema() {
+        fn assert_sync<T: Sync>() {}
+        assert_sync::<Schema>();
+    }
+
+    #[test]
+    fn test_send_schema_system() {
+        fn assert_send<T: Send>() {}
+        assert_send::<SchemaSystem>();
+    }
+
+    #[test]
+    fn test_sync_schema_system() {
+        fn assert_sync<T: Sync>() {}
+        assert_sync::<SchemaSystem>();
     }
 }

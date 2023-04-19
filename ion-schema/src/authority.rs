@@ -72,7 +72,12 @@ use std::path::{Path, PathBuf};
 ///
 /// The structure of a schema identifier string is defined by the
 /// Authority responsible for the schema/type(s) being imported.
-pub trait DocumentAuthority: Debug {
+///
+/// [`DocumentAuthority`] is *[Send and Sync]* i.e. it is safe to send it to another thread and to be shared between threads.
+/// For cases when one does need thread-safe interior mutability, they can use the explicit locking via [`std::sync::Mutex`] and [`std::sync::RwLock`].
+///
+/// [Send and Sync]: https://doc.rust-lang.org/nomicon/send-and-sync.html
+pub trait DocumentAuthority: Debug + Send + Sync {
     fn elements(&self, id: &str) -> IonSchemaResult<Vec<Element>>;
 }
 
