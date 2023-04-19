@@ -1,4 +1,4 @@
-use ion_rs::element::Element;
+use ion_rs::element::{Element, SExp, Sequence};
 use ion_rs::Symbol;
 use std::fmt;
 use std::fmt::{Debug, Formatter};
@@ -74,15 +74,15 @@ impl IonPath {
 
 impl From<IonPath> for Element {
     fn from(value: IonPath) -> Element {
-        let mut ion_path = Element::sexp_builder();
+        let mut ion_path_elements = vec![];
         for parent in &value.ion_path_elements {
             let element = match parent {
                 IonPathElement::Index(index) => Element::from(*index as i64),
                 IonPathElement::Field(name) => Element::from(Symbol::from(name.as_str())),
             };
-            ion_path = ion_path.push(element);
+            ion_path_elements.push(element);
         }
-        ion_path.build().into()
+        SExp::from(Sequence::new(ion_path_elements)).into()
     }
 }
 

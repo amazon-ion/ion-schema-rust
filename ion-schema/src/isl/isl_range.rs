@@ -3,11 +3,11 @@ use crate::isl::util::TimestampPrecision;
 use crate::result::{
     invalid_schema_error, invalid_schema_error_raw, IonSchemaError, IonSchemaResult,
 };
-use ion_rs::element::{Element, IonSequence};
+use ion_rs::element::Element;
 use ion_rs::external::bigdecimal::num_bigint::BigInt;
 use ion_rs::external::bigdecimal::{BigDecimal, One};
 use ion_rs::types::integer::IntAccess;
-use ion_rs::{Decimal, Int, IonType, Symbol, Timestamp};
+use ion_rs::{element, Decimal, Int, IonType, Timestamp};
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
 use std::prelude::rust_2021::TryInto;
@@ -219,9 +219,9 @@ impl Range {
                     value.ion_type()
                 ))
             }
-        } else if let Some(range) = value.as_list() {
+        } else if let element::Value::List(range) = value.value() {
             // verify if the value has annotation range
-            if !value.annotations().any(|a| a == &Symbol::from("range")) {
+            if !value.annotations().contains("range") {
                 return invalid_schema_error(
                     "An element representing a range must have the annotation `range`.",
                 );
@@ -770,10 +770,7 @@ impl TypedRangeBoundaryValue {
         boundary: &Element,
         range_type: RangeType,
     ) -> IonSchemaResult<TypedRangeBoundaryValue> {
-        let range_boundary_type = if boundary
-            .annotations()
-            .any(|x| x == &Symbol::from("exclusive"))
-        {
+        let range_boundary_type = if boundary.annotations().contains("exclusive") {
             RangeBoundaryType::Exclusive
         } else {
             RangeBoundaryType::Inclusive

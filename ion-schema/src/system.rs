@@ -20,7 +20,6 @@
 //! ```
 
 use crate::authority::DocumentAuthority;
-use crate::external::ion_rs::Symbol;
 use crate::isl::isl_constraint::{IslConstraint, IslConstraintImpl};
 use crate::isl::isl_import::{IslImport, IslImportType};
 use crate::isl::isl_type::{IslType, IslTypeImpl};
@@ -32,8 +31,7 @@ use crate::result::{
 use crate::schema::Schema;
 use crate::types::{BuiltInTypeDefinition, Nullability, TypeDefinitionImpl, TypeDefinitionKind};
 use crate::UserReservedFields;
-use ion_rs::element::Element;
-use ion_rs::element::IonSequence;
+use ion_rs::element::{Annotations, Element};
 use ion_rs::types::IonType::Struct;
 use ion_rs::IonType;
 use regex::Regex;
@@ -761,13 +759,14 @@ impl Resolver {
         let mut found_footer = false;
 
         for value in elements {
-            let annotations: Vec<&Symbol> = value.annotations().collect();
+            let annotations: &Annotations = value.annotations();
 
             // load header for schema
-            if annotations.contains(&&Symbol::from("schema_header")) {
+            if annotations.contains("schema_header") {
                 found_header = true;
                 let schema_header = try_to!(value.as_struct());
-                if let Some(imports) = schema_header.get("imports").and_then(|it| it.as_list()) {
+                if let Some(imports) = schema_header.get("imports").and_then(|it| it.as_sequence())
+                {
                     for import in imports.elements() {
                         let isl_import = IslImport::from_ion_element(import)?;
                         isl_imports.push(isl_import);
@@ -785,7 +784,7 @@ impl Resolver {
                 }
             }
             // load types for schema
-            else if annotations.contains(&&Symbol::from("type")) {
+            else if annotations.contains("type") {
                 // convert Element to IslType
                 let isl_type: IslTypeImpl =
                     IslTypeImpl::from_owned_element(isl_version, &value, &mut isl_inline_imports)?;
@@ -819,7 +818,7 @@ impl Resolver {
                 isl_types.push(IslType::new(isl_type, constraints));
             }
             // load footer for schema
-            else if annotations.contains(&&Symbol::from("schema_footer")) {
+            else if annotations.contains("schema_footer") {
                 found_footer = true;
                 if isl_version == IslVersion::V2_0 {
                     let schema_footer = try_to!(value.as_struct());
@@ -1038,7 +1037,8 @@ impl Resolver {
         for value in schema_content {
             // if find a type definition or a schema header before finding any version marker then this is ISL 1.0
             if value.ion_type() == Struct
-                && (value.has_annotation("type") || value.has_annotation("schema_header"))
+                && (value.annotations().contains("type")
+                    || value.annotations().contains("schema_header"))
             {
                 // default ISL 1.0 version will be returned
                 break;

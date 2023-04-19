@@ -2,8 +2,7 @@ use crate::isl::isl_range::{Range, RangeType};
 use crate::result::{invalid_schema_error, IonSchemaError};
 use ion_rs::element::Element;
 use ion_rs::types::timestamp::Precision;
-use ion_rs::Symbol;
-use ion_rs::Timestamp;
+use ion_rs::{Symbol, Timestamp};
 use num_traits::abs;
 use std::cmp::Ordering;
 use std::fmt;
@@ -35,11 +34,11 @@ impl Annotation {
 
     // Returns a bool value that represents if an annotation is required or not
     pub(crate) fn is_annotation_required(value: &Element, list_level_required: bool) -> bool {
-        if value.annotations().any(|a| a.text().unwrap() == "required") {
+        if value.annotations().contains("required") {
             true
         } else if list_level_required {
             // if the value is annotated with `optional` then it overrides the list-level `required` behavior
-            !value.annotations().any(|a| a.text().unwrap() == "optional")
+            !value.annotations().contains("optional")
         } else {
             // for any value the default annotation is `optional`
             false
@@ -170,12 +169,16 @@ impl TryFrom<&Element> for ValidValue {
     type Error = IonSchemaError;
 
     fn try_from(value: &Element) -> Result<Self, Self::Error> {
-        if value.annotations().any(|a| a == &Symbol::from("range")) {
+        if value.annotations().contains("range") {
             Ok(ValidValue::Range(Range::from_ion_element(
                 value,
                 RangeType::NumberOrTimestamp,
             )?))
-        } else if value.annotations().any(|a| a != &Symbol::from("range")) {
+        } else if value
+            .annotations()
+            .iter()
+            .any(|a| a != &Symbol::from("range"))
+        {
             invalid_schema_error(
                 "Annotations are not allowed for valid_values constraint except `range` annotation",
             )

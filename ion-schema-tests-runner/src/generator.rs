@@ -127,7 +127,7 @@ fn generate_test_cases_for_file(ctx: Context) -> TokenStream {
     let isl_version = find_isl_version(&schema_content);
 
     for element in schema_content {
-        if element.has_annotation("$test") {
+        if element.annotations().contains("$test") {
             let test_cases: TestCaseVec = element
                 .try_into()
                 .unwrap_or_else(|e| panic!("Error in {path_string} - {e}"));
@@ -180,7 +180,8 @@ fn find_isl_version(schema_content: &[Element]) -> IslVersion {
     for value in schema_content {
         // if find a type definition or a schema header before finding any version marker then this is ISL 1.0
         if value.ion_type() == IonType::Struct
-            && (value.has_annotation("type") || value.has_annotation("schema_header"))
+            && (value.annotations().contains("type")
+                || value.annotations().contains("schema_header"))
         {
             // default ISL 1.0 version will be returned
             break;
@@ -265,7 +266,7 @@ fn generate_preamble(root_dir_path: &Path) -> TokenStream {
     let root_dir_token = TokenTree::from(Literal::string(root_dir_path.to_str().unwrap()));
 
     quote! {
-        use ion_rs::element::{IonSequence};
+        use ion_rs::element::Sequence;
         use std::hash::{Hash, Hasher};
 
         /// Gets the root directory for the test suite.
@@ -322,7 +323,7 @@ fn generate_preamble(root_dir_path: &Path) -> TokenStream {
             let schema = __new_schema_system().load_schema(schema_id).unwrap();
             let isl_type = schema.get_type(type_id).unwrap();
             let value: ion_rs::element::Element = ion_rs::element::Element::read_one(value_ion.as_bytes()).unwrap();
-            let prepared_value: ion_schema::IonSchemaElement = if value.has_annotation("document") && value.ion_type() == ion_rs::IonType::SExp {
+            let prepared_value: ion_schema::IonSchemaElement = if value.annotations().contains("document") && value.ion_type() == ion_rs::IonType::SExp {
                 let element_vec = value.as_sequence()
                     .unwrap_or_else(|| unreachable!("We already confirmed that this is a s-expression."))
                     .elements()

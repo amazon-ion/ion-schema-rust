@@ -1537,6 +1537,7 @@ impl AnnotationsConstraint {
     ) -> ValidationResult {
         let mut value_annotations = value
             .annotations()
+            .iter()
             .map(|sym| sym.text().unwrap())
             .peekable();
 
@@ -1598,15 +1599,16 @@ impl AnnotationsConstraint {
         // This will be used by a violation to to return all the missing annotations
         let mut missing_annotations: Vec<&Annotation> = vec![];
 
-        let value_annotations: Vec<&str> =
-            value.annotations().map(|sym| sym.text().unwrap()).collect();
+        let value_annotations: Vec<&str> = value
+            .annotations()
+            .iter()
+            .map(|sym| sym.text().unwrap())
+            .collect();
 
         for expected_annotation in &self.annotations {
             // verify if the expected_annotation is required and if it matches with value annotation
             if expected_annotation.is_required()
-                && !value
-                    .annotations()
-                    .any(|a| a.text().unwrap() == expected_annotation.value())
+                && !value.annotations().contains(expected_annotation.value())
             {
                 missing_annotations.push(expected_annotation);
             }
