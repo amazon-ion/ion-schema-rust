@@ -1,4 +1,4 @@
-use ion_rs::element::{Element, IonSequence, List, Struct};
+use ion_rs::element::{Element, List, Struct};
 use std::ops::Deref;
 
 // Represents a single test case.
@@ -206,14 +206,14 @@ impl StructUtils for Struct {
                 Element::from(self.clone())
             ))
         } else if let Some(field) = self.get(field_name) {
-            let list = field.as_list().ok_or(format!(
+            let list = field.as_sequence().ok_or(format!(
                 "Malformed test case - field '{}' must be a list: {}",
                 field_name,
                 Element::from(self.clone())
             ))?;
-            Ok(list.clone())
+            Ok(ion_rs::element::List(list.clone()))
         } else {
-            Ok(Element::list_builder().build())
+            Ok(ion_rs::element::List(Element::sequence_builder().build()))
         }
     }
 }

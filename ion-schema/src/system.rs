@@ -20,7 +20,6 @@
 //! ```
 
 use crate::authority::DocumentAuthority;
-use crate::external::ion_rs::Symbol;
 use crate::isl::isl_constraint::{IslConstraint, IslConstraintImpl};
 use crate::isl::isl_import::{IslImport, IslImportType};
 use crate::isl::isl_type::{IslType, IslTypeImpl};
@@ -32,14 +31,13 @@ use crate::result::{
 use crate::schema::Schema;
 use crate::types::{BuiltInTypeDefinition, Nullability, TypeDefinitionImpl, TypeDefinitionKind};
 use crate::UserReservedFields;
-use ion_rs::element::Element;
-use ion_rs::element::IonSequence;
+use ion_rs::element::{Annotations, Element};
 use ion_rs::types::IonType::Struct;
 use ion_rs::IonType;
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
 use std::io::ErrorKind;
-use std::rc::Rc;
+use std::sync::Arc;
 
 // TODO: Shift PendingTypes and TypeStore implementations to a separate module
 /// Stores information about types that are in the process of being defined.
@@ -679,7 +677,7 @@ impl TypeStore {
 /// Provides functions to load [`Schema`] with type definitions using authorities for [`SchemaSystem`]
 pub struct Resolver {
     authorities: Vec<Box<dyn DocumentAuthority>>,
-    resolved_schema_cache: HashMap<String, Rc<Schema>>,
+    resolved_schema_cache: HashMap<String, Arc<Schema>>,
 }
 
 impl Resolver {
@@ -698,7 +696,7 @@ impl Resolver {
     ) -> IonSchemaResult<Schema> {
         let isl_types = isl_types.into();
         // create type_store and pending types which will be used to create type definition
-        let type_store = &mut TypeStore::default();
+        let mut type_store = TypeStore::default();
         let pending_types = &mut PendingTypes::default();
 
         // get all isl type names from given isl types
@@ -727,7 +725,7 @@ impl Resolver {
                     TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
                         isl_version,
                         &isl_type.type_definition,
-                        type_store,
+                        &mut type_store,
                         pending_types,
                     )?
                 }
@@ -739,8 +737,8 @@ impl Resolver {
         }
 
         // add all types from pending_types to type_store
-        pending_types.update_type_store(type_store, None, &isl_type_names)?;
-        Ok(Schema::new(id, Rc::new(type_store.to_owned())))
+        pending_types.update_type_store(&mut type_store, None, &isl_type_names)?;
+        Ok(Schema::new(id, Arc::new(type_store)))
     }
 
     /// Converts given owned elements into ISL v2.0 representation
@@ -761,13 +759,14 @@ impl Resolver {
         let mut found_footer = false;
 
         for value in elements {
-            let annotations: Vec<&Symbol> = value.annotations().collect();
+            let annotations: &Annotations = value.annotations();
 
             // load header for schema
-            if annotations.contains(&&Symbol::from("schema_header")) {
+            if annotations.contains("schema_header") {
                 found_header = true;
                 let schema_header = try_to!(value.as_struct());
-                if let Some(imports) = schema_header.get("imports").and_then(|it| it.as_list()) {
+                if let Some(imports) = schema_header.get("imports").and_then(|it| it.as_sequence())
+                {
                     for import in imports.elements() {
                         let isl_import = IslImport::from_ion_element(import)?;
                         isl_imports.push(isl_import);
@@ -785,7 +784,7 @@ impl Resolver {
                 }
             }
             // load types for schema
-            else if annotations.contains(&&Symbol::from("type")) {
+            else if annotations.contains("type") {
                 // convert Element to IslType
                 let isl_type: IslTypeImpl =
                     IslTypeImpl::from_owned_element(isl_version, &value, &mut isl_inline_imports)?;
@@ -819,7 +818,7 @@ impl Resolver {
                 isl_types.push(IslType::new(isl_type, constraints));
             }
             // load footer for schema
-            else if annotations.contains(&&Symbol::from("schema_footer")) {
+            else if annotations.contains("schema_footer") {
                 found_footer = true;
                 if isl_version == IslVersion::V2_0 {
                     let schema_footer = try_to!(value.as_struct());
@@ -862,7 +861,7 @@ impl Resolver {
         isl: IslSchema,
         type_store: &mut TypeStore,
         load_isl_import: Option<&IslImport>,
-    ) -> IonSchemaResult<Rc<Schema>> {
+    ) -> IonSchemaResult<Arc<Schema>> {
         // This is used while resolving an import, it is initialized as `false` to indicate that
         // the type to be imported is not yet added to the type_store.
         // This will be changed to `true` as soon as the type to be imported is resolved and is added to the type_store
@@ -935,10 +934,26 @@ impl Resolver {
             );
         }
 
-        Ok(Rc::new(Schema::new(
-            isl.id(),
-            Rc::new(type_store.to_owned()),
-        )))
+        let schema = Arc::new(Schema::new(isl.id(), Arc::new(type_store.clone())));
+
+        // add schema to schema cache
+        // if we are loading an import of the schema then we can only add this schema to cache if its a full schema import
+        // and can not add it to cache if we are loading specific type imports from the schema.
+        match load_isl_import {
+            None => {
+                self.resolved_schema_cache
+                    .insert(isl.id(), Arc::clone(&schema));
+            }
+            Some(isl_import) if matches!(isl_import, IslImport::Schema(_)) => {
+                self.resolved_schema_cache
+                    .insert(isl.id(), Arc::clone(&schema));
+            }
+            _ => {
+                // No op for type imports
+            }
+        }
+
+        Ok(schema)
     }
 
     /// Loads a [`Schema`] with resolved [`Type`]s using authorities and type_store
@@ -952,13 +967,13 @@ impl Resolver {
         id: A,
         type_store: &mut TypeStore,
         load_isl_import: Option<&IslImport>,
-    ) -> IonSchemaResult<Rc<Schema>> {
+    ) -> IonSchemaResult<Arc<Schema>> {
         let id: &str = id.as_ref();
         // ISL version marker regex
         let isl_version_marker: Regex = Regex::new(r"^\$ion_schema_\d.*$").unwrap();
 
         if let Some(schema) = self.resolved_schema_cache.get(id) {
-            return Ok(Rc::clone(schema));
+            return Ok(Arc::clone(schema));
         }
 
         for authority in &self.authorities {
@@ -1022,7 +1037,8 @@ impl Resolver {
         for value in schema_content {
             // if find a type definition or a schema header before finding any version marker then this is ISL 1.0
             if value.ion_type() == Struct
-                && (value.has_annotation("type") || value.has_annotation("schema_header"))
+                && (value.annotations().contains("type")
+                    || value.annotations().contains("schema_header"))
             {
                 // default ISL 1.0 version will be returned
                 break;
@@ -1048,6 +1064,11 @@ impl Resolver {
 }
 
 /// Provides functions for instantiating instances of [`Schema`].
+///
+/// [`SchemaSystem`] is *[Send and Sync]* i.e. it is safe to send it to another thread and to be shared between threads.
+/// For cases when one does need thread-safe interior mutability, they can use the explicit locking via [`std::sync::Mutex`] and [`std::sync::RwLock`].
+///
+/// [Send and Sync]: https://doc.rust-lang.org/nomicon/send-and-sync.html
 pub struct SchemaSystem {
     resolver: Resolver,
 }
@@ -1063,7 +1084,10 @@ impl SchemaSystem {
     /// Requests each of the provided [`DocumentAuthority`]s, in order, to resolve the requested schema id
     /// until one successfully resolves it.
     /// If an authority throws an exception, resolution silently proceeds to the next authority.
-    pub fn load_schema<A: AsRef<str>>(&mut self, id: A) -> IonSchemaResult<Rc<Schema>> {
+    /// This method returns an `Arc<Schema>` which allows to load this schema once re-use it across threads.
+    // TODO: Add support for Rc<Schema> by providing a trait implementation of schema and schema cache. This should
+    //  allow users to choose what variant of schema they want.
+    pub fn load_schema<A: AsRef<str>>(&mut self, id: A) -> IonSchemaResult<Arc<Schema>> {
         self.resolver
             .load_schema(id, &mut TypeStore::default(), None)
     }
@@ -1077,20 +1101,26 @@ impl SchemaSystem {
 
     /// Resolves given ISL 1.0 model into a [Schema]
     /// If the given ISL model has any ISL 2.0 related types/constraints, resolution returns an error.
+    /// This method returns an `Arc<Schema>` which allows to load this schema once re-use it across threads.
+    // TODO: Add support for Rc<Schema> by providing a trait implementation of schema and schema cache. This should
+    //  allow users to choose what variant of schema they want.
     pub fn load_schema_from_isl_schema_v1_0(
         &mut self,
         isl: IslSchema,
-    ) -> IonSchemaResult<Rc<Schema>> {
+    ) -> IonSchemaResult<Arc<Schema>> {
         self.resolver
             .schema_from_isl_schema(IslVersion::V1_0, isl, &mut TypeStore::default(), None)
     }
 
     /// Resolves given ISL 2.0 model into a [Schema]
     /// If the given ISL model has any ISL 1.0 related types/constraints, resolution returns an error.
+    /// This method returns an `Arc<Schema>` which allows to load this schema once re-use it across threads.
+    // TODO: Add support for Rc<Schema> by providing a trait implementation of schema and schema cache. This should
+    //  allow users to choose what variant of schema they want.
     pub fn load_schema_from_isl_schema_v2_0(
         &mut self,
         isl: IslSchema,
-    ) -> IonSchemaResult<Rc<Schema>> {
+    ) -> IonSchemaResult<Arc<Schema>> {
         self.resolver
             .schema_from_isl_schema(IslVersion::V2_0, isl, &mut TypeStore::default(), None)
     }
@@ -2083,5 +2113,29 @@ mod schema_system_tests {
 
         // verify the resolved schema generated from the ISL 2.0 model that contains ISL 1.0 constraints is invalid
         assert!(&schema.is_err());
+    }
+
+    #[test]
+    fn test_send_schema() {
+        fn assert_send<T: Send>() {}
+        assert_send::<Schema>();
+    }
+
+    #[test]
+    fn test_sync_schema() {
+        fn assert_sync<T: Sync>() {}
+        assert_sync::<Schema>();
+    }
+
+    #[test]
+    fn test_send_schema_system() {
+        fn assert_send<T: Send>() {}
+        assert_send::<SchemaSystem>();
+    }
+
+    #[test]
+    fn test_sync_schema_system() {
+        fn assert_sync<T: Sync>() {}
+        assert_sync::<SchemaSystem>();
     }
 }

@@ -9,7 +9,7 @@
 use crate::import::Import;
 use crate::system::{TypeId, TypeStore};
 use crate::types::{TypeDefinition, TypeDefinitionImpl};
-use std::rc::Rc;
+use std::sync::Arc;
 
 /// A Schema is a collection of zero or more [`TypeRef`]s.
 ///
@@ -21,11 +21,11 @@ use std::rc::Rc;
 #[derive(Debug, Clone)]
 pub struct Schema {
     id: String,
-    types: Rc<TypeStore>,
+    types: Arc<TypeStore>,
 }
 
 impl Schema {
-    pub(crate) fn new<A: AsRef<str>>(id: A, types: Rc<TypeStore>) -> Self {
+    pub(crate) fn new<A: AsRef<str>>(id: A, types: Arc<TypeStore>) -> Self {
         Self {
             id: id.as_ref().to_owned(),
             types,
@@ -50,7 +50,7 @@ impl Schema {
 
     /// Returns an iterator over the imported types of this [`Schema`].
     fn imported_types(&self) -> SchemaTypeIterator {
-        SchemaTypeIterator::new(Rc::clone(&self.types), self.types.get_imports())
+        SchemaTypeIterator::new(Arc::clone(&self.types), self.types.get_imports())
     }
 
     /// Returns the requested type, if present in this schema or a a built in type;
@@ -59,13 +59,13 @@ impl Schema {
         let type_id = self
             .types
             .get_built_in_type_id_or_defined_type_id_by_name(name.as_ref())?;
-        Some(TypeDefinition::new(*type_id, Rc::clone(&self.types)))
+        Some(TypeDefinition::new(*type_id, Arc::clone(&self.types)))
     }
 
     /// Returns an iterator over the types in this schema.
     // This only includes named types defined within this schema.
     pub fn get_types(&self) -> SchemaTypeIterator {
-        SchemaTypeIterator::new(Rc::clone(&self.types), self.types.get_types())
+        SchemaTypeIterator::new(Arc::clone(&self.types), self.types.get_types())
     }
 
     /// Returns a new [`Schema`] instance containing all the types of this
@@ -79,13 +79,13 @@ impl Schema {
 
 /// Provides an Iterator which returns [`TypeRef`]s inside a [`Schema`]
 pub struct SchemaTypeIterator {
-    type_store: Rc<TypeStore>,
+    type_store: Arc<TypeStore>,
     index: usize,
     types: Vec<TypeId>,
 }
 
 impl SchemaTypeIterator {
-    fn new(type_store: Rc<TypeStore>, types: Vec<TypeId>) -> Self {
+    fn new(type_store: Arc<TypeStore>, types: Vec<TypeId>) -> Self {
         Self {
             type_store,
             index: 0,
@@ -104,7 +104,7 @@ impl Iterator for SchemaTypeIterator {
         self.index += 1;
         Some(TypeDefinition::new(
             self.types[self.index - 1],
-            Rc::clone(&self.type_store),
+            Arc::clone(&self.type_store),
         ))
     }
 }
@@ -117,6 +117,7 @@ mod schema_tests {
     use crate::system::{Resolver, SchemaSystem};
     use ion_rs::element::Element;
     use rstest::*;
+    use std::sync::Arc;
 
     // helper function to be used by schema tests
     fn load(text: &str) -> Vec<Element> {
@@ -124,7 +125,7 @@ mod schema_tests {
     }
 
     // helper function to be used by validation tests
-    fn load_schema_from_text(text: &str) -> Rc<Schema> {
+    fn load_schema_from_text(text: &str) -> Arc<Schema> {
         // map with (id, ion content)
         let map_authority = [("sample.isl", text)];
         let mut schema_system =
@@ -1236,7 +1237,7 @@ mod schema_tests {
     fn type_validation(
         valid_values: Vec<Element>,
         invalid_values: Vec<Element>,
-        schema: Rc<Schema>,
+        schema: Arc<Schema>,
         type_name: &str,
     ) {
         let type_ref: TypeDefinition = schema.get_type(type_name).unwrap();

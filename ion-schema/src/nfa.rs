@@ -6,8 +6,8 @@ use crate::IonSchemaElement;
 use ion_rs::element::Element;
 use std::collections::{HashMap, HashSet};
 use std::iter::Peekable;
-use std::rc::Rc;
 use std::slice::Iter;
+use std::sync::Arc;
 
 /// Represents an id for a state in NFA
 type StateId = usize;
@@ -120,11 +120,11 @@ impl NfaRun {
 #[derive(Debug, Clone)]
 pub struct NfaEvaluation {
     pub(crate) visits: HashSet<NfaRun>,
-    pub(crate) nfa: Rc<Nfa>,
+    pub(crate) nfa: Arc<Nfa>,
 }
 
 impl NfaEvaluation {
-    pub fn new(nfa: Rc<Nfa>) -> Self {
+    pub fn new(nfa: Arc<Nfa>) -> Self {
         Self {
             visits: {
                 let mut visits = HashSet::new();

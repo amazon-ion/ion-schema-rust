@@ -7,7 +7,7 @@ use crate::result::{
     invalid_schema_error, invalid_schema_error_raw, IonSchemaError, IonSchemaResult,
 };
 use ion_rs::element::Element;
-use ion_rs::{IonType, Symbol};
+use ion_rs::IonType;
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 
@@ -639,6 +639,7 @@ impl IslConstraintImpl {
                         // return error if there are any annotations other than `distinct` or `$null_or`
                         if value
                             .annotations()
+                            .iter()
                             .any(|a| a.text() != Some("distinct") && a.text() != Some("$null_or"))
                         {
                             return invalid_schema_error(
@@ -647,7 +648,7 @@ impl IslConstraintImpl {
                         }
 
                         // verify whether `distinct`annotation is present or not
-                        let require_distinct = value.has_annotation("distinct");
+                        let require_distinct = value.annotations().contains("distinct");
 
                         // return error if the type reference contains `occurs` constraint
                         if type_reference.get_occurs_range().is_some() {
@@ -673,8 +674,11 @@ impl IslConstraintImpl {
                     }
                     IslVersion::V2_0 => {
                         // return error if there are any annotations other than `distinct`
-                        if value.annotations().count() > 1
-                            || value.annotations().any(|a| a.text() != Some("distinct"))
+                        if value.annotations().len() > 1
+                            || value
+                                .annotations()
+                                .iter()
+                                .any(|a| a.text() != Some("distinct"))
                         {
                             return invalid_schema_error(
                                 "field_names constraint can only contain `distinct` annotation",
@@ -690,7 +694,7 @@ impl IslConstraintImpl {
 
                         Ok(IslConstraintImpl::FieldNames(
                             type_reference,
-                            value.has_annotation("distinct"),
+                            value.annotations().contains("distinct"),
                         ))
                     }
                 }
@@ -709,8 +713,11 @@ impl IslConstraintImpl {
                 match isl_version {
                     IslVersion::V1_0 => Ok(IslConstraintImpl::Fields(fields, false)),
                     IslVersion::V2_0 => {
-                        if value.annotations().count() > 1
-                            || value.annotations().any(|a| a.text() != Some("closed"))
+                        if value.annotations().len() > 1
+                            || value
+                                .annotations()
+                                .iter()
+                                .any(|a| a.text() != Some("closed"))
                         {
                             return invalid_schema_error(
                                 "fields constraint may only be annotated with 'closed'",
@@ -718,7 +725,7 @@ impl IslConstraintImpl {
                         }
                         Ok(IslConstraintImpl::Fields(
                             fields,
-                            value.has_annotation("closed"),
+                            value.annotations().contains("closed"),
                         ))
                     }
                 }
@@ -795,8 +802,8 @@ impl IslConstraintImpl {
                 RangeType::Precision,
             )?)),
             "regex" => {
-                let case_insensitive = value.annotations().any(|a| a == &Symbol::from("i"));
-                let multi_line = value.annotations().any(|a| a == &Symbol::from("m"));
+                let case_insensitive = value.annotations().contains("i");
+                let multi_line = value.annotations().contains("m");
 
                 let expression = value.as_string().ok_or_else(|| {
                     invalid_schema_error_raw(format!(
@@ -848,7 +855,7 @@ impl IslConstraintImpl {
                     );
                 }
 
-                if value.annotations().next().is_some() {
+                if !value.annotations().is_empty() {
                     return invalid_schema_error("`timestamp_offset` list may not be annotated");
                 }
 
@@ -875,7 +882,7 @@ impl IslConstraintImpl {
                                 ));
                                 }
 
-                                if e.annotations().next().is_some() {
+                                if !e.annotations().is_empty() {
                                     return invalid_schema_error(format!(
                                         "`timestamp_offset` values may not be annotated, found {e}"
                                     ));
@@ -1001,8 +1008,11 @@ impl TryFrom<&Element> for IslAnnotationsConstraint {
     type Error = IonSchemaError;
 
     fn try_from(value: &Element) -> IonSchemaResult<Self> {
-        let annotation_modifiers: Vec<&str> =
-            value.annotations().map(|sym| sym.text().unwrap()).collect();
+        let annotation_modifiers: Vec<&str> = value
+            .annotations()
+            .iter()
+            .map(|sym| sym.text().unwrap())
+            .collect();
 
         let annotations: Vec<Annotation> = value
             .as_sequence()
@@ -1060,7 +1070,7 @@ impl TryFrom<&Element> for IslValidValuesConstraint {
     type Error = IonSchemaError;
 
     fn try_from(value: &Element) -> IonSchemaResult<Self> {
-        if value.annotations().any(|a| a == &Symbol::from("range")) {
+        if value.annotations().contains("range") {
             return IslValidValuesConstraint::new(vec![ValidValue::Range(
                 Range::from_ion_element(value, RangeType::NumberOrTimestamp)?,
             )]);

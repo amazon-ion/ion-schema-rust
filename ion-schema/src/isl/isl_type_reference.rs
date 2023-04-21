@@ -132,7 +132,7 @@ impl IslTypeRefImpl {
         inline_imported_types: &mut Vec<IslImportType>,
     ) -> IonSchemaResult<Self> {
         use crate::isl::isl_type_reference::NullabilityModifier::*;
-        let nullability = if value.has_annotation("nullable") {
+        let nullability = if value.annotations().contains("nullable") {
             if isl_version == IslVersion::V1_0 {
                 Nullable
             } else {
@@ -140,7 +140,7 @@ impl IslTypeRefImpl {
                     "`nullable::` modifier is not supported since ISL 2.0",
                 );
             }
-        } else if value.has_annotation("$null_or") {
+        } else if value.annotations().contains("$null_or") {
             if isl_version != IslVersion::V1_0 {
                 NullOr
             } else {

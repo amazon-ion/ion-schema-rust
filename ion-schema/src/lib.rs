@@ -133,7 +133,7 @@ impl Display for IonSchemaElement {
 
 impl From<&Element> for IonSchemaElement {
     fn from(value: &Element) -> Self {
-        if value.annotations().any(|a| a.text() == Some("document")) {
+        if value.annotations().contains("document") {
             let sequence = match value.ion_type() {
                 IonType::String => load(value.as_string().unwrap()),
                 IonType::List | IonType::SExp => {

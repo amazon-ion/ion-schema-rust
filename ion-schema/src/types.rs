@@ -11,7 +11,7 @@ use ion_rs::element::Element;
 use ion_rs::IonType;
 use ion_rs::Symbol;
 use std::fmt::{Display, Formatter};
-use std::rc::Rc;
+use std::sync::Arc;
 
 /// Provides validation for type definition
 pub trait TypeValidator {
@@ -40,11 +40,11 @@ pub trait TypeValidator {
 #[derive(Debug, Clone)]
 pub struct TypeDefinition {
     id: TypeId,
-    type_store: Rc<TypeStore>,
+    type_store: Arc<TypeStore>,
 }
 
 impl TypeDefinition {
-    pub fn new(id: TypeId, type_store: Rc<TypeStore>) -> Self {
+    pub fn new(id: TypeId, type_store: Arc<TypeStore>) -> Self {
         Self { id, type_store }
     }
 

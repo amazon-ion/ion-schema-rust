@@ -6,8 +6,8 @@ use ion_schema::result::IonSchemaResult;
 use ion_schema::schema::Schema;
 use ion_schema::system::SchemaSystem;
 use ion_schema::types::TypeDefinition;
-use std::rc::Rc;
 use std::str;
+use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 
 extern crate web_sys;
@@ -115,7 +115,7 @@ pub fn validate(ion: &str, schema: &str, schema_type: &str) -> SchemaValidationR
     log!("created schema system successfully!");
 
     // Load schema
-    let schema_result: IonSchemaResult<Rc<Schema>> = schema_system.load_schema(schema_id);
+    let schema_result: IonSchemaResult<Arc<Schema>> = schema_system.load_schema(schema_id);
 
     match &schema_result {
         Ok(_) => {}
@@ -132,7 +132,7 @@ pub fn validate(ion: &str, schema: &str, schema_type: &str) -> SchemaValidationR
         }
     };
 
-    let schema: Rc<Schema> = schema_result.unwrap();
+    let schema: Arc<Schema> = schema_result.unwrap();
 
     log!("loaded schema successfully!");
 
