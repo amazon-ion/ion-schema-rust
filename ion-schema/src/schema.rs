@@ -1,9 +1,9 @@
-//! Represents a [`Schema`] which is collection of zero or more [`TypeRef`]s.
-//! Provides functions to get the underlying [`TypeRef`]s from the [`Schema`] that can be used to validate an Ion value.
+//! Represents a [`Schema`] which is collection of zero or more [`TypeDefinition`]s.
+//! Provides functions to get the underlying [`TypeDefinition`]s from the [`Schema`] that can be used to validate an Ion value.
 //!
-//! * `get_types`: This function returns an [`SchemaTypeIterator`] which can be used to iterate over the [`TypeRef`]s.
+//! * `get_types`: This function returns an [`SchemaTypeIterator`] which can be used to iterate over the [`TypeDefinition`]s.
 //! * `get_type`: This function requires to pass the name of a type definition that you want to use for validation.
-//! It returns the [`TypeRef`] if it is defined in the [`Schema`] otherwise returns [`None`].
+//! It returns the [`TypeDefinition`] if it is defined in the [`Schema`] otherwise returns [`None`].
 //!
 
 use crate::import::Import;
@@ -11,7 +11,7 @@ use crate::system::{TypeId, TypeStore};
 use crate::types::{TypeDefinition, TypeDefinitionImpl};
 use std::sync::Arc;
 
-/// A Schema is a collection of zero or more [`TypeRef`]s.
+/// A Schema is a collection of zero or more [`TypeDefinition`]s.
 ///
 /// Each type may refer to other types within the same schema,
 /// or types imported into this schema from other schemas.
@@ -77,7 +77,7 @@ impl Schema {
     }
 }
 
-/// Provides an Iterator which returns [`TypeRef`]s inside a [`Schema`]
+/// Provides an Iterator which returns [`TypeDefinition`]s inside a [`Schema`]
 pub struct SchemaTypeIterator {
     type_store: Arc<TypeStore>,
     index: usize,

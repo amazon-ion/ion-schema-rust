@@ -2,18 +2,20 @@
 //!
 //! This module consists of three submodules that help constructing ISL types/constraint:
 //!
-//! * `isl_type` module represents a schema type `IslType` which converts given ion content in the schema file
+//! * `isl_type` module represents a schema type [IslType] which converts given ion content in the schema file
 //! into an ISL types(not-yet-resolved types). It stores `IslConstraint`s defined within the given type.
 //!
-//! * `isl_import` module represents a schema import `IslImport` which converts given ion content in the schema file
+//! * `isl_import` module represents a schema import [IslImport] which converts given ion content in the schema file
 //! into an ISL import. It stores schema id, an optional type that needs to be imported and an optional alias to that type.
 //!
-//! * `isl_constraint` module represents schema constraints `IslConstraint`
+//! * `isl_constraint` module represents schema constraints [IslConstraint]
 //! which converts given ion content in the schema file into an ISL constraint(not-yet-resolved constraints).
-//! This stores `IslTypeRef`s for the given ISL constraint.
 //!
 //! * `isl_type_reference` module provides a schema type reference.
-//! The type reference grammar is defined in the [Ion Schema Spec]: `<https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#grammar>`
+//! The type reference grammar is defined in the [Ion Schema Specification]
+//!
+//! [IslConstraint]: isl_constraint::IslConstraint
+//! [Ion Schema Specification]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#grammar
 //!
 //! ## Example usage of `isl` module to create an `IslType`:
 //! ```

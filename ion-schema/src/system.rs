@@ -340,7 +340,7 @@ impl PendingTypes {
     }
 
     /// Updates the unresolved named type that was added as None while loading types in a schema
-    /// with a resolved [`TypeDefinitionKind`]
+    /// with a resolved type definition
     pub(crate) fn update_named_type(
         &mut self,
         type_id: TypeId,
@@ -363,7 +363,7 @@ impl PendingTypes {
     }
 
     /// Updates the unresolved anonymous type that was added as None while loading types in a schema
-    /// with a resolved [`TypeDefinitionKind`]
+    /// with a resolved type definition
     pub(crate) fn update_anonymous_type(
         &mut self,
         type_id: TypeId,
@@ -451,7 +451,7 @@ static DERIVED_ISL_TYPES: [&str; 10] = [
 
 pub type TypeId = usize;
 
-/// Defines a cache that can be used to store resolved [`TypeDefinitionKind`]s of a [`Schema`]
+/// Defines a cache that can be used to store resolved type definitions of a [`Schema`]
 #[derive(Debug, Clone)]
 pub struct TypeStore {
     builtin_type_ids_by_name: HashMap<String, TypeId>, // stores all the builtin types used within this schema

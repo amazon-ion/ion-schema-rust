@@ -9,7 +9,7 @@ pub mod v_1_0 {
     use crate::isl::isl_constraint::{IslConstraint, IslConstraintImpl};
     use crate::isl::isl_type::{IslType, IslTypeImpl};
 
-    /// Creates a [IslType::Named] using the [IslConstraint] defined within it
+    /// Creates a named [IslType] using the [IslConstraint] defined within it
     pub fn named_type<A: Into<String>, B: Into<Vec<IslConstraint>>>(
         name: A,
         constraints: B,
@@ -25,7 +25,7 @@ pub mod v_1_0 {
         )
     }
 
-    /// Creates a [IslType::Anonymous] using the [IslConstraint] defined within it
+    /// Creates an anonymous [IslType] using the [IslConstraint] defined within it
     pub fn anonymous_type<A: Into<Vec<IslConstraint>>>(constraints: A) -> IslType {
         let constraints = constraints.into();
         let isl_constraints: Vec<IslConstraintImpl> = constraints
@@ -41,7 +41,7 @@ pub mod v_2_0 {
     use crate::isl::isl_constraint::IslConstraint;
     use crate::isl::isl_type::{v_1_0, IslType};
 
-    /// Creates a [IslType::Named] using the [IslConstraint] defined within it
+    /// Creates a named [IslType] using the [IslConstraint] defined within it
     pub fn named_type<A: Into<String>, B: Into<Vec<IslConstraint>>>(
         name: A,
         constraints: B,
@@ -49,7 +49,7 @@ pub mod v_2_0 {
         v_1_0::named_type(name, constraints)
     }
 
-    /// Creates a [IslType::Anonymous] using the [IslConstraint] defined within it
+    /// Creates an anonymous [IslType] using the [IslConstraint] defined within it
     pub fn anonymous_type<A: Into<Vec<IslConstraint>>>(constraints: A) -> IslType {
         v_1_0::anonymous_type(constraints)
     }

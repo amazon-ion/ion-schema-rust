@@ -35,6 +35,7 @@ pub type TimestampPrecisionRange = RangeImpl<TimestampPrecision>;
 pub type NumberRange = RangeImpl<Number>;
 
 /// Represents ISL [Range]s where some constraints can be defined using a range
+/// ```ion
 /// <RANGE<RANGE_TYPE>> ::= range::[ <EXCLUSIVITY><RANGE_TYPE>, <EXCLUSIVITY><RANGE_TYPE> ]
 ///                       | range::[ min, <EXCLUSIVITY><RANGE_TYPE> ]
 ///                       | range::[ <EXCLUSIVITY><RANGE_TYPE>, max ]
@@ -44,6 +45,7 @@ pub type NumberRange = RangeImpl<Number>;
 ///                | <NUMBER>
 ///                | <TIMESTAMP>
 ///                | <TIMESTAMP_PRECISION_VALUE>
+/// ```
 /// For more information on [Range]: <https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#constraints>
 // this is a wrapper around the RangeImpl generic implementation of ranges
 #[derive(Debug, Clone, PartialEq)]
