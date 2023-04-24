@@ -1099,7 +1099,7 @@ impl SchemaSystem {
         self.resolver.load_isl_schema(id, None)
     }
 
-    /// Resolves given ISL 1.0 model into a [Schema]
+    /// Resolves given ISL 1.0 model into a [Schema].
     /// If the given ISL model has any ISL 2.0 related types/constraints, resolution returns an error.
     /// This method returns an `Arc<Schema>` which allows to load this schema once re-use it across threads.
     // TODO: Add support for Rc<Schema> by providing a trait implementation of schema and schema cache. This should
@@ -1112,7 +1112,7 @@ impl SchemaSystem {
             .schema_from_isl_schema(IslVersion::V1_0, isl, &mut TypeStore::default(), None)
     }
 
-    /// Resolves given ISL 2.0 model into a [Schema]
+    /// Resolves given ISL 2.0 model into a [Schema].
     /// If the given ISL model has any ISL 1.0 related types/constraints, resolution returns an error.
     /// This method returns an `Arc<Schema>` which allows to load this schema once re-use it across threads.
     // TODO: Add support for Rc<Schema> by providing a trait implementation of schema and schema cache. This should
