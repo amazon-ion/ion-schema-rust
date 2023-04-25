@@ -2,25 +2,26 @@
 //!
 //! This module consists of three submodules that help constructing ISL types/constraint:
 //!
-//! * `isl_type` module represents a schema type `IslType` which converts given ion content in the schema file
+//! * `isl_type` module represents a schema type [IslType] which converts given ion content in the schema file
 //! into an ISL types(not-yet-resolved types). It stores `IslConstraint`s defined within the given type.
 //!
-//! * `isl_import` module represents a schema import `IslImport` which converts given ion content in the schema file
+//! * `isl_import` module represents a schema import [IslImport] which converts given ion content in the schema file
 //! into an ISL import. It stores schema id, an optional type that needs to be imported and an optional alias to that type.
 //!
-//! * `isl_constraint` module represents schema constraints `IslConstraint`
+//! * `isl_constraint` module represents schema constraints [IslConstraint]
 //! which converts given ion content in the schema file into an ISL constraint(not-yet-resolved constraints).
-//! This stores `IslTypeRef`s for the given ISL constraint.
 //!
 //! * `isl_type_reference` module provides a schema type reference.
-//! The type reference grammar is defined in the [Ion Schema Spec]: `<https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#grammar>`
+//! The type reference grammar is defined in the [Ion Schema Specification]
 //!
-//! ## Example usage of `isl` module to create an `IslType`:
+//! [IslConstraint]: isl_constraint::IslConstraint
+//! [Ion Schema Specification]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#grammar
+//!
+//! ## Example usage of `isl` module to create an `IslSchema` using `IslType`:
 //! ```
-//! use ion_schema::isl::{isl_type::v_1_0::*, isl_constraint::v_1_0::*, isl_type_reference::v_1_0::*};
+//! use ion_schema::isl::{isl_type::v_1_0::*, isl_constraint::v_1_0::*, isl_type_reference::v_1_0::*, IslSchema};
 //! use ion_schema::schema::Schema;
 //! use ion_schema::system::SchemaSystem;
-//! use std::path::Path;
 //!
 //! // below code represents an ISL type:
 //! // type:: {
@@ -53,15 +54,21 @@
 //!     ]
 //! );
 //!
-//! // create a schema from given IslType using SchemaSystem
-//! let schema_system = SchemaSystem::new(vec![]); // no authorities added
-//! let schema = schema_system.schema_from_isl_types_v1_0("my_schema", [isl_type.to_owned()]);
+//! // create an ISL schema using above IslType
+//! let isl_schema = IslSchema::schema_v_1_0("my_schema", vec![], vec![isl_type.to_owned()], vec![], vec![]);
+//!
+//! // create a schema with resolved type references from given IslSchema using SchemaSystem
+//! let mut schema_system = SchemaSystem::new(vec![]); // no authorities added
+//! let schema = schema_system.load_schema_from_isl_schema_v1_0(isl_schema);
 //!
 //! assert!(schema.is_ok());
 //!
 //! // verify if the generated schema contains the correct type
 //! assert!(schema.unwrap().get_type("my_type_name").is_some())
 //! ```
+//!
+//! Note that all the above functions to construct a type, constraint and type reference comes from `v_1_0` module which represents functions for [ISL 1.0](https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec).
+//! In order to programmatically construct [ISL 2.0](https://amazon-ion.github.io/ion-schema/docs/isl-2-0/spec) types, constraints and type references use `v_2_0` module.
 
 // The given schema is loaded with a two phase approach:
 // 1. Phase 1: Constructing an internal representation of ISL types/constraints from given schema file.

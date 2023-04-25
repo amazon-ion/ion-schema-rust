@@ -9,9 +9,11 @@ use std::fmt;
 use std::fmt::{Display, Formatter};
 
 /// Represents an annotation for `annotations` constraint.
+/// ```ion
 /// Grammar: <ANNOTATION> ::= <SYMBOL>
 ///                | required::<SYMBOL>
 ///                | optional::<SYMBOL>
+/// ```
 /// `annotations`: `<https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#annotations>`
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Annotation {
@@ -155,9 +157,11 @@ impl Display for TimestampPrecision {
 
 /// Represents a valid value to be ued within `valid_values` constraint
 /// ValidValue could either be a range or Element
+/// ```ion
 /// Grammar: <VALID_VALUE> ::= <VALUE>
 ///                | <RANGE<TIMESTAMP>>
 ///                | <RANGE<NUMBER>>
+/// ```
 /// `valid_values`: `<https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#valid_values>`
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValidValue {

@@ -24,7 +24,7 @@ pub mod v_1_0 {
     use crate::result::IonSchemaResult;
     use ion_rs::element::Element;
 
-    /// Creates an [IslConstraint::Type] using the [IslTypeRef] referenced inside it
+    /// Creates a `type` constraint using the [IslTypeRef] referenced inside it
     // type is rust keyword hence this method is named type_constraint unlike other ISL constraint methods
     pub fn type_constraint(isl_type: IslTypeRef) -> IslConstraint {
         IslConstraint::new(
@@ -33,7 +33,7 @@ pub mod v_1_0 {
         )
     }
 
-    /// Creates an [IslConstraint::AllOf] using the [IslTypeRef] referenced inside it
+    /// Creates an `all_of` constraint using the [IslTypeRef] referenced inside it
     pub fn all_of<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V1_0,
@@ -47,7 +47,7 @@ pub mod v_1_0 {
         )
     }
 
-    /// Creates an [IslConstraint::AnyOf] using the [IslTypeRef] referenced inside it
+    /// Creates an `any_of` constraint using the [IslTypeRef] referenced inside it
     pub fn any_of<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V1_0,
@@ -61,7 +61,7 @@ pub mod v_1_0 {
         )
     }
 
-    /// Creates an [IslConstraint::OneOf] using the [IslTypeRef] referenced inside it
+    /// Creates a `one_of` constraint using the [IslTypeRef] referenced inside it
     pub fn one_of<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V1_0,
@@ -75,7 +75,7 @@ pub mod v_1_0 {
         )
     }
 
-    /// Creates an [IslConstraint::OrderedElements] using the [IslTypeRef] referenced inside it
+    /// Creates an `ordered_elements` constraint using the [IslTypeRef] referenced inside it
     pub fn ordered_elements<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V1_0,
@@ -89,7 +89,7 @@ pub mod v_1_0 {
         )
     }
 
-    /// Creates an [IslConstraint::Precision] using the range specified in it
+    /// Creates a `precision` constraint using the range specified in it
     pub fn precision(precision: NonNegativeIntegerRange) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V1_0,
@@ -97,7 +97,7 @@ pub mod v_1_0 {
         )
     }
 
-    /// Creates an [IslConstraint::Scale] using the range specified in it
+    /// Creates a `scale` constraint using the range specified in it
     pub fn scale(scale: IntegerRange) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V1_0,
@@ -105,7 +105,7 @@ pub mod v_1_0 {
         )
     }
 
-    /// Creates an [IslConstraint::Fields] using the field names and [IslTypeRef]s referenced inside it
+    /// Creates a `fields` constraint using the field names and [IslTypeRef]s referenced inside it
     pub fn fields<I>(fields: I) -> IslConstraint
     where
         I: Iterator<Item = (String, IslTypeRef)>,
@@ -116,7 +116,7 @@ pub mod v_1_0 {
         )
     }
 
-    /// Creates an [IslConstraint::Not] using the [IslTypeRef] referenced inside it
+    /// Creates a `not` constraint using the [IslTypeRef] referenced inside it
     pub fn not(isl_type: IslTypeRef) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V1_0,
@@ -124,12 +124,12 @@ pub mod v_1_0 {
         )
     }
 
-    /// Creates a [IslConstraint::Contains] using the [Element] specified inside it
+    /// Creates a `contains` constraint using the [Element] specified inside it
     pub fn contains<A: Into<Vec<Element>>>(values: A) -> IslConstraint {
         IslConstraint::new(IslVersion::V1_0, IslConstraintImpl::Contains(values.into()))
     }
 
-    /// Creates an [IslConstraint::ContainerLength] using the range specified in it
+    /// Creates a `container_length` constraint using the range specified in it
     pub fn container_length(length: NonNegativeIntegerRange) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V1_0,
@@ -137,7 +137,7 @@ pub mod v_1_0 {
         )
     }
 
-    /// Creates an [IslConstraint::ByteLength] using the range specified in it
+    /// Creates a `byte_length` constraint using the range specified in it
     pub fn byte_length(length: RangeImpl<usize>) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V1_0,
@@ -145,7 +145,7 @@ pub mod v_1_0 {
         )
     }
 
-    /// Creates an [IslConstraint::CodepointLength] using the range specified in it
+    /// Creates a `codepoint_length` constraint using the range specified in it
     pub fn codepoint_length(length: RangeImpl<usize>) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V1_0,
@@ -153,7 +153,7 @@ pub mod v_1_0 {
         )
     }
 
-    /// Creates an [IslConstraint::TimestampPrecision] using the range specified in it
+    /// Creates a `timestamp_precision` constraint using the range specified in it
     pub fn timestamp_precision(precision: RangeImpl<TimestampPrecision>) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V1_0,
@@ -161,7 +161,7 @@ pub mod v_1_0 {
         )
     }
 
-    /// Creates an [IslConstraint::TimestampOffset] using the offset list specified in it
+    /// Creates a `timestamp_offset` constraint using the offset list specified in it
     pub fn timestamp_offset(offsets: Vec<TimestampOffset>) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V1_0,
@@ -169,7 +169,7 @@ pub mod v_1_0 {
         )
     }
 
-    /// Creates an [IslConstraint::Utf8ByteLength] using the range specified in it
+    /// Creates an `utf_byte_length` constraint using the range specified in it
     pub fn utf8_byte_length(length: NonNegativeIntegerRange) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V1_0,
@@ -177,7 +177,7 @@ pub mod v_1_0 {
         )
     }
 
-    /// Creates an [IslConstraint::Element] using the [IslTypeRef] referenced inside it
+    /// Creates an `element` constraint using the [IslTypeRef] referenced inside it
     pub fn element(isl_type: IslTypeRef) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V1_0,
@@ -185,7 +185,7 @@ pub mod v_1_0 {
         )
     }
 
-    /// Creates an [IslConstraint::Annotations] using [str]s and [Element]s specified inside it
+    /// Creates an `annotations` constraint using [str]s and [Element]s specified inside it
     pub fn annotations<'a, A: IntoIterator<Item = &'a str>, B: IntoIterator<Item = Element>>(
         annotations_modifiers: A,
         annotations: B,
@@ -213,7 +213,7 @@ pub mod v_1_0 {
         )
     }
 
-    /// Creates a [IslConstraint::ValidValues] using the [Element]s specified inside it
+    /// Creates a `valid_values` constraint using the [Element]s specified inside it
     pub fn valid_values_with_values(values: Vec<Element>) -> IonSchemaResult<IslConstraint> {
         let valid_values: IonSchemaResult<Vec<ValidValue>> =
             values.iter().map(|e| e.try_into()).collect();
@@ -225,7 +225,7 @@ pub mod v_1_0 {
         ))
     }
 
-    /// Creates a [IslConstraint::ValidValues] using the [Range] specified inside it
+    /// Creates a `valid_values` constraint using the [Range] specified inside it
     pub fn valid_values_with_range(range: Range) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V1_0,
@@ -235,7 +235,7 @@ pub mod v_1_0 {
         )
     }
 
-    /// Creates an [IslConstraint::Regex] using the expression and flags (case_insensitive, multi_line)
+    /// Creates a `regex` constraint using the expression and flags (case_insensitive, multi_line)
     pub fn regex(case_insensitive: bool, multi_line: bool, expression: String) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V1_0,
@@ -262,7 +262,7 @@ pub mod v_2_0 {
     use ion_rs::element::Element;
     use ion_rs::Int;
 
-    /// Creates an [IslConstraint::Type] using the [IslTypeRef] referenced inside it
+    /// Creates a `type` constraint using the [IslTypeRef] referenced inside it
     // type is rust keyword hence this method is named type_constraint unlike other ISL constraint methods
     pub fn type_constraint(isl_type: IslTypeRef) -> IslConstraint {
         IslConstraint::new(
@@ -271,7 +271,7 @@ pub mod v_2_0 {
         )
     }
 
-    /// Creates an [IslConstraint::AllOf] using the [IslTypeRef] referenced inside it
+    /// Creates an `all_of` constraint using the [IslTypeRef] referenced inside it
     pub fn all_of<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V2_0,
@@ -285,7 +285,7 @@ pub mod v_2_0 {
         )
     }
 
-    /// Creates an [IslConstraint::AnyOf] using the [IslTypeRef] referenced inside it
+    /// Creates an `any_of` constraint using the [IslTypeRef] referenced inside it
     pub fn any_of<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V2_0,
@@ -299,7 +299,7 @@ pub mod v_2_0 {
         )
     }
 
-    /// Creates an [IslConstraint::OneOf] using the [IslTypeRef] referenced inside it
+    /// Creates an `one_of` constraint using the [IslTypeRef] referenced inside it
     pub fn one_of<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V2_0,
@@ -313,7 +313,7 @@ pub mod v_2_0 {
         )
     }
 
-    /// Creates an [IslConstraint::OrderedElements] using the [IslTypeRef] referenced inside it
+    /// Creates an `ordered_elements` constraint using the [IslTypeRef] referenced inside it
     pub fn ordered_elements<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V2_0,
@@ -327,7 +327,7 @@ pub mod v_2_0 {
         )
     }
 
-    /// Creates an [IslConstraint::Precision] using the range specified in it
+    /// Creates a `precision` constraint using the range specified in it
     pub fn precision(precision: NonNegativeIntegerRange) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V2_0,
@@ -335,7 +335,7 @@ pub mod v_2_0 {
         )
     }
 
-    /// Creates a [IslConstraint::Exponent] from a [Range] specifying an exponent range.
+    /// Creates an `exponent` constraint from a [Range] specifying an exponent range.
     pub fn exponent(exponent: RangeImpl<Int>) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V2_0,
@@ -343,7 +343,7 @@ pub mod v_2_0 {
         )
     }
 
-    /// Creates an [IslConstraint::Fields] using the field names and [IslTypeRef]s referenced inside it
+    /// Creates a `fields` constraint using the field names and [IslTypeRef]s referenced inside it
     pub fn fields<I>(fields: I) -> IslConstraint
     where
         I: Iterator<Item = (String, IslTypeRef)>,
@@ -354,7 +354,7 @@ pub mod v_2_0 {
         )
     }
 
-    /// Creates an [IslConstraint::FieldNames] using the [IslTypeRef] referenced inside it and considers whether distinct elements are required or not
+    /// Creates a `field_names` constraint using the [IslTypeRef] referenced inside it and considers whether distinct elements are required or not
     pub fn field_names(isl_type: IslTypeRef, require_distinct_field_names: bool) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V2_0,
@@ -362,7 +362,7 @@ pub mod v_2_0 {
         )
     }
 
-    /// Creates an [IslConstraint::Not] using the [IslTypeRef] referenced inside it
+    /// Creates a `not` constraint using the [IslTypeRef] referenced inside it
     pub fn not(isl_type: IslTypeRef) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V2_0,
@@ -370,12 +370,12 @@ pub mod v_2_0 {
         )
     }
 
-    /// Creates a [IslConstraint::Contains] using the [Element] specified inside it
+    /// Creates a `contains` constraint using the [Element] specified inside it
     pub fn contains<A: Into<Vec<Element>>>(values: A) -> IslConstraint {
         IslConstraint::new(IslVersion::V2_0, IslConstraintImpl::Contains(values.into()))
     }
 
-    /// Creates an [IslConstraint::ContainerLength] using the range specified in it
+    /// Creates a `container_length` constraint using the range specified in it
     pub fn container_length(length: NonNegativeIntegerRange) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V2_0,
@@ -383,7 +383,7 @@ pub mod v_2_0 {
         )
     }
 
-    /// Creates an [IslConstraint::ByteLength] using the range specified in it
+    /// Creates a `byte_length` constraint using the range specified in it
     pub fn byte_length(length: RangeImpl<usize>) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V2_0,
@@ -391,7 +391,7 @@ pub mod v_2_0 {
         )
     }
 
-    /// Creates an [IslConstraint::CodepointLength] using the range specified in it
+    /// Creates a `codepoint_length` constraint using the range specified in it
     pub fn codepoint_length(length: RangeImpl<usize>) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V2_0,
@@ -399,7 +399,7 @@ pub mod v_2_0 {
         )
     }
 
-    /// Creates an [IslConstraint::TimestampPrecision] using the range specified in it
+    /// Creates a `timestamp_precision` constraint using the range specified in it
     pub fn timestamp_precision(precision: RangeImpl<TimestampPrecision>) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V2_0,
@@ -407,7 +407,7 @@ pub mod v_2_0 {
         )
     }
 
-    /// Creates an [IslConstraint::TimestampOffset] using the offset list specified in it
+    /// Creates a `timestamp_offset` constraint using the offset list specified in it
     pub fn timestamp_offset(offsets: Vec<TimestampOffset>) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V2_0,
@@ -415,7 +415,7 @@ pub mod v_2_0 {
         )
     }
 
-    /// Creates an [IslConstraint::Utf8ByteLength] using the range specified in it
+    /// Creates a `utf8_byte_length` constraint using the range specified in it
     pub fn utf8_byte_length(length: NonNegativeIntegerRange) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V2_0,
@@ -423,7 +423,7 @@ pub mod v_2_0 {
         )
     }
 
-    /// Creates an [IslConstraint::Element] using the [IslTypeRef] referenced inside it and considers whether distinct elements are required or not
+    /// Creates an `element` constraint using the [IslTypeRef] referenced inside it and considers whether distinct elements are required or not
     pub fn element(isl_type: IslTypeRef, require_distinct_elements: bool) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V2_0,
@@ -431,7 +431,7 @@ pub mod v_2_0 {
         )
     }
 
-    /// Creates an [IslConstraint::Annotations] using [str]s and [Element]s specified inside it
+    /// Creates an `annotations` constraint using [str]s and [Element]s specified inside it
     pub fn annotations<'a, A: IntoIterator<Item = &'a str>, B: IntoIterator<Item = Element>>(
         annotations_modifiers: A,
         annotations: B,
@@ -439,7 +439,7 @@ pub mod v_2_0 {
         todo!()
     }
 
-    /// Creates a [IslConstraint::ValidValues] using the [Element]s specified inside it
+    /// Creates a `valid_values` constraint using the [Element]s specified inside it
     pub fn valid_values_with_values(values: Vec<Element>) -> IonSchemaResult<IslConstraint> {
         let valid_values: IonSchemaResult<Vec<ValidValue>> =
             values.iter().map(|e| e.try_into()).collect();
@@ -451,7 +451,7 @@ pub mod v_2_0 {
         ))
     }
 
-    /// Creates a [IslConstraint::ValidValues] using the [Range] specified inside it
+    /// Creates a `valid_values` constraint using the [Range] specified inside it
     pub fn valid_values_with_range(range: Range) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V2_0,
@@ -461,13 +461,13 @@ pub mod v_2_0 {
         )
     }
 
-    /// Creates an [IslConstraint::Regex] using the expression and flags (case_insensitive, multi_line)
+    /// Creates a `regex` constraint using the expression and flags (case_insensitive, multi_line)
     pub fn regex(case_insensitive: bool, multi_line: bool, expression: String) -> IslConstraint {
         todo!()
     }
 }
 
-/// Represents schema constraints [IslConstraint] which stores IslTypeRef
+/// Represents schema constraints [IslConstraint]
 #[derive(Debug, Clone, PartialEq)]
 pub struct IslConstraint {
     pub(crate) version: IslVersion,
@@ -983,8 +983,9 @@ impl IslConstraintImpl {
     }
 }
 
-/// Represents the `annotations` constraint
-/// `annotations`: `<https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#annotations>`
+/// Represents the [annotations] constraint
+///
+/// [annotations]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#annotations
 // The `required` annotation provided on the list of annotations is not represented here,
 // requirement of an annotation is represented in the annotation itself by the field `is_required` of `Annotation` struct.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1037,8 +1038,9 @@ impl TryFrom<&Element> for IslAnnotationsConstraint {
     }
 }
 
-/// Represents the `valid_values` constraint
-/// `valid_values`: `<https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#annotations>`
+/// Represents the [valid_values] constraint
+///
+/// [valid_values]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#annotations
 #[derive(Debug, Clone, PartialEq)]
 pub struct IslValidValuesConstraint {
     pub(crate) valid_values: Vec<ValidValue>,
@@ -1096,8 +1098,9 @@ impl TryFrom<&Element> for IslValidValuesConstraint {
     }
 }
 
-/// Represents the `regex` constraint
-/// `regex`: `<https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#regex>`
+/// Represents the [regex] constraint
+///
+/// [regex]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#regex
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IslRegexConstraint {
     case_insensitive: bool,
@@ -1127,8 +1130,9 @@ impl IslRegexConstraint {
     }
 }
 
-/// Represents the `timestamp_offset` constraint
-/// `timestamp_offset`: `<https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#timestamp_offset>`
+/// Represents the [timestamp_offset] constraint
+///
+/// [timestamp_offset]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#timestamp_offset
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IslTimestampOffsetConstraint {
     valid_offsets: Vec<TimestampOffset>,

@@ -1,8 +1,9 @@
 use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
 use ion_rs::element::Element;
 
-/// Represents an import in an ISL schema.
-/// For more information: `<https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#imports>`
+/// Represents an [import] in an ISL schema.
+///
+/// [import]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#imports
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IslImport {
     Schema(String),

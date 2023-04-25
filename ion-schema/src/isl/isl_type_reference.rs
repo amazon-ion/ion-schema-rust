@@ -19,7 +19,7 @@ pub mod v_1_0 {
     use crate::isl::isl_type_reference::{IslTypeRef, IslTypeRefImpl, NullabilityModifier};
     use ion_rs::IonType;
 
-    /// Creates a [IslTypeRef::Named] using the [IonType] referenced inside it
+    /// Creates a named [IslTypeRef] using the name of the type referenced inside it
     pub fn named_type_ref<A: Into<String>>(name: A) -> IslTypeRef {
         IslTypeRef::new(IslTypeRefImpl::Named(
             name.into(),
@@ -27,7 +27,7 @@ pub mod v_1_0 {
         ))
     }
 
-    /// Creates a nullable [IslTypeRef::Named] using the [IonType] referenced inside it
+    /// Creates a nullable [IslTypeRef] using the [IonType] referenced inside it
     pub fn nullable_built_in_type_ref(name: IonType) -> IslTypeRef {
         IslTypeRef::new(IslTypeRefImpl::Named(
             format!("{name}"),
@@ -35,7 +35,7 @@ pub mod v_1_0 {
         ))
     }
 
-    /// Creates a [IslTypeRef::Anonymous] using the [IonType] referenced inside it
+    /// Creates an anonymous [IslTypeRef] using the [IslConstraint]s referenced inside it
     pub fn anonymous_type_ref<A: Into<Vec<IslConstraint>>>(constraints: A) -> IslTypeRef {
         let constraints = constraints.into();
         let isl_constraints: Vec<IslConstraintImpl> = constraints
@@ -54,12 +54,12 @@ pub mod v_2_0 {
     use crate::isl::isl_constraint::IslConstraint;
     use crate::isl::isl_type_reference::{v_1_0, IslTypeRef, IslTypeRefImpl, NullabilityModifier};
 
-    /// Creates a [IslTypeRef::Named] using the [IonType] referenced inside it
+    /// Creates a named [IslTypeRef] using the name of the type referenced inside it
     pub fn named_type_ref<A: Into<String>>(name: A) -> IslTypeRef {
         v_1_0::named_type_ref(name)
     }
 
-    /// Creates a nullable [IslTypeRef::Named] using the [IonType] referenced inside it
+    /// Creates a nullable [IslTypeRef] using the name of the type referenced inside it
     pub fn null_or_named_type_ref<A: Into<String>>(name: A) -> IslTypeRef {
         IslTypeRef::new(IslTypeRefImpl::Named(
             name.into(),
@@ -67,7 +67,7 @@ pub mod v_2_0 {
         ))
     }
 
-    /// Creates a [IslTypeRef::Anonymous] using the [IonType] referenced inside it
+    /// Creates an anonymous [IslTypeRef] using the [IslConstraint]s referenced inside it
     pub fn anonymous_type_ref<A: Into<Vec<IslConstraint>>>(constraints: A) -> IslTypeRef {
         v_1_0::anonymous_type_ref(constraints)
     }
@@ -75,7 +75,8 @@ pub mod v_2_0 {
 
 /// Provides an internal representation of a schema type reference.
 /// The type reference grammar is defined in the [Ion Schema Spec]
-/// [Ion Schema spec]: `<https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#grammar>`
+///
+/// [Ion Schema spec]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#grammar
 #[derive(Debug, Clone, PartialEq)]
 pub struct IslTypeRef {
     pub(crate) type_reference: IslTypeRefImpl,

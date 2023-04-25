@@ -1,13 +1,9 @@
 #[macro_use]
 extern crate clap;
 use clap::{App, ArgMatches};
-use ion_rs::value::native_writer::NativeElementWriter;
-use ion_rs::value::owned::Element;
-use ion_rs::value::reader::element_reader;
-use ion_rs::value::reader::ElementReader;
-use ion_rs::value::writer::ElementWriter;
+use ion_rs::element::Element;
 use ion_rs::IonWriter;
-use ion_rs::{IonResult, IonType, TextWriterBuilder};
+use ion_rs::{IonType, TextWriterBuilder};
 use ion_schema::authority::{DocumentAuthority, FileSystemDocumentAuthority};
 use ion_schema::result::IonSchemaResult;
 use ion_schema::system::SchemaSystem;
@@ -69,9 +65,7 @@ fn validate(command_args: &ArgMatches) -> IonSchemaResult<()> {
     // Extract Ion value provided by user
     let input_file = command_args.value_of("input").unwrap();
     let value = fs::read(input_file).expect("Can not load given ion file");
-    let owned_elements = element_reader()
-        .read_all(&value)
-        .expect("parsing failed unexpectedly");
+    let owned_elements = Element::read_all(&value).expect("parsing failed unexpectedly");
 
     // Set up authorities vector
     let mut document_authorities: Vec<Box<dyn DocumentAuthority>> = vec![];
@@ -105,7 +99,7 @@ fn validate(command_args: &ArgMatches) -> IonSchemaResult<()> {
             Ok(_) => {
                 writer.write_string("Valid")?;
                 writer.set_field_name("value");
-                writer.write_string(element_to_string(&owned_element)?)?;
+                writer.write_string(format!("{owned_element}"))?;
                 writer.set_field_name("schema");
                 writer.write_string(schema_id)?;
             }
@@ -121,16 +115,4 @@ fn validate(command_args: &ArgMatches) -> IonSchemaResult<()> {
     println!("Validation report:");
     println!("{}", from_utf8(&output).unwrap());
     Ok(())
-}
-
-// TODO: this will be provided by OwnedElement's implementation of `Display` in a future release
-fn element_to_string(element: &Element) -> IonResult<String> {
-    let mut buffer = Vec::new();
-    let text_writer = TextWriterBuilder::new().build(std::io::Cursor::new(&mut buffer))?;
-    let mut element_writer = NativeElementWriter::new(text_writer);
-    element_writer.write(element)?;
-    let mut text_writer = element_writer.finish()?;
-    text_writer.flush()?;
-    drop(text_writer);
-    Ok(from_utf8(buffer.as_slice()).unwrap().to_string())
 }

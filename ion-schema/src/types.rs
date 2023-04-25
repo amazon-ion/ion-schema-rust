@@ -14,7 +14,7 @@ use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 
 /// Provides validation for type definition
-pub trait TypeValidator {
+pub(crate) trait TypeValidator {
     /// If the specified value violates one or more of this type's constraints,
     /// returns `false`, otherwise `true`
     fn is_valid(
@@ -44,7 +44,7 @@ pub struct TypeDefinition {
 }
 
 impl TypeDefinition {
-    pub fn new(id: TypeId, type_store: Arc<TypeStore>) -> Self {
+    pub(crate) fn new(id: TypeId, type_store: Arc<TypeStore>) -> Self {
         Self { id, type_store }
     }
 
@@ -109,14 +109,14 @@ impl TypeDefinition {
 
 /// Represents a [`BuiltInTypeDefinition`] which stores a resolved builtin ISl type using [`TypeStore`]
 #[derive(Debug, Clone, PartialEq)]
-pub enum BuiltInTypeDefinition {
+pub(crate) enum BuiltInTypeDefinition {
     Atomic(IonType, Nullability),
     Derived(TypeDefinitionImpl),
 }
 
 /// Represents whether an atomic built-in type is nullable or not
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Nullability {
+pub(crate) enum Nullability {
     Nullable,
     NotNullable,
 }
@@ -243,14 +243,14 @@ impl Display for BuiltInTypeDefinition {
 
 /// Represents a [`TypeDefinitionKind`] which stores a resolved ISL type using [`TypeStore`]
 #[derive(Debug, Clone, PartialEq)]
-pub enum TypeDefinitionKind {
+pub(crate) enum TypeDefinitionKind {
     Named(TypeDefinitionImpl),
     Anonymous(TypeDefinitionImpl),
     BuiltIn(BuiltInTypeDefinition),
 }
 
 impl TypeDefinitionKind {
-    /// Creates a named [`TypeDefinition`] using the [`IslConstraint`] defined within it
+    /// Creates a named [`TypeDefinitionKind`] using the [`Constraint`]s defined within it
     pub fn named<A: Into<String>, B: Into<Vec<Constraint>>>(
         name: A,
         constraints: B,
@@ -262,12 +262,12 @@ impl TypeDefinitionKind {
         ))
     }
 
-    /// Creates an anonymous [`TypeDefinition`] using the [`IslConstraint`] defined within it
+    /// Creates an anonymous [`TypeDefinitionKind`] using the [`Constraint`]s defined within it
     pub fn anonymous<A: Into<Vec<Constraint>>>(constraints: A) -> TypeDefinitionKind {
         TypeDefinitionKind::Anonymous(TypeDefinitionImpl::new(None, constraints.into(), None))
     }
 
-    /// Provides the underlying constraints of [`TypeDefinitionImpl`]
+    /// Provides the underlying constraints of [`TypeDefinitionKind`]
     pub fn constraints(&self) -> &[Constraint] {
         match &self {
             TypeDefinitionKind::Named(named_type) => named_type.constraints(),
@@ -369,7 +369,7 @@ impl TypeValidator for TypeDefinitionKind {
 
 /// A [`TypeDefinitionImpl`] consists of an optional name and zero or more constraints.
 #[derive(Debug, Clone)]
-pub struct TypeDefinitionImpl {
+pub(crate) struct TypeDefinitionImpl {
     name: Option<String>,
     constraints: Vec<Constraint>,
     // `is_deferred_type_def` indicates if this is a deferred type def which will be resolved later

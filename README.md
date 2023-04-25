@@ -33,12 +33,12 @@ schema_footer::{
 
 ### Loading a schema and validating an Ion value
 ```rust
+use ion_rs::element::Element;
 use ion_schema::authority::{DocumentAuthority, FileSystemDocumentAuthority};
-use ion_schema::external::ion_rs::value::owned::OwnedElement;
 use ion_schema::result::{IonSchemaResult, ValidationResult};
 use ion_schema::schema::Schema;
 use ion_schema::system::SchemaSystem;
-use ion_schema::types::TypeRef;
+use ion_schema::types::TypeDefinition;
 use ion_schema::IonSchemaElement;
 use std::fmt::Debug;
 use std::path::Path;
@@ -60,11 +60,11 @@ fn main() -> IonSchemaResult<()> {
     let schema: Arc<Schema> = schema_system.load_schema(schema_id)?;
 
     // Retrieve a particular type from this schema
-    let type_ref: TypeRef = schema.get_type("my_int_type").unwrap();
+    let type_ref: TypeDefinition = schema.get_type("my_int_type").unwrap();
 
-    let valid_element: OwnedElement = 5.into();
-    let invalid_element: OwnedElement = 5e3.into();
-    let invalid_document_element: Vec<OwnedElement> = vec![5.into(), true.into(), 6e3.into()];
+    let valid_element: Element = 5.into();
+    let invalid_element: Element = 5e3.into();
+    let invalid_document_element: Vec<Element> = vec![5.into(), true.into(), 6e3.into()];
 
     // Validate data based on the type: 'my_int_type'
     check_value(&valid_element, &type_ref); // this validation passes as the value satisfies integer type constraint
@@ -75,7 +75,7 @@ fn main() -> IonSchemaResult<()> {
 }
 
 // Verify if the given value is valid and print violation for invalid value
-fn check_value<I: Into<IonSchemaElement> + Debug + Clone>(value: I, type_ref: &TypeRef) {
+fn check_value<I: Into<IonSchemaElement> + Debug + Clone>(value: I, type_ref: &TypeDefinition) {
     let validation_result: ValidationResult = type_ref.validate(value.to_owned());
     if let Err(violation) = validation_result {
         println!("{}", value.into());
@@ -92,11 +92,13 @@ Violation {
     constraint: "my_int_type",
     code: TypeConstraintsUnsatisfied,
     message: "value didn't satisfy type constraint(s)",
+    ion_path: (),
     violations: [
         Violation {
             constraint: "type_constraint",
             code: TypeMismatched,
-            message: "expected type Integer, found Float",
+            message: "expected type Int, found Float",
+            ion_path: (),
             violations: [],
         },
     ],
@@ -106,11 +108,13 @@ Violation {
     constraint: "my_int_type",
     code: TypeConstraintsUnsatisfied,
     message: "value didn't satisfy type constraint(s)",
+    ion_path: (),
     violations: [
         Violation {
             constraint: "type_constraint",
             code: TypeMismatched,
-            message: "expected type Integer, found document",
+            message: "expected type Int, found document",
+            ion_path: (),
             violations: [],
         },
     ],
