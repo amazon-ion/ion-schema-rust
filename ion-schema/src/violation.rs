@@ -61,10 +61,10 @@ impl Violation {
     pub fn flattened_violations(&self) -> Vec<&Violation> {
         let mut flattened_violations = Vec::new();
         for violation in &self.violations {
-            if violation.violations.len() == 0 {
+            if violation.violations.is_empty() {
                 flattened_violations.push(violation);
             } else {
-                flattened_violations.extend_from_slice(&*violation.flattened_violations())
+                flattened_violations.extend_from_slice(&violation.flattened_violations())
             }
         }
         flattened_violations
