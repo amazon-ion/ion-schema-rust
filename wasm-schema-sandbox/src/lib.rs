@@ -173,13 +173,8 @@ pub fn validate(
     let values_result = load_all(ion);
 
     let value = match values_result {
-        Ok(v) => {
-            if is_document {
-                IonSchemaElement::Document(v)
-            } else {
-                IonSchemaElement::SingleElement(v[0].to_owned())
-            }
-        }
+        Ok(v) if is_document => IonSchemaElement::Document(v),
+        Ok(v) => IonSchemaElement::SingleElement(v[0].to_owned()),
         Err(_) => {
             return SchemaValidationResult::new(
                 false,

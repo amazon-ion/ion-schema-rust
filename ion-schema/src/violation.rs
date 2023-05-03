@@ -57,20 +57,24 @@ impl Violation {
         &self.code
     }
 
-    /// Provides flattened list of violations that only represent the leaf violations or core violations.
+    /// Provides flattened list of leaf violations which represent the root cause of the top-level violation.
     pub fn flattened_violations(&self) -> Vec<&Violation> {
-        if self.violations.is_empty() {
-            return vec![self];
-        }
         let mut flattened_violations = Vec::new();
+        self.flatten_violations(&mut flattened_violations);
+        flattened_violations
+    }
+
+    fn flatten_violations<'a>(&'a self, flattened: &mut Vec<&'a Violation>) {
+        if self.violations.is_empty() {
+            flattened.push(self);
+        }
         for violation in &self.violations {
             if violation.violations.is_empty() {
-                flattened_violations.push(violation);
+                flattened.push(violation);
             } else {
-                flattened_violations.extend_from_slice(&violation.flattened_violations())
+                violation.flatten_violations(flattened)
             }
         }
-        flattened_violations
     }
 
     pub fn violations(&self) -> &[Violation] {
