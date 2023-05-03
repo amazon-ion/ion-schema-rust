@@ -256,7 +256,9 @@ pub mod v_2_0 {
     };
     use crate::isl::isl_range::{NonNegativeIntegerRange, Range, RangeImpl};
     use crate::isl::isl_type_reference::IslTypeRef;
-    use crate::isl::util::{TimestampOffset, TimestampPrecision, ValidValue};
+    use crate::isl::util::{
+        Ieee754InterchangeFormat, TimestampOffset, TimestampPrecision, ValidValue,
+    };
     use crate::isl::IslVersion;
     use crate::result::IonSchemaResult;
     use ion_rs::element::Element;
@@ -464,6 +466,14 @@ pub mod v_2_0 {
     /// Creates a `regex` constraint using the expression and flags (case_insensitive, multi_line)
     pub fn regex(case_insensitive: bool, multi_line: bool, expression: String) -> IslConstraint {
         todo!()
+    }
+
+    /// Creates a `ieee754_float` constraint using `Ieee754InterchangeFormat` specified in it.
+    pub fn ieee754_float(interchange_format: Ieee754InterchangeFormat) -> IslConstraint {
+        IslConstraint::new(
+            IslVersion::V2_0,
+            IslConstraintImpl::Ieee754Float(interchange_format),
+        )
     }
 }
 

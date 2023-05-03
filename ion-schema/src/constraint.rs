@@ -283,6 +283,11 @@ impl Constraint {
         Ok(Constraint::Regex(regex.try_into()?))
     }
 
+    /// Creates a [Constraint::Ieee754Float] from [Ieee754InterchangeFormat] specified inside it
+    pub fn ieee754_float(interchange_format: Ieee754InterchangeFormat) -> Constraint {
+        Constraint::Ieee754Float(Ieee754FloatConstraint::new(interchange_format))
+    }
+
     /// Resolves all ISL type references to corresponding [TypeReference]s
     fn resolve_type_references(
         isl_version: IslVersion,
@@ -2347,19 +2352,25 @@ impl ConstraintValidator for Ieee754FloatConstraint {
                     return Err(Violation::new(
                         "ieee754_float",
                         ViolationCode::InvalidIeee754Float,
-                        "value cannot be losslessly represented by the IEEE-754 $interchangeFormat interchange format.",
+                        format!("value cannot be losslessly represented by the IEEE-754 {} interchange format.", self.interchange_format),
                         ion_path,
                     ));
                 }
                 Ok(())
             }
             Ieee754InterchangeFormat::Binary32 => {
-                let f32_value = float_value.to_f32().unwrap();
-                if f32_value.to_f64().unwrap() != float_value {
+                let f64_value = float_value.to_f32().and_then(|f32_value| f32_value.to_f64()).ok_or(Violation::new(
+                    "ieee754_float",
+                    ViolationCode::InvalidIeee754Float,
+                    format!("value cannot be losslessly represented by the IEEE-754 {} interchange format.", self.interchange_format),
+                    ion_path,
+                ))?;
+
+                if f64_value != float_value {
                     return Err(Violation::new(
                         "ieee754_float",
                         ViolationCode::InvalidIeee754Float,
-                        "value cannot be losslessly represented by the IEEE-754 $interchangeFormat interchange format.",
+                        format!("value cannot be losslessly represented by the IEEE-754 {} interchange format.", self.interchange_format),
                         ion_path,
                     ));
                 }

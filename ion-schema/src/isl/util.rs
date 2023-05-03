@@ -297,3 +297,17 @@ impl TryFrom<&str> for Ieee754InterchangeFormat {
         })
     }
 }
+
+impl Display for Ieee754InterchangeFormat {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Ieee754InterchangeFormat::Binary16 => "binary16",
+                Ieee754InterchangeFormat::Binary32 => "binary32",
+                Ieee754InterchangeFormat::Binary64 => "binary64",
+            }
+        )
+    }
+}
