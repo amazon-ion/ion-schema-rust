@@ -59,6 +59,9 @@ impl Violation {
 
     /// Provides flattened list of violations that only represent the leaf violations or core violations.
     pub fn flattened_violations(&self) -> Vec<&Violation> {
+        if self.violations.is_empty() {
+            return vec![self];
+        }
         let mut flattened_violations = Vec::new();
         for violation in &self.violations {
             if violation.violations.is_empty() {
