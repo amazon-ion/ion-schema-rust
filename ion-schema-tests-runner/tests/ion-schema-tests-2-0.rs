@@ -15,7 +15,6 @@ ion_schema_tests!(
         "constraints::codepoint_length",
         "constraints::container_length",
         "constraints::contains",
-        // "constraints::ieee754_float",
         "constraints::not",
         "constraints::one_of",
         "constraints::ordered_elements",
