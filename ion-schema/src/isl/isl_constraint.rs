@@ -1,7 +1,7 @@
 use crate::isl::isl_import::IslImportType;
 use crate::isl::isl_range::{Range, RangeType};
 use crate::isl::isl_type_reference::IslTypeRefImpl;
-use crate::isl::util::{Annotation, TimestampOffset, ValidValue};
+use crate::isl::util::{Annotation, Ieee754InterchangeFormat, TimestampOffset, ValidValue};
 use crate::isl::IslVersion;
 use crate::result::{
     invalid_schema_error, invalid_schema_error_raw, IonSchemaError, IonSchemaResult,
@@ -506,6 +506,7 @@ pub(crate) enum IslConstraintImpl {
     // For ISL 2.0 true/false is specified based on whether `distinct` annotation is present or not.
     // For ISL 1.0 which doesn't support `field_names` constraint this will be (type_reference, false).
     FieldNames(IslTypeRefImpl, bool),
+    Ieee754Float(Ieee754InterchangeFormat),
     Not(IslTypeRefImpl),
     Occurs(Range),
     OneOf(Vec<IslTypeRefImpl>),
@@ -729,6 +730,29 @@ impl IslConstraintImpl {
                         ))
                     }
                 }
+            }
+            "ieee754_float" => {
+                if value.is_null() {
+                    return invalid_schema_error(
+                        "expected a symbol for an `ieee754_float` constraint, found null",
+                    );
+                }
+                if !value.annotations().is_empty() {
+                    return invalid_schema_error(
+                        "`ieee_754_float` constraint must be one of binary16, binary32, binary64",
+                    );
+                }
+                let string_value =
+                    value
+                        .as_symbol()
+                        .map(|s| s.text().unwrap())
+                        .ok_or_else(|| {
+                            invalid_schema_error_raw(format!(
+                                "expected ieee754_float to contain a symbol but found: {}",
+                                value.ion_type()
+                            ))
+                        })?;
+                Ok(IslConstraintImpl::Ieee754Float(string_value.try_into()?))
             }
             "one_of" => {
                 let types: Vec<IslTypeRefImpl> =
