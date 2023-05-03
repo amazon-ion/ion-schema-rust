@@ -6,6 +6,10 @@ use ion_schema::result::IonSchemaResult;
 use ion_schema::schema::Schema;
 use ion_schema::system::SchemaSystem;
 use ion_schema::types::TypeDefinition;
+use ion_schema::IonSchemaElement;
+use js_sys::Array;
+use serde::{Deserialize, Serialize};
+use serde_wasm_bindgen::to_value;
 use std::str;
 use std::sync::Arc;
 use wasm_bindgen::prelude::*;
@@ -19,14 +23,21 @@ macro_rules! log {
     }
 }
 
-fn load(text: &str) -> IonResult<Element> {
-    Element::read_one(text.as_bytes())
+fn load_all(text: &str) -> IonResult<Vec<Element>> {
+    Element::read_all(text.as_bytes())
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ViolationResult {
+    ion_path: String,
+    code: String,
+    message: String,
 }
 
 #[wasm_bindgen]
 pub struct SchemaValidationResult {
     result: bool,
-    violation: String,
+    violations: Array,
     value: String,
     has_error: bool,
     error: String,
@@ -37,14 +48,14 @@ impl SchemaValidationResult {
     #[wasm_bindgen(constructor)]
     pub fn new(
         r: bool,
-        v: String,
+        v: Array,
         val: String,
         has_error: bool,
         error: String,
     ) -> SchemaValidationResult {
         SchemaValidationResult {
             result: r,
-            violation: v,
+            violations: v,
             value: val,
             has_error,
             error,
@@ -57,14 +68,6 @@ impl SchemaValidationResult {
 
     pub fn set_result(&mut self, val: bool) {
         self.result = val;
-    }
-
-    pub fn violation(&self) -> String {
-        self.violation.to_owned()
-    }
-
-    pub fn set_violation(&mut self, val: String) {
-        self.violation = val;
     }
 
     pub fn value(&self) -> String {
@@ -90,10 +93,19 @@ impl SchemaValidationResult {
     pub fn set_has_error(&mut self, val: bool) {
         self.has_error = val;
     }
+
+    pub fn violations(&self) -> Array {
+        self.violations.to_owned()
+    }
 }
 
 #[wasm_bindgen]
-pub fn validate(ion: &str, schema: &str, schema_type: &str) -> SchemaValidationResult {
+pub fn validate(
+    ion: &str,
+    schema: &str,
+    schema_type: &str,
+    is_document: bool,
+) -> SchemaValidationResult {
     // Provide schema id for the schema you want to load (schema_id is the schema file name here)
     // This will be the id of schema, provided within the map authority defined below
     let schema_id = "schema.isl";
@@ -123,7 +135,7 @@ pub fn validate(ion: &str, schema: &str, schema_type: &str) -> SchemaValidationR
             // TODO: once we have a better Display for _error, replace the error portion of SchemaValidationResult to take this _error
             return SchemaValidationResult::new(
                 false,
-                "".to_string(),
+                Array::new(),
                 ion.to_string(),
                 true,
                 "Can not load given schema!\nPlease check Ion schema syntax for given schema."
@@ -144,7 +156,7 @@ pub fn validate(ion: &str, schema: &str, schema_type: &str) -> SchemaValidationR
         None => {
             return SchemaValidationResult::new(
                 false,
-                "".to_string(),
+                Array::new(),
                 ion.to_string(),
                 true,
                 format!("Type definition: {schema_type} does not exist in this schema"),
@@ -158,14 +170,15 @@ pub fn validate(ion: &str, schema: &str, schema_type: &str) -> SchemaValidationR
     );
 
     // get Element from given ion text
-    let value_result = load(ion);
+    let values_result = load_all(ion);
 
-    let value = match value_result {
-        Ok(v) => v,
+    let value = match values_result {
+        Ok(v) if is_document => IonSchemaElement::Document(v),
+        Ok(v) => IonSchemaElement::SingleElement(v[0].to_owned()),
         Err(_) => {
             return SchemaValidationResult::new(
                 false,
-                "".to_string(),
+                Array::new(),
                 ion.to_string(),
                 true,
                 format!("Can not parse given Ion value: {ion} for validation"),
@@ -176,23 +189,30 @@ pub fn validate(ion: &str, schema: &str, schema_type: &str) -> SchemaValidationR
     log!("loaded ion value successfully!");
 
     // Validate data based on `schema_type`
-    let result = type_ref.validate(&value);
+    let result = type_ref.validate(value.to_owned());
 
     log!("validation complete!");
 
-    let violation = match &result {
-        Ok(_) => "".to_string(),
-        Err(violation) => {
-            //TODO: Once we have a Display implementation with proper indentation for nested violations change the following
-            format!("{violation:#?}")
-        }
+    let violations = match &result {
+        Ok(_) => vec![],
+        Err(violation) => violation.flattened_violations(),
     };
 
     log!("Creating validation result....");
 
+    let violations_result = Array::new();
+    for violation in violations {
+        let v_result = ViolationResult {
+            ion_path: format!("{}", violation.ion_path()),
+            code: format!("{}", violation.code()),
+            message: violation.message().to_string(),
+        };
+        violations_result.push(&to_value(&v_result).unwrap());
+    }
+
     let result: SchemaValidationResult = SchemaValidationResult::new(
         result.is_ok(),
-        violation,
+        violations_result,
         format!("{value}"),
         false,
         "".to_string(),

@@ -45,6 +45,38 @@ impl Violation {
         }
     }
 
+    pub fn ion_path(&self) -> &IonPath {
+        &self.ion_path
+    }
+
+    pub fn message(&self) -> &String {
+        &self.message
+    }
+
+    pub fn code(&self) -> &ViolationCode {
+        &self.code
+    }
+
+    /// Provides flattened list of leaf violations which represent the root cause of the top-level violation.
+    pub fn flattened_violations(&self) -> Vec<&Violation> {
+        let mut flattened_violations = Vec::new();
+        self.flatten_violations(&mut flattened_violations);
+        flattened_violations
+    }
+
+    fn flatten_violations<'a>(&'a self, flattened: &mut Vec<&'a Violation>) {
+        if self.violations.is_empty() {
+            flattened.push(self);
+        }
+        for violation in &self.violations {
+            if violation.violations.is_empty() {
+                flattened.push(violation);
+            } else {
+                violation.flatten_violations(flattened)
+            }
+        }
+    }
+
     pub fn violations(&self) -> &[Violation] {
         &self.violations
     }
