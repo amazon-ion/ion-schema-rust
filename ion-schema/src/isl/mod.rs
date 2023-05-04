@@ -258,6 +258,7 @@ mod isl_tests {
     use crate::isl::isl_type::v_1_0::*;
     use crate::isl::isl_type::{IslType, IslTypeImpl};
     use crate::isl::isl_type_reference::v_1_0::*;
+    use crate::isl::util::Ieee754InterchangeFormat;
     use crate::isl::util::TimestampPrecision;
     use crate::isl::IslVersion;
     use crate::isl::*;
@@ -552,7 +553,13 @@ mod isl_tests {
         anonymous_type(
             [timestamp_offset(vec!["+00:00".try_into().unwrap()])]
         )
-    )
+    ),
+    case::ieee754_float_constraint(
+        load_anonymous_type_v2_0(r#" // For a schema with ieee754_float constraint as below:
+                            { ieee754_float: binary16 }
+                        "#),
+        isl_type::v_2_0::anonymous_type([isl_constraint::v_2_0::ieee754_float(Ieee754InterchangeFormat::Binary16)])
+    ),
     )]
     fn owned_struct_to_isl_type(isl_type1: IslType, isl_type2: IslType) {
         // assert if both the IslType are same in terms of constraints and name

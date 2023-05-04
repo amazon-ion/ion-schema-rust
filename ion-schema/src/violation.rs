@@ -99,7 +99,8 @@ pub enum ViolationCode {
     FieldNamesMismatched,  // this is used for mismatched field names in a struct
     FieldNamesNotDistinct, // this is used for field names that are not distinct in a struct
     FieldsNotMatched,
-    InvalidLength, // this is ued for any length related constraints (e.g. container_length, byte_length, codepoint_length)
+    InvalidIeee754Float, // this is used for ieee754_float constraint
+    InvalidLength, // this is used for any length related constraints (e.g. container_length, byte_length, codepoint_length)
     InvalidNull,   // if the value is a null for type references that doesn't allow null
     InvalidOpenContent, // if a container contains open content when `content: closed` is specified
     InvalidValue,  // this is used for valid_values constraint
@@ -127,6 +128,7 @@ impl fmt::Display for ViolationCode {
                 ViolationCode::FieldNamesMismatched => "field_names_mismatched",
                 ViolationCode::FieldNamesNotDistinct => "field_names_not_distinct",
                 ViolationCode::FieldsNotMatched => "fields_not_matched",
+                ViolationCode::InvalidIeee754Float => "invalid_ieee754_float",
                 ViolationCode::InvalidLength => "invalid_length",
                 ViolationCode::InvalidNull => "invalid_null",
                 ViolationCode::InvalidOpenContent => "invalid_open_content",

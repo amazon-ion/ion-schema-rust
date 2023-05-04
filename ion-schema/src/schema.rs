@@ -306,7 +306,14 @@ mod schema_tests {
                         type:: { name: timestamp_offset_type, timestamp_offset: ["+07:00", "+08:00", "+08:45", "+09:00"] }
                      "#).into_iter(),
         1 // this includes named type regex_type
-    )
+    ),
+    case::ieee754_float_constraint(
+        load(r#" // For a schema with ieee754_float constraint as below:
+                        $ion_schema_2_0
+                        type:: { name: ieee754_float_type, iee4754_float: binary16 }
+                     "#).into_iter(),
+        1 // this includes named type ieee754_float_type
+    ),
     )]
     fn owned_elements_to_schema<I: Iterator<Item = Element>>(
         owned_elements: I,
@@ -1232,6 +1239,31 @@ mod schema_tests {
                             type::{ name: timestamp_offset_type, timestamp_offset: ["-00:00", "+00:00", "+01:00", "-01:01"] }
                     "#),
             "timestamp_offset_type"
+        ),
+        case::ieee754_float_constraint(
+            load(r#"
+                      1e0
+                      -1e0
+                      65504e0
+                      -65504e0
+                      nan
+                      +inf
+                      -inf
+                    "#),
+            load(r#"
+                      null.float
+                      5
+                      5d0
+                      (5e0)
+                      [5e0]
+                      65505e0
+                      -65505e0
+                    "#),
+            load_schema_from_text(r#" // For a schema with timestamp precision constraint as below:
+                            $ion_schema_2_0
+                            type::{ name: ieee754_float_type, ieee754_float: binary16 }
+                    "#),
+            "ieee754_float_type"
         ),
     )]
     fn type_validation(

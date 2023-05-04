@@ -272,3 +272,40 @@ impl Display for TimestampOffset {
         }
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Ieee754InterchangeFormat {
+    Binary16,
+    Binary32,
+    Binary64,
+}
+
+impl TryFrom<&str> for Ieee754InterchangeFormat {
+    type Error = IonSchemaError;
+    fn try_from(string_value: &str) -> Result<Self, Self::Error> {
+        use Ieee754InterchangeFormat::*;
+        match string_value {
+            "binary16" => Ok(Binary16),
+            "binary32" => Ok(Binary32),
+            "binary64" => Ok(Binary64),
+            _ => invalid_schema_error(format!(
+                "unrecognized `ieee754_float` value {}",
+                &string_value
+            )),
+        }
+    }
+}
+
+impl Display for Ieee754InterchangeFormat {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Ieee754InterchangeFormat::Binary16 => "binary16",
+                Ieee754InterchangeFormat::Binary32 => "binary32",
+                Ieee754InterchangeFormat::Binary64 => "binary64",
+            }
+        )
+    }
+}

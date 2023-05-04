@@ -2,7 +2,9 @@ use crate::ion_path::{IonPath, IonPathElement};
 use crate::isl::isl_constraint::{IslConstraintImpl, IslRegexConstraint};
 use crate::isl::isl_range::{Range, RangeImpl};
 use crate::isl::isl_type_reference::{IslTypeRefImpl, NullabilityModifier};
-use crate::isl::util::{Annotation, TimestampOffset, TimestampPrecision, ValidValue};
+use crate::isl::util::{
+    Annotation, Ieee754InterchangeFormat, TimestampOffset, TimestampPrecision, ValidValue,
+};
 use crate::isl::IslVersion;
 use crate::nfa::{FinalState, NfaBuilder, NfaEvaluation};
 use crate::result::{
@@ -16,6 +18,7 @@ use crate::violation::{Violation, ViolationCode};
 use crate::IonSchemaElement;
 use ion_rs::element::Element;
 use ion_rs::{Int, IonType};
+use num_traits::ToPrimitive;
 use regex::{Regex, RegexBuilder};
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
@@ -55,6 +58,7 @@ pub enum Constraint {
     Exponent(ExponentConstraint),
     FieldNames(FieldNamesConstraint),
     Fields(FieldsConstraint),
+    Ieee754Float(Ieee754FloatConstraint),
     Not(NotConstraint),
     OneOf(OneOfConstraint),
     OrderedElements(OrderedElementsConstraint),
@@ -279,6 +283,11 @@ impl Constraint {
         Ok(Constraint::Regex(regex.try_into()?))
     }
 
+    /// Creates a [Constraint::Ieee754Float] from [Ieee754InterchangeFormat] specified inside it
+    pub fn ieee754_float(interchange_format: Ieee754InterchangeFormat) -> Constraint {
+        Constraint::Ieee754Float(Ieee754FloatConstraint::new(interchange_format))
+    }
+
     /// Resolves all ISL type references to corresponding [TypeReference]s
     fn resolve_type_references(
         isl_version: IslVersion,
@@ -385,6 +394,9 @@ impl Constraint {
                     )?;
                 Ok(Constraint::Fields(fields_constraint))
             }
+            IslConstraintImpl::Ieee754Float(iee754_interchange_format) => Ok(
+                Constraint::Ieee754Float(Ieee754FloatConstraint::new(*iee754_interchange_format)),
+            ),
             IslConstraintImpl::OneOf(isl_type_references) => {
                 let type_references = Constraint::resolve_type_references(
                     isl_version,
@@ -492,6 +504,9 @@ impl Constraint {
                 field_names.validate(value, type_store, ion_path)
             }
             Constraint::Fields(fields) => fields.validate(value, type_store, ion_path),
+            Constraint::Ieee754Float(ieee754_float) => {
+                ieee754_float.validate(value, type_store, ion_path)
+            }
             Constraint::Not(not) => not.validate(value, type_store, ion_path),
             Constraint::OneOf(one_of) => one_of.validate(value, type_store, ion_path),
             Constraint::Type(type_constraint) => {
@@ -2293,5 +2308,66 @@ impl ConstraintValidator for TimestampOffsetConstraint {
         }
 
         Ok(())
+    }
+}
+
+/// Implements Ion Schema's `ieee754_float` constraint
+/// [ieee754_float]: https://amazon-ion.github.io/ion-schema/docs/isl-2-0/spec#ieee754_float
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Ieee754FloatConstraint {
+    interchange_format: Ieee754InterchangeFormat,
+}
+
+impl Ieee754FloatConstraint {
+    pub fn new(interchange_format: Ieee754InterchangeFormat) -> Self {
+        Self { interchange_format }
+    }
+
+    pub fn interchange_format(&self) -> Ieee754InterchangeFormat {
+        self.interchange_format
+    }
+}
+
+impl ConstraintValidator for Ieee754FloatConstraint {
+    fn validate(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> ValidationResult {
+        // get ieee interchange format value
+        let float_value = value
+            .expect_element_of_type(&[IonType::Float], "ieee754_float", ion_path)?
+            .as_float()
+            .unwrap();
+
+        if !float_value.is_finite() {
+            return Ok(());
+        }
+
+        let is_valid = match self.interchange_format {
+            Ieee754InterchangeFormat::Binary16 => {
+                half::f16::from_f64(float_value).to_f64() == float_value
+            }
+            Ieee754InterchangeFormat::Binary32 => float_value
+                .to_f32()
+                .and_then(|f32_value| f32_value.to_f64().map(|f64_value| f64_value == float_value))
+                .unwrap_or(false),
+            Ieee754InterchangeFormat::Binary64 => true,
+        };
+
+        if is_valid {
+            Ok(())
+        } else {
+            Err(Violation::new(
+                "ieee754_float",
+                ViolationCode::InvalidIeee754Float,
+                format!(
+                    "value cannot be losslessly represented by the IEEE-754 {} interchange format.",
+                    self.interchange_format
+                ),
+                ion_path,
+            ))
+        }
     }
 }

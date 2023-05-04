@@ -605,6 +605,7 @@ mod type_definition_tests {
     use crate::isl::isl_type::v_1_0::*;
     use crate::isl::isl_type::IslType;
     use crate::isl::isl_type_reference::v_1_0::*;
+    use crate::isl::util::Ieee754InterchangeFormat;
     use crate::isl::*;
     use crate::system::PendingTypes;
     use ion_rs::Decimal;
@@ -848,7 +849,14 @@ mod type_definition_tests {
     TypeDefinitionKind::anonymous([Constraint::timestamp_offset(vec!["-00:00".try_into().unwrap()]),
             Constraint::type_constraint(34)
         ])
-    )
+    ),
+    case::ieee754_float_constraint(
+        /* For a schema with ieee754_float constraint as below:
+            { ieee754_float: binary16 }
+        */
+        isl_type::v_2_0::anonymous_type([isl_constraint::v_2_0::ieee754_float(Ieee754InterchangeFormat::Binary16)]),
+        TypeDefinitionKind::anonymous([Constraint::ieee754_float(Ieee754InterchangeFormat::Binary16), Constraint::type_constraint(34)])
+    ),
     )]
     fn isl_type_to_type_definition(isl_type: IslType, type_def: TypeDefinitionKind) {
         // assert if both the TypeDefinitionKind are same in terms of constraints and name

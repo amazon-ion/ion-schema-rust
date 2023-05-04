@@ -1,7 +1,7 @@
 use crate::isl::isl_import::IslImportType;
 use crate::isl::isl_range::{Range, RangeType};
 use crate::isl::isl_type_reference::IslTypeRefImpl;
-use crate::isl::util::{Annotation, TimestampOffset, ValidValue};
+use crate::isl::util::{Annotation, Ieee754InterchangeFormat, TimestampOffset, ValidValue};
 use crate::isl::IslVersion;
 use crate::result::{
     invalid_schema_error, invalid_schema_error_raw, IonSchemaError, IonSchemaResult,
@@ -256,7 +256,9 @@ pub mod v_2_0 {
     };
     use crate::isl::isl_range::{NonNegativeIntegerRange, Range, RangeImpl};
     use crate::isl::isl_type_reference::IslTypeRef;
-    use crate::isl::util::{TimestampOffset, TimestampPrecision, ValidValue};
+    use crate::isl::util::{
+        Ieee754InterchangeFormat, TimestampOffset, TimestampPrecision, ValidValue,
+    };
     use crate::isl::IslVersion;
     use crate::result::IonSchemaResult;
     use ion_rs::element::Element;
@@ -465,6 +467,14 @@ pub mod v_2_0 {
     pub fn regex(case_insensitive: bool, multi_line: bool, expression: String) -> IslConstraint {
         todo!()
     }
+
+    /// Creates a `ieee754_float` constraint using `Ieee754InterchangeFormat` specified in it.
+    pub fn ieee754_float(interchange_format: Ieee754InterchangeFormat) -> IslConstraint {
+        IslConstraint::new(
+            IslVersion::V2_0,
+            IslConstraintImpl::Ieee754Float(interchange_format),
+        )
+    }
 }
 
 /// Represents schema constraints [IslConstraint]
@@ -506,6 +516,7 @@ pub(crate) enum IslConstraintImpl {
     // For ISL 2.0 true/false is specified based on whether `distinct` annotation is present or not.
     // For ISL 1.0 which doesn't support `field_names` constraint this will be (type_reference, false).
     FieldNames(IslTypeRefImpl, bool),
+    Ieee754Float(Ieee754InterchangeFormat),
     Not(IslTypeRefImpl),
     Occurs(Range),
     OneOf(Vec<IslTypeRefImpl>),
@@ -729,6 +740,22 @@ impl IslConstraintImpl {
                         ))
                     }
                 }
+            }
+            "ieee754_float" => {
+                if !value.annotations().is_empty() {
+                    return invalid_schema_error(
+                        "`ieee_754_float` argument must not have annotations",
+                    );
+                }
+                let string_value =
+                    value
+                        .as_symbol()
+                        .map(|s| s.text().unwrap())
+                        .ok_or_else(|| {
+                            invalid_schema_error_raw(format!(
+                                "expected ieee754_float to be one of 'binary16', 'binary32', or 'binary64', but it was: {value}"))
+                        })?;
+                Ok(IslConstraintImpl::Ieee754Float(string_value.try_into()?))
             }
             "one_of" => {
                 let types: Vec<IslTypeRefImpl> =
