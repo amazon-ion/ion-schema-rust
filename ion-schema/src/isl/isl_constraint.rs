@@ -742,11 +742,6 @@ impl IslConstraintImpl {
                 }
             }
             "ieee754_float" => {
-                if value.is_null() {
-                    return invalid_schema_error(
-                        "expected a symbol for an `ieee754_float` constraint, found null",
-                    );
-                }
                 if !value.annotations().is_empty() {
                     return invalid_schema_error(
                         "`ieee_754_float` argument must not have annotations",
