@@ -2345,38 +2345,29 @@ impl ConstraintValidator for Ieee754FloatConstraint {
             return Ok(());
         }
 
-        match self.interchange_format {
+        let is_valid = match self.interchange_format {
             Ieee754InterchangeFormat::Binary16 => {
-                let f16_value = half::f16::from_f64(float_value);
-                if f16_value.to_f64() != float_value {
-                    return Err(Violation::new(
-                        "ieee754_float",
-                        ViolationCode::InvalidIeee754Float,
-                        format!("value cannot be losslessly represented by the IEEE-754 {} interchange format.", self.interchange_format),
-                        ion_path,
-                    ));
-                }
-                Ok(())
+                half::f16::from_f64(float_value).to_f64() == float_value
             }
-            Ieee754InterchangeFormat::Binary32 => {
-                let f64_value = float_value.to_f32().and_then(|f32_value| f32_value.to_f64()).ok_or(Violation::new(
-                    "ieee754_float",
-                    ViolationCode::InvalidIeee754Float,
-                    format!("value cannot be losslessly represented by the IEEE-754 {} interchange format.", self.interchange_format),
-                    ion_path,
-                ))?;
+            Ieee754InterchangeFormat::Binary32 => float_value
+                .to_f32()
+                .and_then(|f32_value| f32_value.to_f64().map(|f64_value| f64_value == float_value))
+                .unwrap_or(false),
+            Ieee754InterchangeFormat::Binary64 => true,
+        };
 
-                if f64_value != float_value {
-                    return Err(Violation::new(
-                        "ieee754_float",
-                        ViolationCode::InvalidIeee754Float,
-                        format!("value cannot be losslessly represented by the IEEE-754 {} interchange format.", self.interchange_format),
-                        ion_path,
-                    ));
-                }
-                Ok(())
-            }
-            Ieee754InterchangeFormat::Binary64 => Ok(()),
+        if is_valid {
+            Ok(())
+        } else {
+            Err(Violation::new(
+                "ieee754_float",
+                ViolationCode::InvalidIeee754Float,
+                format!(
+                    "value cannot be losslessly represented by the IEEE-754 {} interchange format.",
+                    self.interchange_format
+                ),
+                ion_path,
+            ))
         }
     }
 }

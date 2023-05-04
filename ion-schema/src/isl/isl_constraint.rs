@@ -749,7 +749,7 @@ impl IslConstraintImpl {
                 }
                 if !value.annotations().is_empty() {
                     return invalid_schema_error(
-                        "`ieee_754_float` constraint must be one of binary16, binary32, binary64",
+                        "`ieee_754_float` argument must not have annotations",
                     );
                 }
                 let string_value =
@@ -758,9 +758,7 @@ impl IslConstraintImpl {
                         .map(|s| s.text().unwrap())
                         .ok_or_else(|| {
                             invalid_schema_error_raw(format!(
-                                "expected ieee754_float to contain a symbol but found: {}",
-                                value.ion_type()
-                            ))
+                                "expected ieee754_float to be one of 'binary16', 'binary32', or 'binary64', but it was: {value}"))
                         })?;
                 Ok(IslConstraintImpl::Ieee754Float(string_value.try_into()?))
             }

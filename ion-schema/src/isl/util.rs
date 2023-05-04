@@ -284,17 +284,17 @@ impl TryFrom<&str> for Ieee754InterchangeFormat {
     type Error = IonSchemaError;
     fn try_from(string_value: &str) -> Result<Self, Self::Error> {
         use Ieee754InterchangeFormat::*;
-        Ok(match string_value {
-            "binary16" => Binary16,
-            "binary32" => Binary32,
-            "binary64" => Binary64,
+        match string_value {
+            "binary16" => Ok(Binary16),
+            "binary32" => Ok(Binary32),
+            "binary64" => Ok(Binary64),
             _ => {
                 return invalid_schema_error(format!(
                     "unrecognized `ieee754_float` value {}",
                     &string_value
                 ))
             }
-        })
+        }
     }
 }
 
