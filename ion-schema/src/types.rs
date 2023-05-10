@@ -560,7 +560,12 @@ impl TypeValidator for TypeDefinitionImpl {
     ) -> ValidationResult {
         let mut violations: Vec<Violation> = vec![];
         let type_name = match self.name() {
-            None => format!("{}", self.isl_type_struct.as_ref().unwrap()),
+            None => match self.isl_type_struct.as_ref() {
+                None => "".to_owned(),
+                Some(anonymous_struct) => {
+                    format!("{anonymous_struct}")
+                }
+            },
             Some(name) => name.to_owned(),
         };
         for constraint in self.constraints() {

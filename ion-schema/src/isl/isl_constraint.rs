@@ -1,3 +1,4 @@
+use crate::isl;
 use crate::isl::isl_import::IslImportType;
 use crate::isl::isl_range::{Range, RangeType};
 use crate::isl::isl_type_reference::IslTypeRefImpl;
@@ -15,7 +16,7 @@ use std::convert::{TryFrom, TryInto};
 pub mod v_1_0 {
     use crate::isl::isl_constraint::{
         IslAnnotationsConstraint, IslConstraint, IslConstraintImpl, IslRegexConstraint,
-        IslTimestampOffsetConstraint, IslValidValuesConstraint,
+        IslSimpleAnnotationsConstraint, IslTimestampOffsetConstraint, IslValidValuesConstraint,
     };
     use crate::isl::isl_range::{IntegerRange, NonNegativeIntegerRange, Range, RangeImpl};
     use crate::isl::isl_type_reference::IslTypeRef;
@@ -205,10 +206,13 @@ pub mod v_1_0 {
             .collect();
         IslConstraint::new(
             IslVersion::V1_0,
-            IslConstraintImpl::Annotations(IslAnnotationsConstraint::new(
-                annotations_modifiers.contains(&"closed"),
-                annotations_modifiers.contains(&"ordered"),
-                annotations,
+            IslConstraintImpl::Annotations(IslAnnotationsConstraint::SimpleAnnotations(
+                IslSimpleAnnotationsConstraint::new(
+                    annotations_modifiers.contains(&"closed"),
+                    annotations_modifiers.contains(&"ordered"),
+                    annotations_modifiers.contains(&"required"),
+                    annotations,
+                ),
             )),
         )
     }
@@ -250,14 +254,16 @@ pub mod v_1_0 {
 
 /// Provides public facing APIs for constructing ISL constraints programmatically for ISL 2.0
 pub mod v_2_0 {
-    use crate::isl::isl_constraint::IslConstraint;
+    use crate::isl::isl_constraint::{
+        IslAnnotationsConstraint, IslConstraint, IslSimpleAnnotationsConstraint,
+    };
     use crate::isl::isl_constraint::{
         IslConstraintImpl, IslTimestampOffsetConstraint, IslValidValuesConstraint,
     };
     use crate::isl::isl_range::{NonNegativeIntegerRange, Range, RangeImpl};
     use crate::isl::isl_type_reference::IslTypeRef;
     use crate::isl::util::{
-        Ieee754InterchangeFormat, TimestampOffset, TimestampPrecision, ValidValue,
+        Annotation, Ieee754InterchangeFormat, TimestampOffset, TimestampPrecision, ValidValue,
     };
     use crate::isl::IslVersion;
     use crate::result::IonSchemaResult;
@@ -433,12 +439,37 @@ pub mod v_2_0 {
         )
     }
 
-    /// Creates an `annotations` constraint using [str]s and [Element]s specified inside it
-    pub fn annotations<'a, A: IntoIterator<Item = &'a str>, B: IntoIterator<Item = Element>>(
-        annotations_modifiers: A,
-        annotations: B,
+    /// Creates an `annotations` constraint using a list of valid annotations and specify whether annotations are required or closed or both.
+    pub fn simple_annotations<'a, A: IntoIterator<Item = Element>>(
+        is_required: bool,
+        is_closed: bool,
+        annotations: A,
     ) -> IslConstraint {
-        todo!()
+        let annotations: Vec<Annotation> = annotations
+            .into_iter()
+            .map(|a| {
+                Annotation::new(
+                    a.as_text().unwrap().to_owned(),
+                    Annotation::is_annotation_required(&a, is_required),
+                )
+            })
+            .collect();
+        IslConstraint::new(
+            IslVersion::V2_0,
+            IslConstraintImpl::Annotations(IslAnnotationsConstraint::SimpleAnnotations(
+                IslSimpleAnnotationsConstraint::new(is_closed, false, is_required, annotations),
+            )),
+        )
+    }
+
+    /// Creates an `annotations` constraint using an [IslTypeRef].
+    pub fn standard_annotations(isl_type: IslTypeRef) -> IslConstraint {
+        IslConstraint::new(
+            IslVersion::V2_0,
+            IslConstraintImpl::Annotations(IslAnnotationsConstraint::StandardAnnotations(
+                isl_type.type_reference,
+            )),
+        )
     }
 
     /// Creates a `valid_values` constraint using the [Element]s specified inside it
@@ -560,14 +591,35 @@ impl IslConstraintImpl {
                     );
                 }
 
-                if value.ion_type() != IonType::List {
+                if value.ion_type() == IonType::List {
+                    Ok(IslConstraintImpl::Annotations(
+                        IslAnnotationsConstraint::SimpleAnnotations(
+                            IslSimpleAnnotationsConstraint::from_ion_element(value, isl_version)?,
+                        ),
+                    ))
+                } else if value.ion_type() == IonType::Struct && isl_version == IslVersion::V2_0 {
+                    let type_reference: IslTypeRefImpl = IslTypeRefImpl::from_ion_element(
+                        isl_version,
+                        value,
+                        inline_imported_types,
+                    )?;
+
+                    // return error if the type reference contains `occurs` constraint
+                    if type_reference.get_occurs_range().is_some() {
+                        return invalid_schema_error(
+                            "annotations constraint can not contain type references that contain `occurs` constraint",
+                        );
+                    }
+
+                    Ok(IslConstraintImpl::Annotations(
+                        IslAnnotationsConstraint::StandardAnnotations(type_reference),
+                    ))
+                } else {
                     return invalid_schema_error(format!(
                         "annotations constraint was a {:?} instead of a list",
                         value.ion_type()
                     ));
                 }
-
-                Ok(IslConstraintImpl::Annotations(value.try_into()?))
             }
             "any_of" => {
                 let types: Vec<IslTypeRefImpl> =
@@ -1013,55 +1065,124 @@ impl IslConstraintImpl {
 /// Represents the [annotations] constraint
 ///
 /// [annotations]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#annotations
-// The `required` annotation provided on the list of annotations is not represented here,
-// requirement of an annotation is represented in the annotation itself by the field `is_required` of `Annotation` struct.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum IslAnnotationsConstraint {
+    SimpleAnnotations(IslSimpleAnnotationsConstraint),
+    StandardAnnotations(IslTypeRefImpl),
+}
+
+/// Represents the [simple syntax] for annotations constraint
+/// ```ion
+/// Grammar: <ANNOTATIONS> ::= annotations: <ANNOTATIONS_MODIFIER>... [ <SYMBOL>... ]
+///          <ANNOTATIONS_MODIFIER> ::= required::
+///                                   | closed::
+/// ```
+///
+/// [simple syntax]: https://amazon-ion.github.io/ion-schema/docs/isl-2-0/spec#simple-syntax
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IslAnnotationsConstraint {
+pub struct IslSimpleAnnotationsConstraint {
     pub is_closed: bool,
     pub is_ordered: bool,
+    pub is_required: bool,
     pub annotations: Vec<Annotation>,
 }
 
-impl IslAnnotationsConstraint {
-    pub fn new(is_closed: bool, is_ordered: bool, annotations: Vec<Annotation>) -> Self {
+impl IslSimpleAnnotationsConstraint {
+    pub fn new(
+        is_closed: bool,
+        is_ordered: bool,
+        is_required: bool,
+        annotations: Vec<Annotation>,
+    ) -> Self {
         Self {
             is_closed,
             is_ordered,
+            is_required,
             annotations,
         }
     }
-}
 
-impl TryFrom<&Element> for IslAnnotationsConstraint {
-    type Error = IonSchemaError;
-
-    fn try_from(value: &Element) -> IonSchemaResult<Self> {
+    pub(crate) fn from_ion_element(
+        value: &Element,
+        isl_version: IslVersion,
+    ) -> IonSchemaResult<Self> {
         let annotation_modifiers: Vec<&str> = value
             .annotations()
             .iter()
             .map(|sym| sym.text().unwrap())
             .collect();
 
+        if (annotation_modifiers
+            .iter()
+            .any(|a| a != &"closed" && a != &"required")
+            || annotation_modifiers.is_empty())
+            && isl_version == IslVersion::V2_0
+        {
+            return invalid_schema_error(
+                "annotations constraint must only be annotated with 'required' or 'closed' annotation",
+            );
+        }
+
         let annotations: Vec<Annotation> = value
             .as_sequence()
             .unwrap()
             .elements()
             .map(|e| {
-                Annotation::new(
-                    e.as_text().unwrap().to_owned(),
-                    Annotation::is_annotation_required(
-                        e,
-                        annotation_modifiers.contains(&"required"),
-                    ),
-                )
+                if !e.annotations().is_empty() && isl_version == IslVersion::V2_0 {
+                    return invalid_schema_error(
+                        "annotations constraint must only contain symbols without any annotations",
+                    );
+                }
+                e.as_symbol()
+                    .map(|s| {
+                        Annotation::new(
+                            s.text().unwrap().to_owned(),
+                            Annotation::is_annotation_required(
+                                e,
+                                annotation_modifiers.contains(&"required"),
+                            ),
+                        )
+                    })
+                    .ok_or(invalid_schema_error_raw(
+                        "annotations constraint must only contain symbols",
+                    ))
             })
-            .collect();
+            .collect::<IonSchemaResult<Vec<Annotation>>>()?;
 
-        Ok(IslAnnotationsConstraint::new(
+        Ok(IslSimpleAnnotationsConstraint::new(
             annotation_modifiers.contains(&"closed"),
             annotation_modifiers.contains(&"ordered"),
+            annotation_modifiers.contains(&"required"),
             annotations,
         ))
+    }
+
+    pub(crate) fn convert_to_type_reference(&self) -> IonSchemaResult<IslTypeRefImpl> {
+        let mut isl_constraints = vec![];
+        if self.is_closed {
+            isl_constraints.push(isl::isl_constraint::v_2_0::element(
+                isl::isl_type_reference::v_2_0::anonymous_type_ref(vec![
+                    isl::isl_constraint::v_2_0::valid_values_with_values(
+                        self.annotations
+                            .iter()
+                            .map(|a| Element::symbol(a.value()))
+                            .collect(),
+                    )?,
+                ]),
+                false,
+            ));
+        }
+
+        if self.is_required {
+            isl_constraints.push(isl::isl_constraint::v_2_0::contains(
+                self.annotations
+                    .iter()
+                    .map(|a| Element::symbol(a.value()))
+                    .collect::<Vec<Element>>(),
+            ))
+        }
+
+        Ok(isl::isl_type_reference::v_2_0::anonymous_type_ref(isl_constraints).type_reference)
     }
 }
 
