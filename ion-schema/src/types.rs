@@ -761,6 +761,13 @@ mod type_definition_tests {
         anonymous_type([annotations(vec!["closed"], vec![Symbol::from("red").into(), Symbol::from("blue").into(), Symbol::from("green").into()])]),
     TypeDefinitionKind::anonymous([Constraint::annotations(vec!["closed"], vec![Symbol::from("red").into(), Symbol::from("blue").into(), Symbol::from("green").into()]), Constraint::type_constraint(34)])
     ),
+    case::annotations_v2_0_constraint(
+        /* For a schema with annotations constraint as below:
+            { annotations: { container_length: 1 } }
+        */
+        isl_type::v_2_0::anonymous_type([isl_constraint::v_2_0::standard_annotations(isl_type_reference::v_2_0::anonymous_type_ref([isl_constraint::v_2_0::container_length(1.into())]))]),
+        TypeDefinitionKind::anonymous([Constraint::annotations_v2_0(36), Constraint::type_constraint(34)])
+    ),
     case::precision_constraint(
         /* For a schema with precision constraint as below:
             { precision: 3 }

@@ -1265,6 +1265,24 @@ mod schema_tests {
                     "#),
             "ieee754_float_type"
         ),
+        case::annotations_constraint_with_standard_syntax(
+            load(r#"
+                   a::0
+                   b::1
+                   c::2
+                "#),
+            load(r#"
+                   0
+                   $a::1
+                   _c::2
+                   ''::3
+                "#),
+            load_schema_from_text(r#" // For a schema with annotations constraint as below:
+                            $ion_schema_2_0
+                            type::{ name: standard_annotations_type, annotations: { element: { regex: "^[a-z]$" }, container_length: 1 } }
+                    "#),
+            "standard_annotations_type"
+        )
     )]
     fn type_validation(
         valid_values: Vec<Element>,
