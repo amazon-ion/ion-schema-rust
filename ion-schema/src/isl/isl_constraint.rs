@@ -440,7 +440,7 @@ pub mod v_2_0 {
     }
 
     /// Creates an `annotations` constraint using a list of valid annotations and specify whether annotations are required or closed or both.
-    pub fn simple_annotations<'a, A: IntoIterator<Item = Element>>(
+    pub fn simple_annotations<A: IntoIterator<Item = Element>>(
         is_required: bool,
         is_closed: bool,
         annotations: A,
