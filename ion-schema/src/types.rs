@@ -765,7 +765,7 @@ mod type_definition_tests {
         /* For a schema with annotations constraint as below:
             { annotations: { container_length: 1 } }
         */
-        isl_type::v_2_0::anonymous_type([isl_constraint::v_2_0::standard_annotations(isl_type_reference::v_2_0::anonymous_type_ref([isl_constraint::v_2_0::container_length(1.into())]))]),
+        isl_type::v_2_0::anonymous_type([isl_constraint::v_2_0::annotations(isl_type_reference::v_2_0::anonymous_type_ref([isl_constraint::v_2_0::container_length(1.into())]))]),
         TypeDefinitionKind::anonymous([Constraint::annotations_v2_0(36), Constraint::type_constraint(34)])
     ),
     case::precision_constraint(

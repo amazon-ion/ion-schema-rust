@@ -1567,35 +1567,26 @@ impl ConstraintValidator for AnnotationsConstraint2_0 {
         type_store: &TypeStore,
         ion_path: &mut IonPath,
     ) -> ValidationResult {
-        let mut violations: Vec<Violation> = vec![];
-
         match value {
             IonSchemaElement::SingleElement(element) => {
-                let mut sequence_builder = Element::sequence_builder();
-                for annotation in element.annotations().iter() {
-                    sequence_builder =
-                        sequence_builder.push(Element::symbol(annotation.to_owned()));
-                }
+                let schema_element: IonSchemaElement = (&element
+                    .annotations()
+                    .iter()
+                    .map(Element::symbol)
+                    .collect::<Vec<_>>())
+                    .into();
 
-                let schema_element: IonSchemaElement =
-                    (&Element::from(sequence_builder.build_list())).into();
-                if let Err(violation) =
-                    self.type_ref
-                        .validate(&schema_element, type_store, ion_path)
-                {
-                    violations.push(violation);
-                }
-
-                if !violations.is_empty() {
-                    return Err(Violation::with_violations(
-                        "annotations",
-                        ViolationCode::AnnotationMismatched,
-                        "one or more annotations don't satisfy annotations constraint",
-                        ion_path,
-                        violations,
-                    ));
-                }
-                Ok(())
+                self.type_ref
+                    .validate(&schema_element, type_store, ion_path)
+                    .map_err(|v| {
+                        Violation::with_violations(
+                            "annotations",
+                            ViolationCode::AnnotationMismatched,
+                            "one or more annotations don't satisfy annotations constraint",
+                            ion_path,
+                            vec![v],
+                        )
+                    })
             }
             IonSchemaElement::Document(document) => {
                 // document type can not have annotations
