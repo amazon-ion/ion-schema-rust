@@ -1,5 +1,5 @@
 use crate::ion_path::{IonPath, IonPathElement};
-use crate::isl::isl_constraint::{IslConstraintImpl, IslRegexConstraint};
+use crate::isl::isl_constraint::{IslAnnotationsConstraint, IslConstraintImpl, IslRegexConstraint};
 use crate::isl::isl_range::{Range, RangeImpl};
 use crate::isl::isl_type_reference::{IslTypeRefImpl, NullabilityModifier};
 use crate::isl::util::{
@@ -48,6 +48,7 @@ pub trait ConstraintValidator {
 pub enum Constraint {
     AllOf(AllOfConstraint),
     Annotations(AnnotationsConstraint),
+    Annotations2_0(AnnotationsConstraint2_0),
     AnyOf(AnyOfConstraint),
     ByteLength(ByteLengthConstraint),
     CodepointLength(CodepointLengthConstraint),
@@ -193,6 +194,14 @@ impl Constraint {
         ))
     }
 
+    /// Creates a [Constraint::Annotations] using [TypeId] specified inside it
+    pub fn annotations_v2_0(id: TypeId) -> Constraint {
+        Constraint::Annotations2_0(AnnotationsConstraint2_0::new(TypeReference::new(
+            id,
+            NullabilityModifier::Nothing,
+        )))
+    }
+
     /// Creates a [Constraint::Precision] from a [Range] specifying a precision range.
     pub fn precision(precision: RangeImpl<usize>) -> Constraint {
         Constraint::Precision(PrecisionConstraint::new(Range::NonNegativeInteger(
@@ -322,13 +331,42 @@ impl Constraint {
                 )?;
                 Ok(Constraint::AllOf(AllOfConstraint::new(type_references)))
             }
-            IslConstraintImpl::Annotations(isl_annotations) => {
-                Ok(Constraint::Annotations(AnnotationsConstraint::new(
-                    isl_annotations.is_closed,
-                    isl_annotations.is_ordered,
-                    isl_annotations.annotations.to_owned(),
-                )))
-            }
+            IslConstraintImpl::Annotations(isl_annotations) => match isl_annotations {
+                IslAnnotationsConstraint::SimpleAnnotations(simple_annotations) => {
+                    match isl_version {
+                        IslVersion::V1_0 => {
+                            Ok(Constraint::Annotations(AnnotationsConstraint::new(
+                                simple_annotations.is_closed,
+                                simple_annotations.is_ordered,
+                                simple_annotations.annotations.to_owned(),
+                            )))
+                        }
+                        IslVersion::V2_0 => {
+                            let type_ref = IslTypeRefImpl::resolve_type_reference(
+                                IslVersion::V2_0,
+                                &simple_annotations.convert_to_type_reference()?,
+                                type_store,
+                                pending_types,
+                            )?;
+
+                            Ok(Constraint::Annotations2_0(AnnotationsConstraint2_0::new(
+                                type_ref,
+                            )))
+                        }
+                    }
+                }
+                IslAnnotationsConstraint::StandardAnnotations(isl_type_ref) => {
+                    let type_ref = IslTypeRefImpl::resolve_type_reference(
+                        isl_version,
+                        isl_type_ref,
+                        type_store,
+                        pending_types,
+                    )?;
+                    Ok(Constraint::Annotations2_0(AnnotationsConstraint2_0::new(
+                        type_ref,
+                    )))
+                }
+            },
             IslConstraintImpl::AnyOf(isl_type_references) => {
                 let type_references = Constraint::resolve_type_references(
                     isl_version,
@@ -479,6 +517,9 @@ impl Constraint {
         match self {
             Constraint::AllOf(all_of) => all_of.validate(value, type_store, ion_path),
             Constraint::Annotations(annotations) => {
+                annotations.validate(value, type_store, ion_path)
+            }
+            Constraint::Annotations2_0(annotations) => {
                 annotations.validate(value, type_store, ion_path)
             }
             Constraint::AnyOf(any_of) => any_of.validate(value, type_store, ion_path),
@@ -1501,6 +1542,62 @@ impl ConstraintValidator for ElementConstraint {
             ));
         }
         Ok(())
+    }
+}
+
+/// Implements the `annotations` constraint
+/// [annotations]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#annotations
+// This is used for both simple and standard syntax of annotations constraint.
+// The simple syntax will be converted to a standard syntax for removing complexity in the validation logic.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AnnotationsConstraint2_0 {
+    type_ref: TypeReference,
+}
+
+impl AnnotationsConstraint2_0 {
+    pub fn new(type_ref: TypeReference) -> Self {
+        Self { type_ref }
+    }
+}
+
+impl ConstraintValidator for AnnotationsConstraint2_0 {
+    fn validate(
+        &self,
+        value: &IonSchemaElement,
+        type_store: &TypeStore,
+        ion_path: &mut IonPath,
+    ) -> ValidationResult {
+        match value {
+            IonSchemaElement::SingleElement(element) => {
+                let schema_element: IonSchemaElement = (&element
+                    .annotations()
+                    .iter()
+                    .map(Element::symbol)
+                    .collect::<Vec<_>>())
+                    .into();
+
+                self.type_ref
+                    .validate(&schema_element, type_store, ion_path)
+                    .map_err(|v| {
+                        Violation::with_violations(
+                            "annotations",
+                            ViolationCode::AnnotationMismatched,
+                            "one or more annotations don't satisfy annotations constraint",
+                            ion_path,
+                            vec![v],
+                        )
+                    })
+            }
+            IonSchemaElement::Document(document) => {
+                // document type can not have annotations
+                Err(Violation::new(
+                    "annotations",
+                    ViolationCode::AnnotationMismatched,
+                    "annotations constraint is not applicable for document type",
+                    ion_path,
+                ))
+            }
+        }
     }
 }
 

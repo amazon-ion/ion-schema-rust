@@ -560,7 +560,12 @@ impl TypeValidator for TypeDefinitionImpl {
     ) -> ValidationResult {
         let mut violations: Vec<Violation> = vec![];
         let type_name = match self.name() {
-            None => format!("{}", self.isl_type_struct.as_ref().unwrap()),
+            None => match self.isl_type_struct.as_ref() {
+                None => "".to_owned(),
+                Some(anonymous_struct) => {
+                    format!("{anonymous_struct}")
+                }
+            },
             Some(name) => name.to_owned(),
         };
         for constraint in self.constraints() {
@@ -755,6 +760,13 @@ mod type_definition_tests {
         */
         anonymous_type([annotations(vec!["closed"], vec![Symbol::from("red").into(), Symbol::from("blue").into(), Symbol::from("green").into()])]),
     TypeDefinitionKind::anonymous([Constraint::annotations(vec!["closed"], vec![Symbol::from("red").into(), Symbol::from("blue").into(), Symbol::from("green").into()]), Constraint::type_constraint(34)])
+    ),
+    case::annotations_v2_0_constraint(
+        /* For a schema with annotations constraint as below:
+            { annotations: { container_length: 1 } }
+        */
+        isl_type::v_2_0::anonymous_type([isl_constraint::v_2_0::annotations(isl_type_reference::v_2_0::anonymous_type_ref([isl_constraint::v_2_0::container_length(1.into())]))]),
+        TypeDefinitionKind::anonymous([Constraint::annotations_v2_0(36), Constraint::type_constraint(34)])
     ),
     case::precision_constraint(
         /* For a schema with precision constraint as below:

@@ -483,6 +483,12 @@ mod isl_tests {
                     "#),
         anonymous_type([annotations(vec!["closed"], vec![Symbol::from("red").into(), Symbol::from("blue").into(), Symbol::from("green").into()])])
     ),
+    case::standard_syantx_annotations_constraint(
+        load_anonymous_type_v2_0(r#" // For a schema with annotations constraint as below:
+                            { annotations: { container_length: 1 } }
+                        "#),
+    isl_type::v_2_0::anonymous_type([isl_constraint::v_2_0::annotations(isl_type_reference::v_2_0::anonymous_type_ref([isl_constraint::v_2_0::container_length(1.into())]))])
+    ),
     case::precision_constraint(
         load_anonymous_type(r#" // For a schema with precision constraint as below:
                         { precision: 2 }
