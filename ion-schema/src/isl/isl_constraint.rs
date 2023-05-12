@@ -266,7 +266,7 @@ pub mod v_2_0 {
         Annotation, Ieee754InterchangeFormat, TimestampOffset, TimestampPrecision, ValidValue,
     };
     use crate::isl::IslVersion;
-    use crate::result::IonSchemaResult;
+    use crate::result::{invalid_schema_error, IonSchemaResult};
     use ion_rs::element::Element;
     use ion_rs::Int;
 
@@ -440,11 +440,12 @@ pub mod v_2_0 {
     }
 
     /// Creates an `annotations` constraint using a list of valid annotations and specify whether annotations are required or closed or both.
+    /// If both `is_required` and `is_closed` are false then this returns an error as ISL 2.0 requires that either annotations are closed or required or both.
     pub fn annotations_simplified<A: IntoIterator<Item = Element>>(
         is_required: bool,
         is_closed: bool,
         annotations: A,
-    ) -> IslConstraint {
+    ) -> IonSchemaResult<IslConstraint> {
         let annotations: Vec<Annotation> = annotations
             .into_iter()
             .map(|a| {
@@ -454,12 +455,19 @@ pub mod v_2_0 {
                 )
             })
             .collect();
-        IslConstraint::new(
+
+        if !is_required && !is_closed {
+            return invalid_schema_error(
+                "annotations constraints must either be required or closed or both.",
+            );
+        }
+
+        Ok(IslConstraint::new(
             IslVersion::V2_0,
             IslConstraintImpl::Annotations(IslAnnotationsConstraint::SimpleAnnotations(
                 IslSimpleAnnotationsConstraint::new(is_closed, false, is_required, annotations),
             )),
-        )
+        ))
     }
 
     /// Creates an `annotations` constraint using an [IslTypeRef].
