@@ -892,12 +892,28 @@ impl IslConstraintImpl {
                 let case_insensitive = value.annotations().contains("i");
                 let multi_line = value.annotations().contains("m");
 
+                if value
+                    .annotations()
+                    .iter()
+                    .any(|a| a.text().unwrap() != "i" && a.text().unwrap() != "m")
+                {
+                    return invalid_schema_error(
+                        "regex constraint must only contain 'i' or 'm' annotation",
+                    );
+                }
+
                 let expression = value.as_string().ok_or_else(|| {
                     invalid_schema_error_raw(format!(
                         "expected regex to contain a string expression but found: {}",
                         value.ion_type()
                     ))
                 })?;
+
+                if expression.is_empty() {
+                    return invalid_schema_error(
+                        "regex constraint must contain a non empty expression",
+                    );
+                }
 
                 Ok(IslConstraintImpl::Regex(IslRegexConstraint::new(
                     case_insensitive,

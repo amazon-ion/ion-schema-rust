@@ -8,8 +8,7 @@ use crate::isl::util::{
 use crate::isl::IslVersion;
 use crate::nfa::{FinalState, NfaBuilder, NfaEvaluation};
 use crate::result::{
-    invalid_schema_error, invalid_schema_error_raw, IonSchemaError, IonSchemaResult,
-    ValidationResult,
+    invalid_schema_error, invalid_schema_error_raw, IonSchemaResult, ValidationResult,
 };
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::type_reference::{TypeReference, VariablyOccurringTypeRef};
@@ -282,14 +281,18 @@ impl Constraint {
         })
     }
 
-    /// Creates a [Constraint::Regex] from the expression and flags (case_insensitive, multi_line)
+    /// Creates a [Constraint::Regex] from the expression and flags (case_insensitive, multi_line) and also specify the ISL version
     pub fn regex(
         case_insensitive: bool,
         multi_line: bool,
         expression: String,
+        isl_version: IslVersion,
     ) -> IonSchemaResult<Constraint> {
         let regex = IslRegexConstraint::new(case_insensitive, multi_line, expression);
-        Ok(Constraint::Regex(regex.try_into()?))
+        Ok(Constraint::Regex(RegexConstraint::from_isl(
+            &regex,
+            isl_version,
+        )?))
     }
 
     /// Creates a [Constraint::Ieee754Float] from [Ieee754InterchangeFormat] specified inside it
@@ -476,7 +479,10 @@ impl Constraint {
             IslConstraintImpl::Precision(precision_range) => Ok(Constraint::Precision(
                 PrecisionConstraint::new(precision_range.to_owned()),
             )),
-            IslConstraintImpl::Regex(regex) => Ok(Constraint::Regex(regex.to_owned().try_into()?)),
+            IslConstraintImpl::Regex(regex) => Ok(Constraint::Regex(RegexConstraint::from_isl(
+                regex,
+                isl_version,
+            )?)),
             IslConstraintImpl::Scale(scale_range) => Ok(Constraint::Scale(ScaleConstraint::new(
                 scale_range.to_owned(),
             ))),
@@ -2102,9 +2108,28 @@ impl RegexConstraint {
         }
     }
 
+    fn from_isl(isl_regex: &IslRegexConstraint, isl_version: IslVersion) -> IonSchemaResult<Self> {
+        let pattern =
+            RegexConstraint::convert_to_pattern(isl_regex.expression().to_owned(), isl_version)?;
+
+        let regex = RegexBuilder::new(pattern.as_str())
+            .case_insensitive(isl_regex.case_insensitive())
+            .multi_line(isl_regex.multi_line())
+            .build()
+            .map_err(|e| {
+                invalid_schema_error_raw(format!("Invalid regex {}", isl_regex.expression()))
+            })?;
+
+        Ok(RegexConstraint::new(
+            regex,
+            isl_regex.case_insensitive(),
+            isl_regex.multi_line(),
+        ))
+    }
+
     /// Converts given string to a pattern based on regex features supported by Ion Schema Specification
     /// For more information: `<https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#regex>`
-    fn convert_to_pattern(expression: String) -> IonSchemaResult<String> {
+    fn convert_to_pattern(expression: String, isl_version: IslVersion) -> IonSchemaResult<String> {
         let mut sb = String::new();
         let mut si = expression.as_str().chars().peekable();
 
@@ -2114,7 +2139,7 @@ impl RegexConstraint {
                     // push the starting bracket `[` to the result string
                     // and then parse the next characters using parse_char_class
                     sb.push(ch);
-                    RegexConstraint::parse_char_class(&mut sb, &mut si)?;
+                    RegexConstraint::parse_char_class(&mut sb, &mut si, isl_version)?;
                 }
                 '(' => {
                     sb.push(ch);
@@ -2155,7 +2180,11 @@ impl RegexConstraint {
         Ok(sb)
     }
 
-    fn parse_char_class(sb: &mut String, si: &mut Peekable<Chars<'_>>) -> IonSchemaResult<()> {
+    fn parse_char_class(
+        sb: &mut String,
+        si: &mut Peekable<Chars<'_>>,
+        isl_version: IslVersion,
+    ) -> IonSchemaResult<()> {
         while let Some(ch) = si.next() {
             sb.push(ch);
             match ch {
@@ -2170,8 +2199,31 @@ impl RegexConstraint {
                         match ch2 {
                             // escaped `[` or ']' are allowed within character class
                             '[' | ']' | '\\' => sb.push(ch2),
-                            // not supporting pre-defined char classes (i.e., \d, \s, \w)
-                            // as user is specifying a new char class
+                            'd' | 's' | 'w' | 'D' | 'S' | 'W' => {
+                                match isl_version {
+                                    IslVersion::V1_0 => {
+                                        // returns an error for ISL 1.0 as it does not support pre-defined char classes (i.e., \d, \s, \w)
+                                        return invalid_schema_error(format!(
+                                            "invalid sequence '{:?}' in character class",
+                                            si
+                                        ));
+                                    }
+                                    IslVersion::V2_0 => {
+                                        // Change \w and \W to be [a-zA-Z0-9_] and [^a-zA-Z0-9_] respectively
+                                        // Since `regex` supports unicode perl style character classes,
+                                        // i.e. \w is represented as (\p{Alphabetic} + \p{M} + \d + \p{Pc} + \p{Join_Control})
+                                        if ch2 == 'w' {
+                                            sb.pop();
+                                            sb.push_str(r"[a-zA-Z0-9_]");
+                                        } else if ch2 == 'W' {
+                                            sb.pop();
+                                            sb.push_str(r"[^a-zA-Z0-9_]");
+                                        } else {
+                                            sb.push(ch2);
+                                        }
+                                    }
+                                }
+                            }
                             _ => {
                                 return invalid_schema_error(format!(
                                     "invalid sequence '\\{ch2}' in character class"
@@ -2269,28 +2321,6 @@ impl ConstraintValidator for RegexConstraint {
         }
 
         Ok(())
-    }
-}
-
-impl TryFrom<IslRegexConstraint> for RegexConstraint {
-    type Error = IonSchemaError;
-
-    fn try_from(isl_regex: IslRegexConstraint) -> Result<Self, Self::Error> {
-        let pattern = RegexConstraint::convert_to_pattern(isl_regex.expression().to_owned())?;
-
-        let regex = RegexBuilder::new(pattern.as_str())
-            .case_insensitive(isl_regex.case_insensitive())
-            .multi_line(isl_regex.multi_line())
-            .build()
-            .map_err(|e| {
-                invalid_schema_error_raw(format!("Invalid regex {}", isl_regex.expression()))
-            })?;
-
-        Ok(RegexConstraint::new(
-            regex,
-            isl_regex.case_insensitive(),
-            isl_regex.multi_line(),
-        ))
     }
 }
 

@@ -17,8 +17,7 @@ ion_schema_tests!(
         "constraints::one_of",
         "constraints::ordered_elements",
         "constraints::precision",
-        "constraints::regex",
-        "constraints::regex-invalid",
+        "constraints::regex::value_should_be_invalid_for_type_regex_unescaped_newline__2_", // https://github.com/amazon-ion/ion-rust/issues/399
         "constraints::timestamp_offset",
         "constraints::timestamp_precision",
         "constraints::type",
