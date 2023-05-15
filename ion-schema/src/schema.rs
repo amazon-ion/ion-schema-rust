@@ -1221,6 +1221,31 @@ mod schema_tests {
                     "#),
             "regex_type"
         ),
+        case::regex_v2_0_constraint(
+            load(r#"
+                        "/"
+                        ":"
+                        "@"
+                        "["
+                        "`"
+                        "{"
+                        " "
+                    "#),
+            load(r#"
+                        "a"
+                        "A"
+                        "z"
+                        "Z"
+                        "0"
+                        "9"
+                        "_"
+                    "#),
+            load_schema_from_text(r#" // For a schema with regex constraint as below:
+                            $ion_schema_2_0
+                            type::{ name: regex_type, regex: "\\W" }
+                    "#),
+            "regex_type"
+        ),
         case::timestamp_offset_constraint(
             load(r#"
                       2000T

@@ -846,7 +846,8 @@ mod type_definition_tests {
             Constraint::regex(
                 false, // case insensitive
                 false, // multiline
-                "[abc]".to_string()
+                "[abc]".to_string(),
+                IslVersion::V1_0
             ).unwrap(),
             Constraint::type_constraint(34)
         ])
