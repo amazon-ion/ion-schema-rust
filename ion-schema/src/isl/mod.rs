@@ -581,6 +581,15 @@ mod isl_tests {
         )
     }
 
+    // helper function to create a range
+    fn load_range_v2_0(text: &str) -> IonSchemaResult<Range> {
+        Range::from_ion_element(
+            &Element::read_one(text.as_bytes()).expect("parsing failed unexpectedly"),
+            RangeType::Any,
+            IslVersion::V2_0,
+        )
+    }
+
     // helper function to create a timestamp precision range
     fn load_timestamp_precision_range(text: &str) -> IonSchemaResult<Range> {
         Range::from_ion_element(
@@ -641,7 +650,7 @@ mod isl_tests {
             ).unwrap()
         ),
         case::range_with_timestamp(
-            load_range(
+            load_range_v2_0(
                 r#"
                     range::[2020-01-01T, 2021-01-01T]
                 "#
