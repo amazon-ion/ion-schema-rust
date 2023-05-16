@@ -1,5 +1,6 @@
 use crate::isl::isl_range::{Range, RangeType};
-use crate::result::{invalid_schema_error, IonSchemaError};
+use crate::isl::IslVersion;
+use crate::result::{invalid_schema_error, IonSchemaError, IonSchemaResult};
 use ion_rs::element::Element;
 use ion_rs::types::timestamp::Precision;
 use ion_rs::{Symbol, Timestamp};
@@ -169,14 +170,13 @@ pub enum ValidValue {
     Element(Element),
 }
 
-impl TryFrom<&Element> for ValidValue {
-    type Error = IonSchemaError;
-
-    fn try_from(value: &Element) -> Result<Self, Self::Error> {
+impl ValidValue {
+    pub fn from_ion_element(value: &Element, isl_version: IslVersion) -> IonSchemaResult<Self> {
         if value.annotations().contains("range") {
             Ok(ValidValue::Range(Range::from_ion_element(
                 value,
                 RangeType::NumberOrTimestamp,
+                isl_version,
             )?))
         } else if value
             .annotations()

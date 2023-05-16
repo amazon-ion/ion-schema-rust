@@ -1,5 +1,6 @@
 use crate::isl::isl_range::RangeBoundaryValue::*;
 use crate::isl::util::TimestampPrecision;
+use crate::isl::IslVersion;
 use crate::result::{
     invalid_schema_error, invalid_schema_error_raw, IonSchemaError, IonSchemaResult,
 };
@@ -172,7 +173,11 @@ impl Range {
 
     /// Parse an [Element] into a [Range] using the [RangeType]
     // `range_type` is used to determine range type for integer non negative ranges or number ranges
-    pub fn from_ion_element(value: &Element, range_type: RangeType) -> IonSchemaResult<Range> {
+    pub fn from_ion_element(
+        value: &Element,
+        range_type: RangeType,
+        isl_version: IslVersion,
+    ) -> IonSchemaResult<Range> {
         // if an integer value is passed here then convert it into a range
         // eg. if `1` is passed as value then return a range [1,1]
         return if let Some(integer_value) = value.as_int() {
@@ -246,8 +251,12 @@ impl Range {
                 | IonType::Float
                 | IonType::Decimal
                 | IonType::Timestamp => Ok(Self::validate_and_construct_range(
-                    TypedRangeBoundaryValue::from_ion_element(start, range_type.to_owned())?,
-                    TypedRangeBoundaryValue::from_ion_element(end, range_type)?,
+                    TypedRangeBoundaryValue::from_ion_element(
+                        start,
+                        range_type.to_owned(),
+                        isl_version,
+                    )?,
+                    TypedRangeBoundaryValue::from_ion_element(end, range_type, isl_version)?,
                 )?),
                 _ => invalid_schema_error("Unsupported range type specified"),
             }
@@ -423,15 +432,6 @@ impl<T: std::cmp::PartialOrd> RangeImpl<T> {
         start: RangeBoundaryValue<T>,
         end: RangeBoundaryValue<T>,
     ) -> IonSchemaResult<Self> {
-        if Option::is_none(&start.range_boundary_value())
-            && Option::is_none(&end.range_boundary_value())
-            && (start.range_boundary_type() == &RangeBoundaryType::Exclusive
-                || end.range_boundary_type() == &RangeBoundaryType::Exclusive)
-        {
-            return invalid_schema_error(
-                "Exclusive min or max are not allowed for range boundary values",
-            );
-        }
         if start == end
             && (start.range_boundary_type() == &RangeBoundaryType::Exclusive
                 || end.range_boundary_type() == &RangeBoundaryType::Exclusive)
@@ -657,28 +657,9 @@ impl<T: std::cmp::PartialOrd> RangeImpl<T> {
                 RangeImpl::range(v1, v2)
             }
             (TypedRangeBoundaryValue::Min, TypedRangeBoundaryValue::Timestamp(v2)) => {
-                // verify that v2 here doesn't have an unknown offset
-                // For timestamp ranges neither boundaries should have an unknown offset
-                if let Some(range_end_timestamp_value) = v2.range_boundary_value() {
-                    if Option::is_none(&range_end_timestamp_value.offset()) {
-                        return invalid_schema_error(
-                            "Range boundary can not have an unknown offset",
-                        );
-                    }
-                }
-
                 RangeImpl::range(RangeBoundaryValue::Min, v2)
             }
             (TypedRangeBoundaryValue::Timestamp(v1), TypedRangeBoundaryValue::Max) => {
-                // verify that v1 here doesn't have an unknown offset
-                // For timestamp ranges neither boundaries should have an unknown offset
-                if let Some(range_end_timestamp_value) = v1.range_boundary_value() {
-                    if Option::is_none(&range_end_timestamp_value.offset()) {
-                        return invalid_schema_error(
-                            "Range boundary can not have an unknown offset",
-                        );
-                    }
-                }
                 RangeImpl::range(v1, RangeBoundaryValue::Max)
             }
             (TypedRangeBoundaryValue::Timestamp(Value(v1, _)), _)
@@ -771,6 +752,7 @@ impl TypedRangeBoundaryValue {
     fn from_ion_element(
         boundary: &Element,
         range_type: RangeType,
+        isl_version: IslVersion,
     ) -> IonSchemaResult<TypedRangeBoundaryValue> {
         let range_boundary_type = if boundary.annotations().contains("exclusive") {
             RangeBoundaryType::Exclusive
@@ -780,6 +762,14 @@ impl TypedRangeBoundaryValue {
         match boundary.ion_type() {
             IonType::Symbol => {
                 let sym = try_to!(try_to!(boundary.as_symbol()).text());
+
+                if (sym == "min" || sym == "max")
+                    && range_boundary_type == RangeBoundaryType::Exclusive
+                {
+                    return invalid_schema_error(
+                        "Exclusive min or max are not allowed for range boundary values",
+                    );
+                }
 
                 match sym {
                     "min" => Ok(TypedRangeBoundaryValue::Min),
@@ -848,12 +838,23 @@ impl TypedRangeBoundaryValue {
                 )),
             },
             IonType::Timestamp => match range_type {
-                RangeType::NumberOrTimestamp | RangeType::Any => Ok(
-                    TypedRangeBoundaryValue::Timestamp(RangeBoundaryValue::Value(
-                        boundary.as_timestamp().unwrap().to_owned(),
-                        range_boundary_type,
-                    )),
-                ),
+                RangeType::NumberOrTimestamp | RangeType::Any => {
+                    // For ISL 1.0, verify that range boundary here doesn't have an unknown offset
+                    // For timestamp ranges neither boundaries should have an unknown offset
+                    if isl_version == IslVersion::V1_0
+                        && boundary.as_timestamp().unwrap().offset().is_none()
+                    {
+                        return invalid_schema_error(
+                            "Timestamp range boundary can not have an unknown offset",
+                        );
+                    }
+                    Ok(TypedRangeBoundaryValue::Timestamp(
+                        RangeBoundaryValue::Value(
+                            boundary.as_timestamp().unwrap().to_owned(),
+                            range_boundary_type,
+                        ),
+                    ))
+                }
                 _ => invalid_schema_error(format!(
                     "{range_type:?} ranges can not be constructed for timestamp boundary values"
                 )),

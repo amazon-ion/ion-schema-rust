@@ -577,6 +577,7 @@ mod isl_tests {
         Range::from_ion_element(
             &Element::read_one(text.as_bytes()).expect("parsing failed unexpectedly"),
             RangeType::Any,
+            IslVersion::V1_0,
         )
     }
 
@@ -585,6 +586,7 @@ mod isl_tests {
         Range::from_ion_element(
             &Element::read_one(text.as_bytes()).expect("parsing failed unexpectedly"),
             RangeType::TimestampPrecision,
+            IslVersion::V1_0,
         )
     }
 
@@ -593,6 +595,7 @@ mod isl_tests {
         Range::from_ion_element(
             &Element::read_one(text.as_bytes()).expect("parsing failed unexpectedly"),
             RangeType::NumberOrTimestamp,
+            IslVersion::V1_0,
         )
     }
 
