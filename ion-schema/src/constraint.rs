@@ -16,11 +16,11 @@ use crate::types::TypeValidator;
 use crate::violation::{Violation, ViolationCode};
 use crate::IonSchemaElement;
 use ion_rs::element::Element;
+use ion_rs::ion_eq::IonEq;
 use ion_rs::{Int, IonType};
 use num_traits::ToPrimitive;
 use regex::{Regex, RegexBuilder};
 use std::collections::{HashMap, HashSet};
-use std::convert::TryInto;
 use std::fmt::{Display, Formatter};
 use std::iter::Peekable;
 use std::ops::Neg;
@@ -266,9 +266,14 @@ impl Constraint {
 
     /// Creates a [Constraint::ValidValues] using the [Element]s specified inside it
     /// Returns an IonSchemaError if any of the Elements have an annotation other than `range`
-    pub fn valid_values_with_values(values: Vec<Element>) -> IonSchemaResult<Constraint> {
-        let valid_values: IonSchemaResult<Vec<ValidValue>> =
-            values.iter().map(|e| e.try_into()).collect();
+    pub fn valid_values_with_values(
+        values: Vec<Element>,
+        isl_version: IslVersion,
+    ) -> IonSchemaResult<Constraint> {
+        let valid_values: IonSchemaResult<Vec<ValidValue>> = values
+            .iter()
+            .map(|e| ValidValue::from_ion_element(e, isl_version))
+            .collect();
         Ok(Constraint::ValidValues(ValidValuesConstraint {
             valid_values: valid_values?,
         }))
@@ -2007,12 +2012,12 @@ impl ValidValuesConstraint {
     /// Provides a way to programmatically construct valid_values constraint
     /// Returns IonSchemaError whenever annotations are provided within ValidValue::Element
     /// only `range` annotations are accepted for ValidValue::Element
-    pub fn new(valid_values: Vec<ValidValue>) -> IonSchemaResult<Self> {
+    pub fn new(valid_values: Vec<ValidValue>, isl_version: IslVersion) -> IonSchemaResult<Self> {
         let valid_values: IonSchemaResult<Vec<ValidValue>> = valid_values
             .iter()
             .map(|v| match v {
                 ValidValue::Range(r) => Ok(v.to_owned()),
-                ValidValue::Element(e) => e.try_into(),
+                ValidValue::Element(e) => ValidValue::from_ion_element(e, isl_version),
             })
             .collect();
         Ok(Self {
@@ -2061,7 +2066,7 @@ impl ConstraintValidator for ValidValuesConstraint {
                             // get value without annotations
                             let value = value.value();
 
-                            if element.value() == value {
+                            if element.value().ion_eq(value) {
                                 return Ok(());
                             }
                         }

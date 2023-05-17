@@ -573,10 +573,11 @@ mod isl_tests {
     }
 
     // helper function to create a range
-    fn load_range(text: &str) -> IonSchemaResult<Range> {
+    fn load_range(text: &str, isl_version: IslVersion) -> IonSchemaResult<Range> {
         Range::from_ion_element(
             &Element::read_one(text.as_bytes()).expect("parsing failed unexpectedly"),
             RangeType::Any,
+            isl_version,
         )
     }
 
@@ -585,6 +586,7 @@ mod isl_tests {
         Range::from_ion_element(
             &Element::read_one(text.as_bytes()).expect("parsing failed unexpectedly"),
             RangeType::TimestampPrecision,
+            IslVersion::V1_0,
         )
     }
 
@@ -593,6 +595,7 @@ mod isl_tests {
         Range::from_ion_element(
             &Element::read_one(text.as_bytes()).expect("parsing failed unexpectedly"),
             RangeType::NumberOrTimestamp,
+            IslVersion::V1_0,
         )
     }
 
@@ -608,7 +611,8 @@ mod isl_tests {
             load_range(
                 r#"
                     range::[min, 5]
-                "#
+                "#,
+                IslVersion::V1_0
             ).unwrap(),
             IntegerRange::new(
                 RangeBoundaryValue::Min,
@@ -619,7 +623,8 @@ mod isl_tests {
             load_range(
                 r#"
                     range::[2e1, 5e1]
-                "#
+                "#,
+                IslVersion::V1_0
             ).unwrap(),
             FloatRange::new(
                 2e1,
@@ -630,7 +635,8 @@ mod isl_tests {
             load_range(
                 r#"
                     range::[20.4, 50.5]
-                "#
+                "#,
+                IslVersion::V1_0
             ).unwrap(),
             DecimalRange::new(
                 Decimal::new(204, -1),
@@ -641,7 +647,8 @@ mod isl_tests {
             load_range(
                 r#"
                     range::[2020-01-01T, 2021-01-01T]
-                "#
+                "#,
+                IslVersion::V2_0
             ).unwrap(),
             TimestampRange::new(
                 Timestamp::with_year(2020).with_month(1).with_day(1).build().unwrap(),
@@ -681,27 +688,32 @@ mod isl_tests {
         case::range_with_min_max(load_range(
             r#"
                 range::[min, max]
-            "#
+            "#,
+            IslVersion::V1_0
         )),
         case::range_with_max_lower_bound(load_range(
             r#"
                 range::[max, 5]
-            "#
+            "#,
+            IslVersion::V1_0
         )),
         case::range_with_min_upper_bound(load_range(
             r#"
                 range::[5, min]
-            "#
+            "#,
+            IslVersion::V1_0
         )),
         case::range_with_mismatched_bounds(load_range(
             r#"
                 range::[5, 7.834]
-            "#
+            "#,
+            IslVersion::V1_0
         )),
         case::range_with_lower_bound_greater_than_upper_bound(load_range(
             r#"
                 range::[10, 5]
-            "#
+            "#,
+            IslVersion::V1_0
         ))
     )]
     fn invalid_ranges(range: IonSchemaResult<Range>) {
@@ -717,7 +729,8 @@ mod isl_tests {
             load_range(
             r#"
                 range::[0, 10]
-            "#
+            "#,
+            IslVersion::V1_0
             ),
             elements(&[5, 0, 10]),
             elements(&[-5, 11])
@@ -726,7 +739,8 @@ mod isl_tests {
             load_range(
             r#"
                 range::[min, 10]
-            "#
+            "#,
+            IslVersion::V1_0
             ),
             elements(&[5, -5, 0]),
             elements(&[11])
@@ -735,7 +749,8 @@ mod isl_tests {
             load_range(
             r#"
                 range::[0, max]
-            "#
+            "#,
+            IslVersion::V1_0
             ),
             elements(&[5, 0, 11]),
             elements(&[-5])
@@ -744,7 +759,8 @@ mod isl_tests {
             load_range(
             r#"
                 range::[exclusive::0, exclusive::10]
-            "#
+            "#,
+            IslVersion::V1_0
             ),
             elements(&[5, 9]),
             elements(&[-5, 0, 10])
@@ -753,7 +769,8 @@ mod isl_tests {
             load_range(
             r#"
                 range::[0.0, 10.0]
-            "#
+            "#,
+            IslVersion::V1_0
             ),
             elements(&[Decimal::new(55,-1), Decimal::new(0, 0), Decimal::new(100, -1)]),
             elements(&[Decimal::new(-55, -1), Decimal::new(115, -1)])
@@ -762,7 +779,8 @@ mod isl_tests {
             load_range(
             r#"
                 range::[min, 10.0]
-            "#
+            "#,
+            IslVersion::V1_0
             ),
             elements(&[Decimal::new(50, -1), Decimal::new(-55, -1), Decimal::new(0, 0)]),
             elements(&[Decimal::new(115, -1)])
@@ -771,7 +789,8 @@ mod isl_tests {
             load_range(
             r#"
                 range::[0.0, max]
-            "#
+            "#,
+            IslVersion::V1_0
             ),
             elements(&[Decimal::new(55, -1), Decimal::new(115, -1)]),
             elements(&[Decimal::new(-55, -1)])
@@ -780,7 +799,8 @@ mod isl_tests {
             load_range(
             r#"
                 range::[exclusive::1.0, exclusive::10.0]
-            "#
+            "#,
+            IslVersion::V1_0
             ),
             elements(&[Decimal::new(50, -1), Decimal::new(95, -1)]),
             elements(&[Decimal::new(-55, -1), Decimal::new(10, -1), Decimal::new(100, -1)])
@@ -789,7 +809,8 @@ mod isl_tests {
             load_range(
             r#"
                 range::[1e2, 5e2]
-            "#
+            "#,
+            IslVersion::V1_0
             ),
             elements(&[2e2, 1e2, 5e2]),
             elements(&[-1e2,1e1, 6e2, f64::NAN, 0e0, -0e0])
@@ -798,7 +819,8 @@ mod isl_tests {
             load_range(
             r#"
                 range::[min, 2e5]
-            "#
+            "#,
+            IslVersion::V1_0
             ),
             elements(&[f64::NEG_INFINITY, 2.2250738585072014e-308, 2e5, -2e5, 0e0, -0e0]),
             elements(&[3e5, f64::NAN])
@@ -807,7 +829,8 @@ mod isl_tests {
             load_range(
             r#"
                 range::[1e5, max]
-            "#
+            "#,
+            IslVersion::V1_0
             ),
             elements(&[1e5, 5e5, 1e6, 1.7976931348623157e308, f64::INFINITY]),
             elements(&[-5e5, 1e2, f64::NAN])
@@ -816,7 +839,8 @@ mod isl_tests {
             load_range(
             r#"
                 range::[exclusive::1e2, exclusive::5e2]
-            "#
+            "#,
+            IslVersion::V1_0
             ),
             elements(&[2e2]),
             elements(&[-1e2 ,1e1, 6e2, 1e2, 5e2, f64::NAN])

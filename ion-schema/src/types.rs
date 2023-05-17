@@ -801,7 +801,7 @@ mod type_definition_tests {
             { valid_values: [2, 3.5, 5e7, "hello", hi] }
         */
         anonymous_type([valid_values_with_values(vec![2.into(), Decimal::new(35, -1).into(), 5e7.into(), "hello".to_owned().into(), Symbol::from("hi").into()]).unwrap()]),
-    TypeDefinitionKind::anonymous([Constraint::valid_values_with_values(vec![2.into(), Decimal::new(35, -1).into(), 5e7.into(), "hello".to_owned().into(), Symbol::from("hi").into()]).unwrap(), Constraint::type_constraint(34)])
+    TypeDefinitionKind::anonymous([Constraint::valid_values_with_values(vec![2.into(), Decimal::new(35, -1).into(), 5e7.into(), "hello".to_owned().into(), Symbol::from("hi").into()], IslVersion::V1_0).unwrap(), Constraint::type_constraint(34)])
     ),
     case::valid_values_with_range_constraint(
         /* For a schema with valid_values constraint as below:

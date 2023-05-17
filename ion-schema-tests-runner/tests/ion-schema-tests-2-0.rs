@@ -22,7 +22,10 @@ ion_schema_tests!(
         "constraints::timestamp_precision",
         "constraints::type",
         "constraints::utf8_byte_length",
-        "constraints::valid_values",
-        "constraints::valid_values-ranges"
+        // following tests are related to: https://github.com/amazon-ion/ion-rust/pull/553
+        "constraints::valid_values_ranges::value_should_be_valid_for_type_valid_values_range_timestamp_known_offset__12_",
+        "constraints::valid_values_ranges::value_should_be_valid_for_type_valid_values_range_timestamp_known_offset__13_",
+        "constraints::valid_values_ranges::value_should_be_valid_for_type_valid_values_range_timestamp_unknown_offset__12_",
+        "constraints::valid_values_ranges::value_should_be_valid_for_type_valid_values_range_timestamp_unknown_offset__13_"
     )
 );
