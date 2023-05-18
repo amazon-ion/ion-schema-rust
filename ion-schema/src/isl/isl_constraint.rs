@@ -612,14 +612,8 @@ impl IslConstraintImpl {
                         isl_version,
                         value,
                         inline_imported_types,
+                        false,
                     )?;
-
-                    // return error if the type reference contains `occurs` constraint
-                    if type_reference.get_occurs_range().is_some() {
-                        return invalid_schema_error(
-                            "annotations constraint can not contain type references that contain `occurs` constraint",
-                        );
-                    }
 
                     Ok(IslConstraintImpl::Annotations(
                         IslAnnotationsConstraint::StandardAnnotations(type_reference),
@@ -704,8 +698,12 @@ impl IslConstraintImpl {
                 isl_version,
             )?)),
             "element" => {
-                let type_reference: IslTypeRefImpl =
-                    IslTypeRefImpl::from_ion_element(isl_version, value, inline_imported_types)?;
+                let type_reference: IslTypeRefImpl = IslTypeRefImpl::from_ion_element(
+                    isl_version,
+                    value,
+                    inline_imported_types,
+                    false,
+                )?;
                 match isl_version {
                     IslVersion::V1_0 => {
                         // for ISL 1.0 `distinct annotation on `element` constraint is not supported which is represented by `false` here
@@ -726,20 +724,17 @@ impl IslConstraintImpl {
                         // verify whether `distinct`annotation is present or not
                         let require_distinct = value.annotations().contains("distinct");
 
-                        // return error if the type reference contains `occurs` constraint
-                        if type_reference.get_occurs_range().is_some() {
-                            return invalid_schema_error(
-                                "element constraint can not contain type references that contain `occurs` constraint",
-                            );
-                        }
-
                         Ok(IslConstraintImpl::Element(type_reference, require_distinct))
                     }
                 }
             }
             "field_names" => {
-                let type_reference =
-                    IslTypeRefImpl::from_ion_element(isl_version, value, inline_imported_types)?;
+                let type_reference = IslTypeRefImpl::from_ion_element(
+                    isl_version,
+                    value,
+                    inline_imported_types,
+                    false,
+                )?;
                 match isl_version {
                     IslVersion::V1_0 => {
                         // for ISL 1.0 `field_names` constraint does not exist hence `field_names` will be considered as open content
@@ -758,13 +753,6 @@ impl IslConstraintImpl {
                         {
                             return invalid_schema_error(
                                 "field_names constraint can only contain `distinct` annotation",
-                            );
-                        }
-
-                        // return error if the type reference contains `occurs` constraint
-                        if type_reference.get_occurs_range().is_some() {
-                            return invalid_schema_error(
-                                "field_names constraint can not contain type references that contain `occurs` constraint",
                             );
                         }
 
@@ -833,13 +821,21 @@ impl IslConstraintImpl {
                 Ok(IslConstraintImpl::OneOf(types))
             }
             "not" => {
-                let type_reference: IslTypeRefImpl =
-                    IslTypeRefImpl::from_ion_element(isl_version, value, inline_imported_types)?;
+                let type_reference: IslTypeRefImpl = IslTypeRefImpl::from_ion_element(
+                    isl_version,
+                    value,
+                    inline_imported_types,
+                    false,
+                )?;
                 Ok(IslConstraintImpl::Not(type_reference))
             }
             "type" => {
-                let type_reference: IslTypeRefImpl =
-                    IslTypeRefImpl::from_ion_element(isl_version, value, inline_imported_types)?;
+                let type_reference: IslTypeRefImpl = IslTypeRefImpl::from_ion_element(
+                    isl_version,
+                    value,
+                    inline_imported_types,
+                    false,
+                )?;
                 Ok(IslConstraintImpl::Type(type_reference))
             }
             "occurs" => {
@@ -1053,11 +1049,19 @@ impl IslConstraintImpl {
                 value.ion_type()
             ));
         }
+        let allow_variably_occurring_type = constraint_name == "ordered_elements";
         value
             .as_sequence()
             .unwrap()
             .elements()
-            .map(|e| IslTypeRefImpl::from_ion_element(isl_version, e, inline_imported_types))
+            .map(|e| {
+                IslTypeRefImpl::from_ion_element(
+                    isl_version,
+                    e,
+                    inline_imported_types,
+                    allow_variably_occurring_type,
+                )
+            })
             .collect::<IonSchemaResult<Vec<IslTypeRefImpl>>>()
     }
 
@@ -1083,7 +1087,7 @@ impl IslConstraintImpl {
             .unwrap()
             .iter()
             .map(|(f, v)| {
-                IslTypeRefImpl::from_ion_element(isl_version, v, inline_imported_types)
+                IslTypeRefImpl::from_ion_element(isl_version, v, inline_imported_types, true)
                     .map(|t| (f.text().unwrap().to_owned(), t))
             })
             .collect::<IonSchemaResult<HashMap<String, IslTypeRefImpl>>>()?;

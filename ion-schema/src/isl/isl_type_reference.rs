@@ -131,6 +131,7 @@ impl IslTypeRefImpl {
         isl_version: IslVersion,
         value: &Element,
         inline_imported_types: &mut Vec<IslImportType>,
+        allow_variably_occurring_type: bool,
     ) -> IonSchemaResult<Self> {
         use crate::isl::isl_type_reference::NullabilityModifier::*;
         let nullability = if value.annotations().contains("nullable") {
@@ -213,6 +214,15 @@ impl IslTypeRefImpl {
                             "`$null_or` annotation is not supported for a type reference with an explicit `occurs` field",
                         )
                     }
+
+                    if !allow_variably_occurring_type && isl_version == IslVersion::V2_0 && type_def.constraints()
+                        .iter()
+                        .any(|c| matches!(c, IslConstraintImpl::Occurs(_))) {
+                        return invalid_schema_error(
+                            "A type reference with an explicit `occurs` field can only be used for `fields` and `ordered_elements` constraint",
+                        )
+                    }
+
                     return Ok(IslTypeRefImpl::Anonymous(type_def, nullability))
                 }
                 // if it is an inline import type store it as import type reference
