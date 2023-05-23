@@ -80,7 +80,7 @@ pub mod v_1_0 {
     ) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V1_0,
-            IslConstraintImpl::OrderedElements(isl_types.into().into_iter().map(|t| t).collect()),
+            IslConstraintImpl::OrderedElements(isl_types.into().into_iter().collect()),
         )
     }
 
@@ -323,7 +323,7 @@ pub mod v_2_0 {
     ) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V2_0,
-            IslConstraintImpl::OrderedElements(isl_types.into().into_iter().map(|t| t).collect()),
+            IslConstraintImpl::OrderedElements(isl_types.into().into_iter().collect()),
         )
     }
 
@@ -852,9 +852,9 @@ impl IslConstraintImpl {
             }
             "ordered_elements" => {
                 if value.is_null() {
-                    return invalid_schema_error(format!(
-                        "ordered_elements constraint was a null instead of a list"
-                    ));
+                    return invalid_schema_error(
+                        "ordered_elements constraint was a null instead of a list",
+                    );
                 }
                 if value.ion_type() != IonType::List {
                     return invalid_schema_error(format!(

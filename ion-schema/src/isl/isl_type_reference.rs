@@ -128,26 +128,6 @@ pub(crate) enum IslTypeRefImpl {
 }
 
 impl IslTypeRefImpl {
-    /// Returns range for `occurs` field if `occurs` is present in the given type reference
-    /// Otherwise, returns `None`
-    // This is used to make sure only `ordered_elements` and `fields` constraint can contain `occurs`.
-    // This method returns `None` for `Named` or `TypeImport` type references because `occurs` field is not allowed within named type definitions.
-    pub fn get_occurs_range(&self) -> Option<Range> {
-        match self {
-            IslTypeRefImpl::Anonymous(anonymous_type_def, _) => {
-                if let Some(IslConstraintImpl::Occurs(occurs)) = anonymous_type_def
-                    .constraints()
-                    .iter()
-                    .find(|c| matches!(c, IslConstraintImpl::Occurs(_)))
-                {
-                    return Some(occurs.to_owned());
-                }
-                None
-            }
-            _ => None,
-        }
-    }
-
     fn from_ion_element_with_occurs_flag(
         isl_version: IslVersion,
         value: &Element,
@@ -392,21 +372,16 @@ impl IslVariablyOccurringTypeRef {
         )?;
         let occurs: Option<Range> = {
             if let IslTypeRefImpl::Anonymous(isl_type, _) = &type_ref {
-                if let Some(IslConstraintImpl::Occurs(occurs)) = isl_type
-                    .constraints()
-                    .iter()
-                    .find(|c| matches!(c, IslConstraintImpl::Occurs(_)))
-                {
-                    Some(occurs.to_owned())
-                } else {
-                    None
-                }
+                isl_type.constraints().iter().find_map(|c| match c {
+                    IslConstraintImpl::Occurs(occurs) => Some(occurs.to_owned()),
+                    _ => None,
+                })
             } else {
                 None
             }
         };
 
-        return Ok(IslVariablyOccurringTypeRef { type_ref, occurs });
+        Ok(IslVariablyOccurringTypeRef { type_ref, occurs })
     }
 
     /// Resolves an [IslVariablyOccurringTypeRef] into a [VariablyOccurringTypeRef] using the type_store
