@@ -1,7 +1,9 @@
 use crate::ion_path::{IonPath, IonPathElement};
 use crate::isl::isl_constraint::{IslAnnotationsConstraint, IslConstraintImpl, IslRegexConstraint};
 use crate::isl::isl_range::{Range, RangeImpl};
-use crate::isl::isl_type_reference::{IslTypeRefImpl, NullabilityModifier};
+use crate::isl::isl_type_reference::{
+    IslTypeRefImpl, IslVariablyOccurringTypeRef, NullabilityModifier,
+};
 use crate::isl::util::{
     Annotation, Ieee754InterchangeFormat, TimestampOffset, TimestampPrecision, ValidValue,
 };
@@ -810,23 +812,16 @@ impl OrderedElementsConstraint {
     /// Tries to create an [OrderedElements] constraint from the given Element
     fn resolve_from_isl_constraint(
         isl_version: IslVersion,
-        type_references: &[IslTypeRefImpl],
+        type_references: &[IslVariablyOccurringTypeRef],
         type_store: &mut TypeStore,
         pending_types: &mut PendingTypes,
     ) -> IonSchemaResult<Self> {
         let resolved_types: Vec<VariablyOccurringTypeRef> = type_references
             .iter()
-            .map(|t| {
+            .map(|t|
                 // resolve type references and create variably occurring type reference with occurs range
-                // default `occurs` field value for `ordered_elements` constraint is `occurs: required` or `occurs: 1`
-                IslTypeRefImpl::resolve_type_reference(isl_version, t, type_store, pending_types)
-                    .map(|type_ref| {
-                        VariablyOccurringTypeRef::new(
-                            type_ref,
-                            t.get_occurs_range().unwrap_or(Range::required()),
-                        )
-                    })
-            })
+                t.resolve_type_reference("ordered_elements", isl_version, type_store, pending_types)
+                )
             .collect::<IonSchemaResult<Vec<VariablyOccurringTypeRef>>>()?;
 
         Ok(OrderedElementsConstraint::new(resolved_types))
@@ -1008,7 +1003,7 @@ impl FieldsConstraint {
     /// Tries to create an [Fields] constraint from the given Element
     fn resolve_from_isl_constraint(
         isl_version: IslVersion,
-        fields: &HashMap<String, IslTypeRefImpl>,
+        fields: &HashMap<String, IslVariablyOccurringTypeRef>,
         type_store: &mut TypeStore,
         pending_types: &mut PendingTypes,
         open_content: bool, // Indicates if open content is allowed or not for the fields in the container
@@ -1018,16 +1013,8 @@ impl FieldsConstraint {
             .map(|(f, t)| {
                 // resolve type references and create variably occurring type reference with occurs range
                 // default `occurs` field value for `fields` constraint is `occurs: optional` or `occurs: range::[0, 1]`
-                IslTypeRefImpl::resolve_type_reference(isl_version, t, type_store, pending_types)
-                    .map(|type_ref| {
-                        (
-                            f.to_owned(),
-                            VariablyOccurringTypeRef::new(
-                                type_ref,
-                                t.get_occurs_range().unwrap_or(Range::optional()),
-                            ),
-                        )
-                    })
+                t.resolve_type_reference("fields", isl_version, type_store, pending_types)
+                    .map(|variably_occurring_type_ref| (f.to_owned(), variably_occurring_type_ref))
             })
             .collect::<IonSchemaResult<HashMap<String, VariablyOccurringTypeRef>>>()?;
         Ok(FieldsConstraint::new(resolved_fields, open_content))

@@ -6,7 +6,7 @@ use crate::result::{
     invalid_schema_error, invalid_schema_error_raw, unresolvable_schema_error, IonSchemaResult,
 };
 use crate::system::{PendingTypes, TypeId, TypeStore};
-use crate::type_reference::TypeReference;
+use crate::type_reference::{TypeReference, VariablyOccurringTypeRef};
 use crate::types::TypeDefinitionImpl;
 use crate::IslConstraintImpl;
 use ion_rs::element::Element;
@@ -15,8 +15,11 @@ use ion_rs::IonType;
 /// Provides public facing APIs for constructing ISL type references programmatically for ISL 1.0
 pub mod v_1_0 {
     use crate::isl::isl_constraint::{IslConstraint, IslConstraintImpl};
+    use crate::isl::isl_range::Range;
     use crate::isl::isl_type::IslTypeImpl;
-    use crate::isl::isl_type_reference::{IslTypeRef, IslTypeRefImpl, NullabilityModifier};
+    use crate::isl::isl_type_reference::{
+        IslTypeRef, IslTypeRefImpl, IslVariablyOccurringTypeRef, NullabilityModifier,
+    };
     use ion_rs::IonType;
 
     /// Creates a named [IslTypeRef] using the name of the type referenced inside it
@@ -47,12 +50,23 @@ pub mod v_1_0 {
             NullabilityModifier::Nothing,
         ))
     }
+
+    /// Creates an [IslVariablyOccurringTypeRef] using the [IslConstraint]s and [Range] referenced inside it
+    pub fn variably_occurring_type_ref(
+        type_ref: IslTypeRef,
+        occurs: Option<Range>,
+    ) -> IslVariablyOccurringTypeRef {
+        IslVariablyOccurringTypeRef::new(type_ref, occurs)
+    }
 }
 
 /// Provides public facing APIs for constructing ISL type references programmatically for ISL 2.0
 pub mod v_2_0 {
     use crate::isl::isl_constraint::IslConstraint;
-    use crate::isl::isl_type_reference::{v_1_0, IslTypeRef, IslTypeRefImpl, NullabilityModifier};
+    use crate::isl::isl_range::Range;
+    use crate::isl::isl_type_reference::{
+        v_1_0, IslTypeRef, IslTypeRefImpl, IslVariablyOccurringTypeRef, NullabilityModifier,
+    };
 
     /// Creates a named [IslTypeRef] using the name of the type referenced inside it
     pub fn named_type_ref<A: Into<String>>(name: A) -> IslTypeRef {
@@ -70,6 +84,14 @@ pub mod v_2_0 {
     /// Creates an anonymous [IslTypeRef] using the [IslConstraint]s referenced inside it
     pub fn anonymous_type_ref<A: Into<Vec<IslConstraint>>>(constraints: A) -> IslTypeRef {
         v_1_0::anonymous_type_ref(constraints)
+    }
+
+    /// Creates an anonymous [IslTypeRef] using the [IslConstraint]s and [Range] referenced inside it
+    pub fn variably_occurring_type_ref(
+        type_ref: IslTypeRef,
+        occurs: Option<Range>,
+    ) -> IslVariablyOccurringTypeRef {
+        v_1_0::variably_occurring_type_ref(type_ref, occurs)
     }
 }
 
@@ -126,12 +148,11 @@ impl IslTypeRefImpl {
         }
     }
 
-    /// Tries to create an [IslTypeRef] from the given Element
-    pub fn from_ion_element(
+    fn from_ion_element_with_occurs_flag(
         isl_version: IslVersion,
         value: &Element,
         inline_imported_types: &mut Vec<IslImportType>,
-        allow_variably_occurring_type: bool,
+        allow_occurs_field: bool,
     ) -> IonSchemaResult<Self> {
         use crate::isl::isl_type_reference::NullabilityModifier::*;
         let nullability = if value.annotations().contains("nullable") {
@@ -205,7 +226,7 @@ impl IslTypeRefImpl {
                 let value_struct = try_to!(value.as_struct());
                 // if the struct doesn't have an id field then it must be an anonymous type
                 if value_struct.get("id").is_none() {
-                    let type_def =IslTypeImpl::from_owned_element(isl_version, value, inline_imported_types)?;
+                    let type_def= IslTypeImpl::from_owned_element(isl_version, value, inline_imported_types)?;
                     // if type reference contains `occurs` field and has modifier `$null_or` then return an error
                     if nullability == NullOr && type_def.constraints()
                         .iter()
@@ -215,7 +236,7 @@ impl IslTypeRefImpl {
                         )
                     }
 
-                    if !allow_variably_occurring_type && isl_version == IslVersion::V2_0 && type_def.constraints()
+                    if !allow_occurs_field && isl_version == IslVersion::V2_0 && type_def.constraints()
                         .iter()
                         .any(|c| matches!(c, IslConstraintImpl::Occurs(_))) {
                         return invalid_schema_error(
@@ -226,13 +247,13 @@ impl IslTypeRefImpl {
                     return Ok(IslTypeRefImpl::Anonymous(type_def, nullability))
                 }
                 // if it is an inline import type store it as import type reference
-                 let isl_import_type = match IslImport::from_ion_element(value)? {
+                let isl_import_type = match IslImport::from_ion_element(value)? {
                     IslImport::Schema(_) => {
-                         return invalid_schema_error("an inline import type reference does not have `type` field specified")
+                        return invalid_schema_error("an inline import type reference does not have `type` field specified")
                     }
                     IslImport::Type(isl_import_type) => { isl_import_type }
                     IslImport::TypeAlias(_) => {
-                         return invalid_schema_error("an inline import type reference can not have `alias` field specified")
+                        return invalid_schema_error("an inline import type reference can not have `alias` field specified")
                     }
                 };
                 // if an inline import type is encountered add it in the inline_imports_types
@@ -244,6 +265,20 @@ impl IslTypeRefImpl {
                 "type reference can either be a symbol(For base/alias type reference) or a struct (for anonymous type reference)",
             )),
         }
+    }
+
+    /// Tries to create an [IslTypeRef] from the given Element
+    pub fn from_ion_element(
+        isl_version: IslVersion,
+        value: &Element,
+        inline_imported_types: &mut Vec<IslImportType>,
+    ) -> IonSchemaResult<Self> {
+        IslTypeRefImpl::from_ion_element_with_occurs_flag(
+            isl_version,
+            value,
+            inline_imported_types,
+            false,
+        )
     }
 
     /// Return TypeId for given built-in type name from type_store
@@ -309,5 +344,97 @@ impl IslTypeRefImpl {
                 }
             }
         }
+    }
+}
+
+/// Represents a [variably occurring type reference] that will be used by `ordered_elements` and `fields` constraints.
+///  
+/// ```ion
+/// Grammar: <VARIABLY_OCCURRING_TYPE_ARGUMENT> ::= { <OCCURS>, <CONSTRAINT>... }
+///                                      | <TYPE_ARGUMENT>
+///
+///         <OCCURS> ::= occurs: <INT>
+///            | occurs: <RANGE_INT>
+///            | occurs: optional
+///            | occurs: required
+/// ```
+///
+/// [variably occurring type reference]: https://amazon-ion.github.io/ion-schema/docs/isl-2-0/spec#variably-occurring-type-arguments
+#[derive(Debug, Clone, PartialEq)]
+pub struct IslVariablyOccurringTypeRef {
+    type_ref: IslTypeRefImpl,
+    occurs: Option<Range>,
+}
+
+impl IslVariablyOccurringTypeRef {
+    pub(crate) fn new(type_ref: IslTypeRef, occurs: Option<Range>) -> Self {
+        Self {
+            type_ref: type_ref.type_reference,
+            occurs,
+        }
+    }
+
+    pub fn occurs(&self) -> Option<Range> {
+        self.occurs.to_owned()
+    }
+
+    /// Tries to create an [IslVariablyOccurringTypeRef] from the given Element
+    pub fn from_ion_element(
+        isl_version: IslVersion,
+        value: &Element,
+        inline_imported_types: &mut Vec<IslImportType>,
+    ) -> IonSchemaResult<Self> {
+        let type_ref = IslTypeRefImpl::from_ion_element_with_occurs_flag(
+            isl_version,
+            value,
+            inline_imported_types,
+            true,
+        )?;
+        let occurs: Option<Range> = {
+            if let IslTypeRefImpl::Anonymous(isl_type, _) = &type_ref {
+                if let Some(IslConstraintImpl::Occurs(occurs)) = isl_type
+                    .constraints()
+                    .iter()
+                    .find(|c| matches!(c, IslConstraintImpl::Occurs(_)))
+                {
+                    Some(occurs.to_owned())
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        };
+
+        return Ok(IslVariablyOccurringTypeRef { type_ref, occurs });
+    }
+
+    /// Resolves an [IslVariablyOccurringTypeRef] into a [VariablyOccurringTypeRef] using the type_store
+    pub fn resolve_type_reference(
+        &self,
+        constraint_name: &str,
+        isl_version: IslVersion,
+        type_store: &mut TypeStore,
+        pending_types: &mut PendingTypes,
+    ) -> IonSchemaResult<VariablyOccurringTypeRef> {
+        let type_ref = IslTypeRefImpl::resolve_type_reference(
+            isl_version,
+            &self.type_ref,
+            type_store,
+            pending_types,
+        )?;
+
+        let occurs: Range = match &self.occurs {
+            None => {
+                if constraint_name == "fields" {
+                    Range::optional()
+                } else {
+                    Range::required()
+                }
+            }
+            Some(range) => range.to_owned(),
+        };
+
+        Ok(VariablyOccurringTypeRef::new(type_ref, occurs))
     }
 }
