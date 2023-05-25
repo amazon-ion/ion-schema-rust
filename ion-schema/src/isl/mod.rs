@@ -427,13 +427,13 @@ mod isl_tests {
         load_anonymous_type(r#" // For a schema with ordered_elements constraint as below:
                     { ordered_elements: [  symbol, { type: int },  ] }
                 "#),
-        anonymous_type([ordered_elements([variably_occurring_type_ref(named_type_ref("symbol"), None), variably_occurring_type_ref(anonymous_type_ref([type_constraint(named_type_ref("int"))]), None)])])
+        anonymous_type([ordered_elements([variably_occurring_type_ref(named_type_ref("symbol"), Range::required()), variably_occurring_type_ref(anonymous_type_ref([type_constraint(named_type_ref("int"))]), Range::required())])])
     ),
     case::fields_constraint(
         load_anonymous_type(r#" // For a schema with fields constraint as below:
                     { fields: { name: string, id: int} }
                 "#),
-        anonymous_type([fields(vec![("name".to_owned(), variably_occurring_type_ref(named_type_ref("string"), None)), ("id".to_owned(), variably_occurring_type_ref(named_type_ref("int"), None))].into_iter())]),
+        anonymous_type([fields(vec![("name".to_owned(), variably_occurring_type_ref(named_type_ref("string"), Range::optional())), ("id".to_owned(), variably_occurring_type_ref(named_type_ref("int"), Range::optional()))].into_iter())]),
     ),
     case::field_names_constraint(
         load_anonymous_type_v2_0(r#" // For a schema with field_names constraint as below:

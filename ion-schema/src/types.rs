@@ -607,6 +607,7 @@ mod type_definition_tests {
     use crate::isl::isl_constraint::v_1_0::*;
     use crate::isl::isl_range::Number;
     use crate::isl::isl_range::NumberRange;
+    use crate::isl::isl_range::Range;
     use crate::isl::isl_type::v_1_0::*;
     use crate::isl::isl_type::IslType;
     use crate::isl::isl_type_reference::v_1_0::*;
@@ -695,14 +696,14 @@ mod type_definition_tests {
         /* For a schema with ordered_elements constraint as below:
             { ordered_elements: [ symbol, { type: int }, ] }
         */
-        anonymous_type([ordered_elements([variably_occurring_type_ref(named_type_ref("symbol"), None), variably_occurring_type_ref(anonymous_type_ref([type_constraint(named_type_ref("int"))]), None)])]),
+        anonymous_type([ordered_elements([variably_occurring_type_ref(named_type_ref("symbol"), Range::required()), variably_occurring_type_ref(anonymous_type_ref([type_constraint(named_type_ref("int"))]), Range::required())])]),
     TypeDefinitionKind::anonymous([Constraint::ordered_elements([5, 36]), Constraint::type_constraint(34)])
     ),
     case::fields_constraint(
         /* For a schema with fields constraint as below:
             { fields: { name: string, id: int} }
         */
-        anonymous_type([fields(vec![("name".to_owned(), variably_occurring_type_ref(named_type_ref("string"), None)), ("id".to_owned(), variably_occurring_type_ref(named_type_ref("int"), None))].into_iter())]),
+        anonymous_type([fields(vec![("name".to_owned(), variably_occurring_type_ref(named_type_ref("string"), Range::optional())), ("id".to_owned(), variably_occurring_type_ref(named_type_ref("int"), Range::optional()))].into_iter())]),
     TypeDefinitionKind::anonymous([Constraint::fields(vec![("name".to_owned(), 4), ("id".to_owned(), 0)].into_iter()), Constraint::type_constraint(34)])
     ),
     case::field_names_constraint(

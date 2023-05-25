@@ -869,6 +869,7 @@ impl IslConstraintImpl {
                     .elements()
                     .map(|e| {
                         IslVariablyOccurringTypeRef::from_ion_element(
+                            constraint_name,
                             isl_version,
                             e,
                             inline_imported_types,
@@ -1071,8 +1072,13 @@ impl IslConstraintImpl {
             .unwrap()
             .iter()
             .map(|(f, v)| {
-                IslVariablyOccurringTypeRef::from_ion_element(isl_version, v, inline_imported_types)
-                    .map(|t| (f.text().unwrap().to_owned(), t))
+                IslVariablyOccurringTypeRef::from_ion_element(
+                    "fields",
+                    isl_version,
+                    v,
+                    inline_imported_types,
+                )
+                .map(|t| (f.text().unwrap().to_owned(), t))
             })
             .collect::<IonSchemaResult<HashMap<String, IslVariablyOccurringTypeRef>>>()?;
 

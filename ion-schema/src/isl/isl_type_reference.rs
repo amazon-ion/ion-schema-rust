@@ -54,7 +54,7 @@ pub mod v_1_0 {
     /// Creates an [IslVariablyOccurringTypeRef] using the [IslConstraint]s and [Range] referenced inside it
     pub fn variably_occurring_type_ref(
         type_ref: IslTypeRef,
-        occurs: Option<Range>,
+        occurs: Range,
     ) -> IslVariablyOccurringTypeRef {
         IslVariablyOccurringTypeRef::new(type_ref, occurs)
     }
@@ -89,7 +89,7 @@ pub mod v_2_0 {
     /// Creates an anonymous [IslTypeRef] using the [IslConstraint]s and [Range] referenced inside it
     pub fn variably_occurring_type_ref(
         type_ref: IslTypeRef,
-        occurs: Option<Range>,
+        occurs: Range,
     ) -> IslVariablyOccurringTypeRef {
         v_1_0::variably_occurring_type_ref(type_ref, occurs)
     }
@@ -343,23 +343,38 @@ impl IslTypeRefImpl {
 #[derive(Debug, Clone, PartialEq)]
 pub struct IslVariablyOccurringTypeRef {
     type_ref: IslTypeRefImpl,
-    occurs: Option<Range>,
+    occurs: Range,
 }
 
 impl IslVariablyOccurringTypeRef {
-    pub(crate) fn new(type_ref: IslTypeRef, occurs: Option<Range>) -> Self {
+    pub(crate) fn new(type_ref: IslTypeRef, occurs: Range) -> Self {
         Self {
             type_ref: type_ref.type_reference,
             occurs,
         }
     }
 
-    pub fn occurs(&self) -> Option<Range> {
+    pub fn optional(type_ref: IslTypeRef) -> Self {
+        Self {
+            type_ref: type_ref.type_reference,
+            occurs: Range::optional(),
+        }
+    }
+
+    pub fn required(type_ref: IslTypeRef) -> Self {
+        Self {
+            type_ref: type_ref.type_reference,
+            occurs: Range::required(),
+        }
+    }
+
+    pub fn occurs(&self) -> Range {
         self.occurs.to_owned()
     }
 
     /// Tries to create an [IslVariablyOccurringTypeRef] from the given Element
     pub fn from_ion_element(
+        constraint_name: &str,
         isl_version: IslVersion,
         value: &Element,
         inline_imported_types: &mut Vec<IslImportType>,
@@ -370,14 +385,25 @@ impl IslVariablyOccurringTypeRef {
             inline_imported_types,
             true,
         )?;
-        let occurs: Option<Range> = {
-            if let IslTypeRefImpl::Anonymous(isl_type, _) = &type_ref {
-                isl_type.constraints().iter().find_map(|c| match c {
+
+        let occurs: Range = if let IslTypeRefImpl::Anonymous(isl_type, _) = &type_ref {
+            isl_type
+                .constraints()
+                .iter()
+                .find_map(|c| match c {
                     IslConstraintImpl::Occurs(occurs) => Some(occurs.to_owned()),
                     _ => None,
                 })
+                .unwrap_or(if constraint_name == "fields" {
+                    Range::optional()
+                } else {
+                    Range::required()
+                })
+        } else {
+            if constraint_name == "fields" {
+                Range::optional()
             } else {
-                None
+                Range::required()
             }
         };
 
@@ -387,7 +413,6 @@ impl IslVariablyOccurringTypeRef {
     /// Resolves an [IslVariablyOccurringTypeRef] into a [VariablyOccurringTypeRef] using the type_store
     pub fn resolve_type_reference(
         &self,
-        constraint_name: &str,
         isl_version: IslVersion,
         type_store: &mut TypeStore,
         pending_types: &mut PendingTypes,
@@ -399,17 +424,6 @@ impl IslVariablyOccurringTypeRef {
             pending_types,
         )?;
 
-        let occurs: Range = match &self.occurs {
-            None => {
-                if constraint_name == "fields" {
-                    Range::optional()
-                } else {
-                    Range::required()
-                }
-            }
-            Some(range) => range.to_owned(),
-        };
-
-        Ok(VariablyOccurringTypeRef::new(type_ref, occurs))
+        Ok(VariablyOccurringTypeRef::new(type_ref, self.occurs()))
     }
 }

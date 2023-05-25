@@ -820,8 +820,7 @@ impl OrderedElementsConstraint {
             .iter()
             .map(|t|
                 // resolve type references and create variably occurring type reference with occurs range
-                t.resolve_type_reference("ordered_elements", isl_version, type_store, pending_types)
-                )
+                t.resolve_type_reference(isl_version, type_store, pending_types))
             .collect::<IonSchemaResult<Vec<VariablyOccurringTypeRef>>>()?;
 
         Ok(OrderedElementsConstraint::new(resolved_types))
@@ -1013,7 +1012,7 @@ impl FieldsConstraint {
             .map(|(f, t)| {
                 // resolve type references and create variably occurring type reference with occurs range
                 // default `occurs` field value for `fields` constraint is `occurs: optional` or `occurs: range::[0, 1]`
-                t.resolve_type_reference("fields", isl_version, type_store, pending_types)
+                t.resolve_type_reference(isl_version, type_store, pending_types)
                     .map(|variably_occurring_type_ref| (f.to_owned(), variably_occurring_type_ref))
             })
             .collect::<IonSchemaResult<HashMap<String, VariablyOccurringTypeRef>>>()?;
