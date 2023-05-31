@@ -213,14 +213,14 @@ impl IslTypeRefImpl {
                         )
                     }
 
-                    if let Some(occurs_constraint) = value_struct.get("occurs") {
+                    if let Some(occurs_field) = value_struct.get("occurs") {
                         if !allow_occurs_field && isl_version == IslVersion::V2_0 {
                             return invalid_schema_error(
                             "A type reference with an explicit `occurs` field can only be used for `fields` and `ordered_elements` constraint",
                             )
                         } else {
                             // for ISL 1.0 ``occurs` field is a no op when used with constraints other than `fields` and `ordered_elements`
-                            IslTypeRefImpl::occurs_from_ion_element(occurs_constraint, isl_version)?;
+                            IslVariablyOccurringTypeRef::occurs_from_ion_element(occurs_field, isl_version)?;
                         }
                     }
 
@@ -243,43 +243,6 @@ impl IslTypeRefImpl {
             },
             _ => Err(invalid_schema_error_raw(
                 "type reference can either be a symbol(For base/alias type reference) or a struct (for anonymous type reference)",
-            )),
-        }
-    }
-
-    fn occurs_from_ion_element(value: &Element, isl_version: IslVersion) -> IonSchemaResult<Range> {
-        use IonType::*;
-        if value.is_null() {
-            return invalid_schema_error(
-                "expected an integer or integer range for an `occurs` constraint, found null",
-            );
-        }
-        match value.ion_type() {
-            Symbol => {
-                let sym = try_to!(try_to!(value.as_symbol()).text());
-                match sym {
-                    "optional" => Ok(Range::optional()),
-                    "required" => Ok(Range::required()),
-                    _ => {
-                        invalid_schema_error(format!(
-                            "only optional and required symbols are supported with occurs constraint, found {sym}"
-                        ))
-                    }
-                }
-            }
-            List | Int => {
-                if value.ion_type() == Int && value.as_int().unwrap() <= &ion_rs::Int::I64(0) {
-                    return invalid_schema_error("occurs constraint can not be 0");
-                }
-                Ok(Range::from_ion_element(
-                    value,
-                    RangeType::NonNegativeInteger,
-                    isl_version,
-                )?)
-            }
-            _ => invalid_schema_error(format!(
-                "ion type: {:?} is not supported with occurs constraint",
-                value.ion_type()
             )),
         }
     }
@@ -427,7 +390,7 @@ impl IslVariablyOccurringTypeRef {
             .as_struct()
             .and_then(|s| {
                 s.get("occurs")
-                    .map(|r| IslTypeRefImpl::occurs_from_ion_element(r, isl_version))
+                    .map(|r| IslVariablyOccurringTypeRef::occurs_from_ion_element(r, isl_version))
             })
             .unwrap_or(if constraint_name == "fields" {
                 Ok(Range::optional())
@@ -436,6 +399,43 @@ impl IslVariablyOccurringTypeRef {
             })?;
 
         Ok(IslVariablyOccurringTypeRef { type_ref, occurs })
+    }
+
+    fn occurs_from_ion_element(value: &Element, isl_version: IslVersion) -> IonSchemaResult<Range> {
+        use IonType::*;
+        if value.is_null() {
+            return invalid_schema_error(
+                "expected an integer or integer range for an `occurs` constraint, found null",
+            );
+        }
+        match value.ion_type() {
+            Symbol => {
+                let sym = try_to!(try_to!(value.as_symbol()).text());
+                match sym {
+                    "optional" => Ok(Range::optional()),
+                    "required" => Ok(Range::required()),
+                    _ => {
+                        invalid_schema_error(format!(
+                            "only optional and required symbols are supported with occurs constraint, found {sym}"
+                        ))
+                    }
+                }
+            }
+            List | Int => {
+                if value.ion_type() == Int && value.as_int().unwrap() <= &ion_rs::Int::I64(0) {
+                    return invalid_schema_error("occurs constraint can not be 0");
+                }
+                Ok(Range::from_ion_element(
+                    value,
+                    RangeType::NonNegativeInteger,
+                    isl_version,
+                )?)
+            }
+            _ => invalid_schema_error(format!(
+                "ion type: {:?} is not supported with occurs constraint",
+                value.ion_type()
+            )),
+        }
     }
 
     /// Resolves an [IslVariablyOccurringTypeRef] into a [VariablyOccurringTypeRef] using the type_store
