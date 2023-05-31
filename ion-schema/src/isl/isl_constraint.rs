@@ -1,7 +1,7 @@
 use crate::isl;
 use crate::isl::isl_import::IslImportType;
 use crate::isl::isl_range::{Range, RangeType};
-use crate::isl::isl_type_reference::IslTypeRefImpl;
+use crate::isl::isl_type_reference::{IslTypeRefImpl, IslVariablyOccurringTypeRef};
 use crate::isl::util::{Annotation, Ieee754InterchangeFormat, TimestampOffset, ValidValue};
 use crate::isl::IslVersion;
 use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
@@ -17,7 +17,7 @@ pub mod v_1_0 {
         IslSimpleAnnotationsConstraint, IslTimestampOffsetConstraint, IslValidValuesConstraint,
     };
     use crate::isl::isl_range::{IntegerRange, NonNegativeIntegerRange, Range, RangeImpl};
-    use crate::isl::isl_type_reference::IslTypeRef;
+    use crate::isl::isl_type_reference::{IslTypeRef, IslVariablyOccurringTypeRef};
     use crate::isl::util::{Annotation, TimestampOffset, TimestampPrecision, ValidValue};
     use crate::isl::IslVersion;
     use crate::result::IonSchemaResult;
@@ -74,17 +74,13 @@ pub mod v_1_0 {
         )
     }
 
-    /// Creates an `ordered_elements` constraint using the [IslTypeRef] referenced inside it
-    pub fn ordered_elements<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
+    /// Creates an `ordered_elements` constraint using the [IslVariablyOccurringTypeRef] referenced inside it
+    pub fn ordered_elements<A: Into<Vec<IslVariablyOccurringTypeRef>>>(
+        isl_types: A,
+    ) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V1_0,
-            IslConstraintImpl::OrderedElements(
-                isl_types
-                    .into()
-                    .into_iter()
-                    .map(|t| t.type_reference)
-                    .collect(),
-            ),
+            IslConstraintImpl::OrderedElements(isl_types.into().into_iter().collect()),
         )
     }
 
@@ -104,14 +100,14 @@ pub mod v_1_0 {
         )
     }
 
-    /// Creates a `fields` constraint using the field names and [IslTypeRef]s referenced inside it
+    /// Creates a `fields` constraint using the field names and [IslVariablyOccurringTypeRef]s referenced inside it
     pub fn fields<I>(fields: I) -> IslConstraint
     where
-        I: Iterator<Item = (String, IslTypeRef)>,
+        I: Iterator<Item = (String, IslVariablyOccurringTypeRef)>,
     {
         IslConstraint::new(
             IslVersion::V1_0,
-            IslConstraintImpl::Fields(fields.map(|(s, t)| (s, t.type_reference)).collect(), false),
+            IslConstraintImpl::Fields(fields.map(|(s, t)| (s, t)).collect(), false),
         )
     }
 
@@ -261,7 +257,7 @@ pub mod v_2_0 {
         IslConstraintImpl, IslTimestampOffsetConstraint, IslValidValuesConstraint,
     };
     use crate::isl::isl_range::{NonNegativeIntegerRange, Range, RangeImpl};
-    use crate::isl::isl_type_reference::IslTypeRef;
+    use crate::isl::isl_type_reference::{IslTypeRef, IslVariablyOccurringTypeRef};
     use crate::isl::util::{
         Annotation, Ieee754InterchangeFormat, TimestampOffset, TimestampPrecision, ValidValue,
     };
@@ -321,17 +317,13 @@ pub mod v_2_0 {
         )
     }
 
-    /// Creates an `ordered_elements` constraint using the [IslTypeRef] referenced inside it
-    pub fn ordered_elements<A: Into<Vec<IslTypeRef>>>(isl_types: A) -> IslConstraint {
+    /// Creates an `ordered_elements` constraint using the [IslVariablyOccurringTypeRef] referenced inside it
+    pub fn ordered_elements<A: Into<Vec<IslVariablyOccurringTypeRef>>>(
+        isl_types: A,
+    ) -> IslConstraint {
         IslConstraint::new(
             IslVersion::V2_0,
-            IslConstraintImpl::OrderedElements(
-                isl_types
-                    .into()
-                    .into_iter()
-                    .map(|t| t.type_reference)
-                    .collect(),
-            ),
+            IslConstraintImpl::OrderedElements(isl_types.into().into_iter().collect()),
         )
     }
 
@@ -351,14 +343,14 @@ pub mod v_2_0 {
         )
     }
 
-    /// Creates a `fields` constraint using the field names and [IslTypeRef]s referenced inside it
+    /// Creates a `fields` constraint using the field names and [IslVariablyOccurringTypeRef]s referenced inside it
     pub fn fields<I>(fields: I) -> IslConstraint
     where
-        I: Iterator<Item = (String, IslTypeRef)>,
+        I: Iterator<Item = (String, IslVariablyOccurringTypeRef)>,
     {
         IslConstraint::new(
             IslVersion::V2_0,
-            IslConstraintImpl::Fields(fields.map(|(s, t)| (s, t.type_reference)).collect(), false),
+            IslConstraintImpl::Fields(fields.map(|(s, t)| (s, t)).collect(), false),
         )
     }
 
@@ -552,16 +544,15 @@ pub(crate) enum IslConstraintImpl {
     // Represents Fields(fields, content_closed)
     // For ISL 2.0 true/false is specified based on whether `closed::` annotation is present or not
     // For ISL 1.0 this will always be (fields, false) as it doesn't support `closed::` annotation on fields constraint
-    Fields(HashMap<String, IslTypeRefImpl>, bool),
+    Fields(HashMap<String, IslVariablyOccurringTypeRef>, bool),
     // Represents FieldNames(type_reference, expected_distinct).
     // For ISL 2.0 true/false is specified based on whether `distinct` annotation is present or not.
     // For ISL 1.0 which doesn't support `field_names` constraint this will be (type_reference, false).
     FieldNames(IslTypeRefImpl, bool),
     Ieee754Float(Ieee754InterchangeFormat),
     Not(IslTypeRefImpl),
-    Occurs(Range),
     OneOf(Vec<IslTypeRefImpl>),
-    OrderedElements(Vec<IslTypeRefImpl>),
+    OrderedElements(Vec<IslVariablyOccurringTypeRef>),
     Precision(Range),
     Regex(IslRegexConstraint),
     Scale(Range),
@@ -612,7 +603,6 @@ impl IslConstraintImpl {
                         isl_version,
                         value,
                         inline_imported_types,
-                        false,
                     )?;
 
                     Ok(IslConstraintImpl::Annotations(
@@ -698,12 +688,8 @@ impl IslConstraintImpl {
                 isl_version,
             )?)),
             "element" => {
-                let type_reference: IslTypeRefImpl = IslTypeRefImpl::from_ion_element(
-                    isl_version,
-                    value,
-                    inline_imported_types,
-                    false,
-                )?;
+                let type_reference: IslTypeRefImpl =
+                    IslTypeRefImpl::from_ion_element(isl_version, value, inline_imported_types)?;
                 match isl_version {
                     IslVersion::V1_0 => {
                         // for ISL 1.0 `distinct annotation on `element` constraint is not supported which is represented by `false` here
@@ -729,12 +715,8 @@ impl IslConstraintImpl {
                 }
             }
             "field_names" => {
-                let type_reference = IslTypeRefImpl::from_ion_element(
-                    isl_version,
-                    value,
-                    inline_imported_types,
-                    false,
-                )?;
+                let type_reference =
+                    IslTypeRefImpl::from_ion_element(isl_version, value, inline_imported_types)?;
                 match isl_version {
                     IslVersion::V1_0 => {
                         // for ISL 1.0 `field_names` constraint does not exist hence `field_names` will be considered as open content
@@ -764,7 +746,7 @@ impl IslConstraintImpl {
                 }
             }
             "fields" => {
-                let fields: HashMap<String, IslTypeRefImpl> =
+                let fields: HashMap<String, IslVariablyOccurringTypeRef> =
                     IslConstraintImpl::isl_fields_from_ion_element(
                         isl_version,
                         value,
@@ -821,68 +803,41 @@ impl IslConstraintImpl {
                 Ok(IslConstraintImpl::OneOf(types))
             }
             "not" => {
-                let type_reference: IslTypeRefImpl = IslTypeRefImpl::from_ion_element(
-                    isl_version,
-                    value,
-                    inline_imported_types,
-                    false,
-                )?;
+                let type_reference: IslTypeRefImpl =
+                    IslTypeRefImpl::from_ion_element(isl_version, value, inline_imported_types)?;
                 Ok(IslConstraintImpl::Not(type_reference))
             }
             "type" => {
-                let type_reference: IslTypeRefImpl = IslTypeRefImpl::from_ion_element(
-                    isl_version,
-                    value,
-                    inline_imported_types,
-                    false,
-                )?;
+                let type_reference: IslTypeRefImpl =
+                    IslTypeRefImpl::from_ion_element(isl_version, value, inline_imported_types)?;
                 Ok(IslConstraintImpl::Type(type_reference))
             }
-            "occurs" => {
-                use IonType::*;
+            "ordered_elements" => {
                 if value.is_null() {
                     return invalid_schema_error(
-                        "expected an integer or integer range for an `occurs` constraint, found null",
+                        "ordered_elements constraint was a null instead of a list",
                     );
                 }
-                let range = match value.ion_type() {
-                    Symbol => {
-                        let sym = try_to!(try_to!(value.as_symbol()).text());
-                        match sym {
-                            "optional" => Range::optional(),
-                            "required" => Range::required(),
-                            _ => {
-                                return invalid_schema_error(format!(
-                                    "only optional and required symbols are supported with occurs constraint, found {sym}"
-                                ))
-                            }
-                        }
-                    }
-                    List | Int => {
-                        if value.ion_type() == Int
-                            && value.as_int().unwrap() <= &ion_rs::Int::I64(0)
-                        {
-                            return invalid_schema_error("occurs constraint can not be 0");
-                        }
-                        Range::from_ion_element(value, RangeType::NonNegativeInteger, isl_version)?
-                    }
-                    _ => {
-                        return invalid_schema_error(format!(
-                            "ion type: {:?} is not supported with occurs constraint",
-                            value.ion_type()
-                        ))
-                    }
-                };
-                Ok(IslConstraintImpl::Occurs(range))
-            }
-            "ordered_elements" => {
-                let types: Vec<IslTypeRefImpl> =
-                    IslConstraintImpl::isl_type_references_from_ion_element(
-                        isl_version,
-                        value,
-                        inline_imported_types,
-                        "ordered_elements",
-                    )?;
+                if value.ion_type() != IonType::List {
+                    return invalid_schema_error(format!(
+                        "ordered_elements constraint was a {:?} instead of a list",
+                        value.ion_type()
+                    ));
+                }
+
+                let types: Vec<IslVariablyOccurringTypeRef> = value
+                    .as_sequence()
+                    .unwrap()
+                    .elements()
+                    .map(|e| {
+                        IslVariablyOccurringTypeRef::from_ion_element(
+                            constraint_name,
+                            isl_version,
+                            e,
+                            inline_imported_types,
+                        )
+                    })
+                    .collect::<IonSchemaResult<Vec<IslVariablyOccurringTypeRef>>>()?;
                 Ok(IslConstraintImpl::OrderedElements(types))
             }
             "precision" => Ok(IslConstraintImpl::Precision(Range::from_ion_element(
@@ -1049,19 +1004,11 @@ impl IslConstraintImpl {
                 value.ion_type()
             ));
         }
-        let allow_variably_occurring_type = constraint_name == "ordered_elements";
         value
             .as_sequence()
             .unwrap()
             .elements()
-            .map(|e| {
-                IslTypeRefImpl::from_ion_element(
-                    isl_version,
-                    e,
-                    inline_imported_types,
-                    allow_variably_occurring_type,
-                )
-            })
+            .map(|e| IslTypeRefImpl::from_ion_element(isl_version, e, inline_imported_types))
             .collect::<IonSchemaResult<Vec<IslTypeRefImpl>>>()
     }
 
@@ -1070,7 +1017,7 @@ impl IslConstraintImpl {
         isl_version: IslVersion,
         value: &Element,
         inline_imported_types: &mut Vec<IslImportType>,
-    ) -> IonSchemaResult<HashMap<String, IslTypeRefImpl>> {
+    ) -> IonSchemaResult<HashMap<String, IslVariablyOccurringTypeRef>> {
         if value.is_null() {
             return invalid_schema_error("fields constraint was a null instead of a struct");
         }
@@ -1087,10 +1034,15 @@ impl IslConstraintImpl {
             .unwrap()
             .iter()
             .map(|(f, v)| {
-                IslTypeRefImpl::from_ion_element(isl_version, v, inline_imported_types, true)
-                    .map(|t| (f.text().unwrap().to_owned(), t))
+                IslVariablyOccurringTypeRef::from_ion_element(
+                    "fields",
+                    isl_version,
+                    v,
+                    inline_imported_types,
+                )
+                .map(|t| (f.text().unwrap().to_owned(), t))
             })
-            .collect::<IonSchemaResult<HashMap<String, IslTypeRefImpl>>>()?;
+            .collect::<IonSchemaResult<HashMap<String, IslVariablyOccurringTypeRef>>>()?;
 
         // verify the map length with struct length to check for duplicates
         if fields_map.len() < value.as_struct().unwrap().len() {
