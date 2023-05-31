@@ -1,5 +1,5 @@
 use crate::isl::isl_import::{IslImport, IslImportType};
-use crate::isl::isl_range::Range;
+use crate::isl::isl_range::{Range, RangeType};
 use crate::isl::isl_type::IslTypeImpl;
 use crate::isl::IslVersion;
 use crate::result::{
@@ -8,7 +8,6 @@ use crate::result::{
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::type_reference::{TypeReference, VariablyOccurringTypeRef};
 use crate::types::TypeDefinitionImpl;
-use crate::IslConstraintImpl;
 use ion_rs::element::Element;
 use ion_rs::IonType;
 
@@ -208,20 +207,21 @@ impl IslTypeRefImpl {
                 if value_struct.get("id").is_none() {
                     let type_def= IslTypeImpl::from_owned_element(isl_version, value, inline_imported_types)?;
                     // if type reference contains `occurs` field and has modifier `$null_or` then return an error
-                    if nullability == NullOr && type_def.constraints()
-                        .iter()
-                        .any(|c| matches!(c, IslConstraintImpl::Occurs(_))) {
+                    if nullability == NullOr && value_struct.get("occurs").is_some() {
                         return invalid_schema_error(
                             "`$null_or` annotation is not supported for a type reference with an explicit `occurs` field",
                         )
                     }
 
-                    if !allow_occurs_field && isl_version == IslVersion::V2_0 && type_def.constraints()
-                        .iter()
-                        .any(|c| matches!(c, IslConstraintImpl::Occurs(_))) {
-                        return invalid_schema_error(
+                    if let Some(occurs_constraint) = value_struct.get("occurs") {
+                        if !allow_occurs_field && isl_version == IslVersion::V2_0 {
+                            return invalid_schema_error(
                             "A type reference with an explicit `occurs` field can only be used for `fields` and `ordered_elements` constraint",
-                        )
+                            )
+                        } else {
+                            // for ISL 1.0 ``occurs` field is a no op when used with constraints other than `fields` and `ordered_elements`
+                            IslTypeRefImpl::occurs_from_ion_element(occurs_constraint, isl_version)?;
+                        }
                     }
 
                     return Ok(IslTypeRefImpl::Anonymous(type_def, nullability))
@@ -243,6 +243,43 @@ impl IslTypeRefImpl {
             },
             _ => Err(invalid_schema_error_raw(
                 "type reference can either be a symbol(For base/alias type reference) or a struct (for anonymous type reference)",
+            )),
+        }
+    }
+
+    fn occurs_from_ion_element(value: &Element, isl_version: IslVersion) -> IonSchemaResult<Range> {
+        use IonType::*;
+        if value.is_null() {
+            return invalid_schema_error(
+                "expected an integer or integer range for an `occurs` constraint, found null",
+            );
+        }
+        match value.ion_type() {
+            Symbol => {
+                let sym = try_to!(try_to!(value.as_symbol()).text());
+                match sym {
+                    "optional" => Ok(Range::optional()),
+                    "required" => Ok(Range::required()),
+                    _ => {
+                        invalid_schema_error(format!(
+                            "only optional and required symbols are supported with occurs constraint, found {sym}"
+                        ))
+                    }
+                }
+            }
+            List | Int => {
+                if value.ion_type() == Int && value.as_int().unwrap() <= &ion_rs::Int::I64(0) {
+                    return invalid_schema_error("occurs constraint can not be 0");
+                }
+                Ok(Range::from_ion_element(
+                    value,
+                    RangeType::NonNegativeInteger,
+                    isl_version,
+                )?)
+            }
+            _ => invalid_schema_error(format!(
+                "ion type: {:?} is not supported with occurs constraint",
+                value.ion_type()
             )),
         }
     }
@@ -386,26 +423,17 @@ impl IslVariablyOccurringTypeRef {
             true,
         )?;
 
-        let occurs: Range = if let IslTypeRefImpl::Anonymous(isl_type, _) = &type_ref {
-            isl_type
-                .constraints()
-                .iter()
-                .find_map(|c| match c {
-                    IslConstraintImpl::Occurs(occurs) => Some(occurs.to_owned()),
-                    _ => None,
-                })
-                .unwrap_or(if constraint_name == "fields" {
-                    Range::optional()
-                } else {
-                    Range::required()
-                })
-        } else {
-            if constraint_name == "fields" {
-                Range::optional()
+        let occurs: Range = value
+            .as_struct()
+            .and_then(|s| {
+                s.get("occurs")
+                    .map(|r| IslTypeRefImpl::occurs_from_ion_element(r, isl_version))
+            })
+            .unwrap_or(if constraint_name == "fields" {
+                Ok(Range::optional())
             } else {
-                Range::required()
-            }
-        };
+                Ok(Range::required())
+            })?;
 
         Ok(IslVariablyOccurringTypeRef { type_ref, occurs })
     }

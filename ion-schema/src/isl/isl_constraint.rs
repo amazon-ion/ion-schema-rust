@@ -551,7 +551,6 @@ pub(crate) enum IslConstraintImpl {
     FieldNames(IslTypeRefImpl, bool),
     Ieee754Float(Ieee754InterchangeFormat),
     Not(IslTypeRefImpl),
-    Occurs(Range),
     OneOf(Vec<IslTypeRefImpl>),
     OrderedElements(Vec<IslVariablyOccurringTypeRef>),
     Precision(Range),
@@ -812,43 +811,6 @@ impl IslConstraintImpl {
                 let type_reference: IslTypeRefImpl =
                     IslTypeRefImpl::from_ion_element(isl_version, value, inline_imported_types)?;
                 Ok(IslConstraintImpl::Type(type_reference))
-            }
-            "occurs" => {
-                use IonType::*;
-                if value.is_null() {
-                    return invalid_schema_error(
-                        "expected an integer or integer range for an `occurs` constraint, found null",
-                    );
-                }
-                let range = match value.ion_type() {
-                    Symbol => {
-                        let sym = try_to!(try_to!(value.as_symbol()).text());
-                        match sym {
-                            "optional" => Range::optional(),
-                            "required" => Range::required(),
-                            _ => {
-                                return invalid_schema_error(format!(
-                                    "only optional and required symbols are supported with occurs constraint, found {sym}"
-                                ))
-                            }
-                        }
-                    }
-                    List | Int => {
-                        if value.ion_type() == Int
-                            && value.as_int().unwrap() <= &ion_rs::Int::I64(0)
-                        {
-                            return invalid_schema_error("occurs constraint can not be 0");
-                        }
-                        Range::from_ion_element(value, RangeType::NonNegativeInteger, isl_version)?
-                    }
-                    _ => {
-                        return invalid_schema_error(format!(
-                            "ion type: {:?} is not supported with occurs constraint",
-                            value.ion_type()
-                        ))
-                    }
-                };
-                Ok(IslConstraintImpl::Occurs(range))
             }
             "ordered_elements" => {
                 if value.is_null() {

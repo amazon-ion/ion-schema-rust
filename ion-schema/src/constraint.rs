@@ -64,7 +64,6 @@ pub enum Constraint {
     Not(NotConstraint),
     OneOf(OneOfConstraint),
     OrderedElements(OrderedElementsConstraint),
-    Occurs,
     Precision(PrecisionConstraint),
     Regex(RegexConstraint),
     Scale(ScaleConstraint),
@@ -472,7 +471,6 @@ impl Constraint {
                 )?;
                 Ok(Constraint::Type(TypeConstraint::new(type_id)))
             }
-            IslConstraintImpl::Occurs(_) => Ok(Constraint::Occurs),
             IslConstraintImpl::OrderedElements(isl_type_references) => {
                 Ok(Constraint::OrderedElements(
                     OrderedElementsConstraint::resolve_from_isl_constraint(
@@ -565,13 +563,6 @@ impl Constraint {
             Constraint::OneOf(one_of) => one_of.validate(value, type_store, ion_path),
             Constraint::Type(type_constraint) => {
                 type_constraint.validate(value, type_store, ion_path)
-            }
-            Constraint::Occurs => {
-                // No op
-                // `occurs` does not work as a constraint by its own, it needs to be used with other constraints
-                // e.g. `ordered_elements`, `fields`, etc.
-                // the validation for occurs is done within these other constraints
-                Ok(())
             }
             Constraint::OrderedElements(ordered_elements) => {
                 ordered_elements.validate(value, type_store, ion_path)
