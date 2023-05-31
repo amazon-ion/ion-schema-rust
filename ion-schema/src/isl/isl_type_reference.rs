@@ -219,7 +219,8 @@ impl IslTypeRefImpl {
                             "A type reference with an explicit `occurs` field can only be used for `fields` and `ordered_elements` constraint",
                             )
                         } else {
-                            // for ISL 1.0 ``occurs` field is a no op when used with constraints other than `fields` and `ordered_elements`
+                            // for ISL 1.0 `occurs` field is a no op when used with constraints other than `fields` and `ordered_elements`.
+                            // Although ISL 1.0 will treat this `occurs` field as no op it still has to serialize the `occurs` range to see if its a valid range.
                             IslVariablyOccurringTypeRef::occurs_from_ion_element(occurs_field, isl_version)?;
                         }
                     }
