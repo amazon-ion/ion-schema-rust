@@ -526,7 +526,7 @@ impl<T: std::cmp::PartialOrd> RangeImpl<T> {
     ) -> IonSchemaResult<RangeImpl<usize>> {
         match (start, end) {
             (TypedRangeBoundaryValue::NonNegativeInteger(Value(v1, v1_type)), TypedRangeBoundaryValue::NonNegativeInteger(Value(v2, v2_type))) => {
-                // verify this is not an empty range for which there is no valid non negative integer values
+                // verify this is not an empty range (i.e. one for which there are no valid non-negative integer values)
                 if v2 > v1 && v2 - v1 == 1
                     && v1_type == RangeBoundaryType::Exclusive
                     && v2_type == RangeBoundaryType::Exclusive
