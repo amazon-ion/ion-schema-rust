@@ -20,7 +20,7 @@
 //! ```
 
 use crate::authority::DocumentAuthority;
-use crate::isl::isl_constraint::{IslConstraint, IslConstraintImpl};
+use crate::isl::isl_constraint::IslConstraint;
 use crate::isl::isl_import::{IslImport, IslImportType};
 use crate::isl::isl_type::{IslType, IslTypeImpl};
 use crate::isl::{IslSchema, IslVersion};
@@ -800,11 +800,7 @@ impl Resolver {
                 }
 
                 // top level named type definition can not contain `occurs` field as per ISL specification
-                if isl_type
-                    .constraints()
-                    .iter()
-                    .any(|c| matches!(c, IslConstraintImpl::Occurs(_)))
-                {
+                if value.as_struct().unwrap().get("occurs").is_some() {
                     return invalid_schema_error(
                         "Top level types must not contain `occurs` field in their definition",
                     );

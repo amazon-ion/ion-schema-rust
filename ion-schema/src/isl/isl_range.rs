@@ -525,8 +525,18 @@ impl<T: std::cmp::PartialOrd> RangeImpl<T> {
         end: TypedRangeBoundaryValue,
     ) -> IonSchemaResult<RangeImpl<usize>> {
         match (start, end) {
-            (TypedRangeBoundaryValue::NonNegativeInteger(v1), TypedRangeBoundaryValue::NonNegativeInteger(v2)) => {
-                RangeImpl::range(v1, v2)
+            (TypedRangeBoundaryValue::NonNegativeInteger(Value(v1, v1_type)), TypedRangeBoundaryValue::NonNegativeInteger(Value(v2, v2_type))) => {
+                // verify this is not an empty range (i.e. one for which there are no valid non-negative integer values)
+                if v2 > v1 && v2 - v1 == 1
+                    && v1_type == RangeBoundaryType::Exclusive
+                    && v2_type == RangeBoundaryType::Exclusive
+                {
+                    return invalid_schema_error("No valid values in the Integer range");
+                }
+                RangeImpl::range(
+                    Value(v1, v1_type),
+                    Value(v2, v2_type),
+                )
             }
             (TypedRangeBoundaryValue::Min, TypedRangeBoundaryValue::NonNegativeInteger(v2)) => {
                 RangeImpl::range(RangeBoundaryValue::Min, v2)

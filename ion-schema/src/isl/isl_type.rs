@@ -191,6 +191,7 @@ impl IslTypeImpl {
         for (field_name, value) in ion_struct.iter() {
             let constraint_name = match field_name.text() {
                 Some("name") => continue, // if the field_name is "name" then it's the type name not a constraint
+                Some("occurs") => continue, // if the field_name is "occurs" then skip it as it is handled elsewhere
                 Some(name) => name,
                 None => {
                     return Err(invalid_schema_error_raw(
