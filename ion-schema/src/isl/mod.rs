@@ -131,6 +131,7 @@ impl IslSchema {
         IslSchema {
             schema: IslSchemaImpl::new(
                 id.as_ref(),
+                IslVersion::V1_0,
                 None,
                 imports,
                 types,
@@ -152,6 +153,7 @@ impl IslSchema {
         IslSchema {
             schema: IslSchemaImpl::new(
                 id.as_ref(),
+                IslVersion::V2_0,
                 Some(user_reserved_fields),
                 imports,
                 types,
@@ -163,6 +165,10 @@ impl IslSchema {
 
     pub fn id(&self) -> String {
         self.schema.id.to_owned()
+    }
+
+    pub fn version(&self) -> IslVersion {
+        self.schema.version
     }
 
     pub fn imports(&self) -> &[IslImport] {
@@ -194,6 +200,8 @@ impl IslSchema {
 pub(crate) struct IslSchemaImpl {
     /// Represents an id for the given ISL model
     id: String,
+    /// Represents the ISL version for given schema
+    version: IslVersion,
     /// Represents the user defined reserved fields
     /// For ISL 2.0 this contains the use reserved fields that are defined within schema header,
     /// Otherwise, it is None.
@@ -226,6 +234,7 @@ pub(crate) struct IslSchemaImpl {
 impl IslSchemaImpl {
     pub fn new<A: AsRef<str>>(
         id: A,
+        version: IslVersion,
         user_reserved_fields: Option<UserReservedFields>,
         imports: Vec<IslImport>,
         types: Vec<IslType>,
@@ -234,6 +243,7 @@ impl IslSchemaImpl {
     ) -> Self {
         Self {
             id: id.as_ref().to_owned(),
+            version,
             user_reserved_fields,
             imports,
             types,

@@ -113,7 +113,6 @@ impl Iterator for SchemaTypeIterator {
 mod schema_tests {
     use super::*;
     use crate::authority::MapDocumentAuthority;
-    use crate::isl::IslVersion;
     use crate::system::{Resolver, SchemaSystem};
     use ion_rs::element::Element;
     use rstest::*;
@@ -310,7 +309,7 @@ mod schema_tests {
     case::ieee754_float_constraint(
         load(r#" // For a schema with ieee754_float constraint as below:
                         $ion_schema_2_0
-                        type:: { name: ieee754_float_type, iee4754_float: binary16 }
+                        type:: { name: ieee754_float_type, ieee754_float: binary16 }
                      "#).into_iter(),
         1 // this includes named type ieee754_float_type
     ),
@@ -324,13 +323,12 @@ mod schema_tests {
         let mut resolver = Resolver::new(vec![]);
 
         // create a isl from owned_elements and verifies if the result is `ok`
-        let isl =
-            resolver.isl_schema_from_elements(IslVersion::V1_0, owned_elements, "my_schema.isl");
-        assert!(isl.is_ok());
+        let isl_result = resolver.isl_schema_from_elements(owned_elements, "my_schema.isl");
+        assert!(isl_result.is_ok());
 
+        let isl = isl_result.unwrap();
         // create a schema from isl and verifies if the result is `ok`
-        let schema =
-            resolver.schema_from_isl_schema(IslVersion::V1_0, isl.unwrap(), type_store, None);
+        let schema = resolver.schema_from_isl_schema(isl.version(), isl, type_store, None);
         assert!(schema.is_ok());
 
         // check if the types of the created schema matches with the actual types specified by test case

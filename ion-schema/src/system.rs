@@ -744,7 +744,6 @@ impl Resolver {
     /// Converts given owned elements into ISL v2.0 representation
     pub fn isl_schema_from_elements<I: Iterator<Item = Element>>(
         &mut self,
-        isl_version: IslVersion,
         elements: I,
         id: &str,
     ) -> IonSchemaResult<IslSchema> {
@@ -754,16 +753,43 @@ impl Resolver {
         let mut isl_inline_imports: Vec<IslImportType> = vec![];
         let mut open_content = vec![];
         let mut isl_user_reserved_fields = UserReservedFields::default();
+        let mut isl_version = IslVersion::V1_0;
+        let isl_version_marker: Regex = Regex::new(r"^\$ion_schema_\d.*$").unwrap();
+        let reserved_keyword_version_marker =
+            Regex::new(r"^(\$ion_schema(_.*)?|[a-z][a-z0-9]*(_[a-z0-9]+)*)$").unwrap();
 
         let mut found_header = false;
         let mut found_footer = false;
+        let mut found_isl_version_marker = false;
 
         for value in elements {
             let annotations: &Annotations = value.annotations();
 
             // load header for schema
-            if annotations.contains("schema_header") {
+            if !found_isl_version_marker
+                && value.ion_type() == IonType::Symbol
+                && isl_version_marker.is_match(value.as_text().unwrap())
+            {
+                // This implementation supports Ion Schema 1.0 and Ion Schema 2.0
+                isl_version = match value.as_text().unwrap() {
+                    "$ion_schema_1_0" => IslVersion::V1_0,
+                    "$ion_schema_2_0" => IslVersion::V2_0,
+                    _ => {
+                        return invalid_schema_error(format!(
+                            "Unsupported Ion Schema Language version: {value}"
+                        ))
+                    }
+                };
+                found_isl_version_marker = true;
+            } else if annotations.contains("schema_header") {
                 found_header = true;
+
+                // if we didn't find an isl version marker before finding a schema header
+                // then isl version will be defaulted to be ISL 1.0
+                if !found_isl_version_marker {
+                    found_isl_version_marker = true;
+                }
+
                 let schema_header = try_to!(value.as_struct());
                 if let Some(imports) = schema_header.get("imports").and_then(|it| it.as_sequence())
                 {
@@ -771,20 +797,35 @@ impl Resolver {
                         let isl_import = IslImport::from_ion_element(import)?;
                         isl_imports.push(isl_import);
                     }
-                } else if isl_version == IslVersion::V2_0 {
-                    if let Some(user_reserved_fields_struct) = schema_header
-                        .get("user_reserved_fields")
-                        .and_then(|it| it.as_struct())
+                }
+                if isl_version == IslVersion::V2_0 {
+                    if let Some(user_reserved_fields_struct) =
+                        schema_header.get("user_reserved_fields").and_then(|it| {
+                            if !it.annotations().is_empty() {
+                                None
+                            } else {
+                                it.as_struct()
+                            }
+                        })
                     {
                         isl_user_reserved_fields =
-                            UserReservedFields::from_ion_elements(user_reserved_fields_struct);
-
-                        isl_user_reserved_fields.validate_field_names_in_header(schema_header)?;
+                            UserReservedFields::from_ion_elements(user_reserved_fields_struct)?;
+                    } else {
+                        return invalid_schema_error(
+                            "User reserved field must be non-null and unannotated struct",
+                        );
                     }
+                    isl_user_reserved_fields.validate_field_names_in_header(schema_header)?;
                 }
             }
             // load types for schema
             else if annotations.contains("type") {
+                // if we didn't find an isl version marker before finding a type definition
+                // then isl version will be defaulted to be ISL 1.0
+                if !found_isl_version_marker {
+                    found_isl_version_marker = true;
+                }
+
                 // convert Element to IslType
                 let isl_type: IslTypeImpl =
                     IslTypeImpl::from_owned_element(isl_version, &value, &mut isl_inline_imports)?;
@@ -822,6 +863,26 @@ impl Resolver {
                 }
             } else {
                 // open content
+                if isl_version == IslVersion::V2_0
+                    && value.ion_type() == IonType::Symbol
+                    && isl_version_marker.is_match(value.as_text().unwrap())
+                {
+                    return invalid_schema_error(
+                        "top level open content can not be an Ion Schema version marker",
+                    );
+                }
+
+                if isl_version == IslVersion::V2_0
+                    && value
+                        .annotations()
+                        .iter()
+                        .any(|a| reserved_keyword_version_marker.is_match(a.text().unwrap()))
+                {
+                    return invalid_schema_error(
+                        "top level open content may not be annotated with any reserved keyword",
+                    );
+                }
+
                 open_content.push(value);
                 continue;
             }
@@ -862,6 +923,13 @@ impl Resolver {
         // the type to be imported is not yet added to the type_store.
         // This will be changed to `true` as soon as the type to be imported is resolved and is added to the type_store
         let mut added_imported_type_to_type_store = false;
+
+        if isl_version != isl.version() {
+            return invalid_schema_error(format!(
+                "Expected {isl_version} schema but found {}",
+                isl.version()
+            ));
+        }
 
         let isl_types = isl.types();
 
@@ -982,10 +1050,8 @@ impl Resolver {
                     _ => Err(error),
                 },
                 Ok(schema_content) => {
-                    let isl_version = self.find_isl_version(&schema_content, isl_version_marker)?;
-                    let isl =
-                        self.isl_schema_from_elements(isl_version, schema_content.into_iter(), id)?;
-                    self.schema_from_isl_schema(isl_version, isl, type_store, load_isl_import)
+                    let isl = self.isl_schema_from_elements(schema_content.into_iter(), id)?;
+                    self.schema_from_isl_schema(isl.version(), isl, type_store, load_isl_import)
                 }
             };
         }
@@ -1009,11 +1075,7 @@ impl Resolver {
 
         for authority in &self.authorities {
             return match authority.elements(id) {
-                Ok(schema_content) => self.isl_schema_from_elements(
-                    self.find_isl_version(&schema_content, isl_version_marker)?,
-                    schema_content.into_iter(),
-                    id,
-                ),
+                Ok(schema_content) => self.isl_schema_from_elements(schema_content.into_iter(), id),
                 Err(IonSchemaError::IoError { source: e }) if e.kind() == ErrorKind::NotFound => {
                     continue
                 }
