@@ -16,15 +16,31 @@ jobs:
       checks: write
 
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v2
         with:
             submodules: recursive
+      - name: Rust Toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+            profile: minimal
+            toolchain: stable
+            components: rustfmt, clippy
+            override: true
       - name: Build
-        run: cargo build --verbose
-      - name: Run tests
-        run: cargo test --verbose
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --verbose
+      - name: Test
+        uses: actions-rs/cargo@v1
+        with:
+            command: test
+            args: --verbose
       - name: Rustfmt
-        run: cargo fmt --verbose -- --check
+        uses: actions-rs/cargo@v1
+        with:
+            command: fmt
+            args: --verbose -- --check
       # `clippy-check` will run `cargo clippy` on new pull requests. Due to a limitation in GitHub
       # permissions, the behavior of the Action is different depending on the source of the PR. If the
       # PR comes from the ion-schema-rust project itself, any suggestions will be added to the PR as comments.
