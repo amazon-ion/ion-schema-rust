@@ -274,7 +274,8 @@ impl UserReservedFields {
         }
 
         if user_reserved_fields.iter().any(|f| {
-            is_reserved_keyword_isl_version_marker(f) || ISL_2_0_KEYWORDS.contains(&f.as_str())
+            is_reserved_keyword_isl_version_marker(f)
+                || ISL_2_0_KEYWORDS.binary_search(&f.as_str()).is_ok()
         }) {
             return invalid_schema_error(
                 "ISl 2.0 keywords may not be declared as user reserved fields",

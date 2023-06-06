@@ -30,7 +30,7 @@ use crate::result::{
 };
 use crate::schema::Schema;
 use crate::types::{BuiltInTypeDefinition, Nullability, TypeDefinitionImpl, TypeDefinitionKind};
-use crate::{is_isl_version_marker, UserReservedFields};
+use crate::{is_isl_version_marker, is_reserved_keyword_isl_version_marker, UserReservedFields};
 use ion_rs::element::{Annotations, Element};
 use ion_rs::types::IonType::Struct;
 use ion_rs::IonType;
@@ -754,8 +754,6 @@ impl Resolver {
         let mut open_content = vec![];
         let mut isl_user_reserved_fields = UserReservedFields::default();
         let mut isl_version = IslVersion::V1_0;
-        let reserved_keyword_version_marker =
-            Regex::new(r"^(\$ion_schema(_.*)?|[a-z][a-z0-9]*(_[a-z0-9]+)*)$").unwrap();
 
         let mut found_header = false;
         let mut found_footer = false;
@@ -875,7 +873,7 @@ impl Resolver {
                     && value
                         .annotations()
                         .iter()
-                        .any(|a| reserved_keyword_version_marker.is_match(a.text().unwrap()))
+                        .any(|a| is_reserved_keyword_isl_version_marker(a.text().unwrap()))
                 {
                     return invalid_schema_error(
                         "top level open content may not be annotated with any reserved keyword",
