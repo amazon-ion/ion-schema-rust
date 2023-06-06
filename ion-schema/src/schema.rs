@@ -326,7 +326,7 @@ mod schema_tests {
         let isl_result = resolver.isl_schema_from_elements(owned_elements, "my_schema.isl");
         assert!(isl_result.is_ok());
 
-        let isl = isl_result.unwrap();
+        let isl = isl_result.expect("ISL schema should be syntactically correct");
         // create a schema from isl and verifies if the result is `ok`
         let schema = resolver.schema_from_isl_schema(isl.version(), isl, type_store, None);
         assert!(schema.is_ok());

@@ -11,6 +11,7 @@ use ion_rs::element::{Element, Struct};
 use ion_rs::Symbol;
 use regex::Regex;
 use std::fmt::{Display, Formatter};
+use std::sync::OnceLock;
 /// A [`try`]-like macro to workaround the [`Option`]/[`Result`] nested APIs.
 /// These API require checking the type and then calling the appropriate getter function
 /// (which returns a None if you got it wrong). This macro turns the `None` into
@@ -42,6 +43,54 @@ pub mod violation;
 pub mod external {
     pub use ion_rs;
 }
+
+static ISL_VERSION_MARKER_REGEX: OnceLock<Regex> = OnceLock::new();
+static RESERVED_KEYWORD_ISL_VERSION_MARKER: OnceLock<Regex> = OnceLock::new();
+
+/// Checks if a value is an ISL version marker.
+fn is_isl_version_marker(text: &str) -> bool {
+    ISL_VERSION_MARKER_REGEX
+        .get_or_init(|| Regex::new(r"^\$ion_schema_\d.*$").unwrap())
+        .is_match(text)
+}
+
+/// Checks is a value is reserved keyword ISL version maker.
+fn is_reserved_keyword_isl_version_marker(text: &str) -> bool {
+    RESERVED_KEYWORD_ISL_VERSION_MARKER
+        .get_or_init(|| Regex::new(r"^(\$ion_schema(_.*)?|[a-z][a-z0-9]*(_[a-z0-9]+)*)$").unwrap())
+        .is_match(text)
+}
+
+const ISL_2_0_KEYWORDS: [&str; 28] = [
+    "all_of",
+    "annotations",
+    "any_of",
+    "as",
+    "byte_length",
+    "codepoint_length",
+    "container_length",
+    "contains",
+    "element",
+    "exponent",
+    "field_names",
+    "fields",
+    "id",
+    "imports",
+    "name",
+    "not",
+    "occurs",
+    "one_of",
+    "ordered_elements",
+    "precision",
+    "regex",
+    "schema_footer",
+    "schema_header",
+    "timestamp_precision",
+    "type",
+    "user_reserved_fields",
+    "utf8_byte_length",
+    "valid_values",
+];
 
 /// Provide an Ion schema Element which includes all Elements and a document type
 ///
@@ -167,37 +216,6 @@ fn load(text: &str) -> Vec<Element> {
     Element::read_all(text.as_bytes()).expect("parsing failed unexpectedly")
 }
 
-const ISL_2_0_KEYWORDS: [&str; 28] = [
-    "all_of",
-    "annotations",
-    "any_of",
-    "as",
-    "byte_length",
-    "codepoint_length",
-    "container_length",
-    "contains",
-    "element",
-    "exponent",
-    "field_names",
-    "fields",
-    "id",
-    "imports",
-    "name",
-    "not",
-    "occurs",
-    "one_of",
-    "ordered_elements",
-    "precision",
-    "regex",
-    "schema_footer",
-    "schema_header",
-    "timestamp_precision",
-    "type",
-    "user_reserved_fields",
-    "utf8_byte_length",
-    "valid_values",
-];
-
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct UserReservedFields {
     schema_header_fields: Vec<String>,
@@ -244,9 +262,6 @@ impl UserReservedFields {
                 "User reserved fields mut be non null",
             ))?;
 
-        let reserved_keyword_version_marker =
-            Regex::new(r"^(\$ion_schema(_.*)?|[a-z][a-z0-9]*(_[a-z0-9]+)*)$").unwrap();
-
         let user_reserved_fields = user_reserved_elements
             .iter()
             .filter(|e| e.annotations().is_empty() && !e.is_null())
@@ -259,7 +274,7 @@ impl UserReservedFields {
         }
 
         if user_reserved_fields.iter().any(|f| {
-            reserved_keyword_version_marker.is_match(f) || ISL_2_0_KEYWORDS.contains(&f.as_str())
+            is_reserved_keyword_isl_version_marker(f) || ISL_2_0_KEYWORDS.contains(&f.as_str())
         }) {
             return invalid_schema_error(
                 "ISl 2.0 keywords may not be declared as user reserved fields",

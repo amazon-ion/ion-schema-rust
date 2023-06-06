@@ -30,7 +30,7 @@ use crate::result::{
 };
 use crate::schema::Schema;
 use crate::types::{BuiltInTypeDefinition, Nullability, TypeDefinitionImpl, TypeDefinitionKind};
-use crate::UserReservedFields;
+use crate::{is_isl_version_marker, UserReservedFields};
 use ion_rs::element::{Annotations, Element};
 use ion_rs::types::IonType::Struct;
 use ion_rs::IonType;
@@ -754,7 +754,6 @@ impl Resolver {
         let mut open_content = vec![];
         let mut isl_user_reserved_fields = UserReservedFields::default();
         let mut isl_version = IslVersion::V1_0;
-        let isl_version_marker: Regex = Regex::new(r"^\$ion_schema_\d.*$").unwrap();
         let reserved_keyword_version_marker =
             Regex::new(r"^(\$ion_schema(_.*)?|[a-z][a-z0-9]*(_[a-z0-9]+)*)$").unwrap();
 
@@ -768,7 +767,7 @@ impl Resolver {
             // load header for schema
             if !found_isl_version_marker
                 && value.ion_type() == IonType::Symbol
-                && isl_version_marker.is_match(value.as_text().unwrap())
+                && is_isl_version_marker(value.as_text().unwrap())
             {
                 // This implementation supports Ion Schema 1.0 and Ion Schema 2.0
                 isl_version = match value.as_text().unwrap() {
@@ -865,7 +864,7 @@ impl Resolver {
                 // open content
                 if isl_version == IslVersion::V2_0
                     && value.ion_type() == IonType::Symbol
-                    && isl_version_marker.is_match(value.as_text().unwrap())
+                    && is_isl_version_marker(value.as_text().unwrap())
                 {
                     return invalid_schema_error(
                         "top level open content can not be an Ion Schema version marker",
@@ -1033,8 +1032,6 @@ impl Resolver {
         load_isl_import: Option<&IslImport>,
     ) -> IonSchemaResult<Arc<Schema>> {
         let id: &str = id.as_ref();
-        // ISL version marker regex
-        let isl_version_marker: Regex = Regex::new(r"^\$ion_schema_\d.*$").unwrap();
 
         if let Some(schema) = self.resolved_schema_cache.get(id) {
             return Ok(Arc::clone(schema));
@@ -1070,8 +1067,6 @@ impl Resolver {
         load_isl_import: Option<&IslImport>,
     ) -> IonSchemaResult<IslSchema> {
         let id: &str = id.as_ref();
-        // ISL version marker regex
-        let isl_version_marker: Regex = Regex::new(r"^\$ion_schema_\d.*$").unwrap();
 
         for authority in &self.authorities {
             return match authority.elements(id) {
