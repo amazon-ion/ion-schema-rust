@@ -16,7 +16,7 @@ jobs:
       checks: write
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
             submodules: recursive
       - name: Rust Toolchain
@@ -29,8 +29,8 @@ jobs:
       - name: Build
         uses: actions-rs/cargo@v1
         with:
-          command: build
-          args: --verbose
+            command: build
+            args: --verbose
       - name: Test
         uses: actions-rs/cargo@v1
         with:
