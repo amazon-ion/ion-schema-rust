@@ -18,13 +18,18 @@ use std::fmt::{Display, Formatter};
 /// `annotations`: `<https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#annotations>`
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Annotation {
+    isl_version: IslVersion,
     value: String,
     is_required: bool, // Specifies whether an annotation's occurrence is required or optional
 }
 
 impl Annotation {
-    pub fn new(value: String, is_required: bool) -> Self {
-        Self { value, is_required }
+    pub fn new(value: String, is_required: bool, isl_version: IslVersion) -> Self {
+        Self {
+            value,
+            is_required,
+            isl_version,
+        }
     }
 
     pub fn value(&self) -> &String {

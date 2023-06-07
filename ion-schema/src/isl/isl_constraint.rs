@@ -195,6 +195,7 @@ pub mod v_1_0 {
                         &a,
                         annotations_modifiers.contains(&"required"),
                     ),
+                    IslVersion::V1_0,
                 )
             })
             .collect();
@@ -444,6 +445,7 @@ pub mod v_2_0 {
                 Annotation::new(
                     a.as_text().unwrap().to_owned(),
                     Annotation::is_annotation_required(&a, is_required),
+                    IslVersion::V2_0,
                 )
             })
             .collect();
@@ -1132,6 +1134,7 @@ impl IslSimpleAnnotationsConstraint {
                                 e,
                                 annotation_modifiers.contains(&"required"),
                             ),
+                            isl_version,
                         )
                     })
                     .ok_or(invalid_schema_error_raw(
