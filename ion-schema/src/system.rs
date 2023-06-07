@@ -1144,11 +1144,32 @@ impl SchemaSystem {
             .load_schema(id, &mut TypeStore::default(), None)
     }
 
+    /// Constructs a new schema using provided ISL content.
+    pub fn new_schema(&mut self, schema_content: &[u8], id: &str) -> IonSchemaResult<Arc<Schema>> {
+        let elements = Element::read_all(schema_content)?;
+        let isl = self
+            .resolver
+            .isl_schema_from_elements(elements.into_iter(), id)?;
+        self.resolver
+            .schema_from_isl_schema(isl.version(), isl, &mut TypeStore::default(), None)
+    }
+
     /// Requests each of the provided [`DocumentAuthority`]s, in order, to get ISL model for the
     /// requested schema id until one successfully resolves it.
     /// If an authority throws an exception, resolution silently proceeds to the next authority.
     pub fn load_isl_schema<A: AsRef<str>>(&mut self, id: A) -> IonSchemaResult<IslSchema> {
         self.resolver.load_isl_schema(id, None)
+    }
+
+    /// Constructs a new ISL model using provided ISL content.
+    pub fn new_isl_schema(
+        &mut self,
+        schema_content: &[u8],
+        id: &str,
+    ) -> IonSchemaResult<IslSchema> {
+        let elements = Element::read_all(schema_content)?;
+        self.resolver
+            .isl_schema_from_elements(elements.into_iter(), id)
     }
 
     /// Resolves given ISL 1.0 model into a [Schema].
@@ -2165,6 +2186,90 @@ mod schema_system_tests {
 
         // verify the resolved schema generated from the ISL 2.0 model that contains ISL 1.0 constraints is invalid
         assert!(&schema.is_err());
+    }
+
+    #[test]
+    fn new_schema_test() {
+        let mut schema_system = SchemaSystem::new(vec![]);
+        let schema = schema_system.new_schema(
+            r#"
+                $ion_schema_2_0
+                schema_header::{}
+                
+                type::{
+                  name: my_type,
+                  type: string,
+                }
+                
+                schema_footer::{}
+            "#
+            .as_bytes(),
+            "sample.isl",
+        );
+        assert!(schema.is_ok());
+    }
+
+    #[test]
+    fn new_schema_invalid_test() {
+        let mut schema_system = SchemaSystem::new(vec![]);
+        let schema = schema_system.new_schema(
+            r#"
+                $ion_schema_2_0
+                schema_header::{}
+                
+                type::{
+                  name: my_type,
+                  type: nullable::string, // `nullable` annotation is not supported in ISL 2.0
+                }
+                
+                schema_footer::{}
+            "#
+            .as_bytes(),
+            "sample.isl",
+        );
+        assert!(schema.is_err());
+    }
+
+    #[test]
+    fn new_isl_schema_test() {
+        let mut schema_system = SchemaSystem::new(vec![]);
+        let isl = schema_system.new_isl_schema(
+            r#"
+                $ion_schema_2_0
+                schema_header::{}
+                
+                type::{
+                  name: my_type,
+                  type: string,
+                }
+                
+                schema_footer::{}
+            "#
+            .as_bytes(),
+            "sample.isl",
+        );
+        assert!(isl.is_ok());
+    }
+
+    #[test]
+    fn new_isl_schema_invalid_test() {
+        let mut schema_system = SchemaSystem::new(vec![]);
+        let isl = schema_system.new_isl_schema(
+            r#"
+                $ion_schema_2_0
+                schema_header::{}
+                
+                type::{
+                  name: my_type,
+                  type: nullable::string, // `nullable` annotation is not supported in ISL 2.0
+                }
+                
+                schema_footer::{}
+            "#
+            .as_bytes(),
+            "sample.isl",
+        );
+        assert!(isl.is_err());
     }
 
     #[test]
