@@ -8,7 +8,7 @@ use crate::isl::isl_type::IslTypeImpl;
 use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
 use crate::violation::{Violation, ViolationCode};
 use ion_rs::element::{Element, Struct};
-use ion_rs::Symbol;
+use ion_rs::{IonWriter, Symbol};
 use regex::Regex;
 use std::fmt::{Display, Formatter};
 use std::sync::OnceLock;
@@ -296,6 +296,7 @@ impl UserReservedFields {
                     .schema_header_fields
                     .contains(&f.text().unwrap().to_owned())
                     && f.text().unwrap() != "user_reserved_fields"
+                    && f.text().unwrap() != "imports"
             })
             .collect();
 

@@ -25,8 +25,8 @@ use crate::isl::isl_import::{IslImport, IslImportType};
 use crate::isl::isl_type::{IslType, IslTypeImpl};
 use crate::isl::{IslSchema, IslVersion};
 use crate::result::{
-    invalid_schema_error, unresolvable_schema_error, unresolvable_schema_error_raw, IonSchemaError,
-    IonSchemaResult,
+    invalid_schema_error, invalid_schema_error_raw, unresolvable_schema_error,
+    unresolvable_schema_error_raw, IonSchemaError, IonSchemaResult,
 };
 use crate::schema::Schema;
 use crate::types::{BuiltInTypeDefinition, Nullability, TypeDefinitionImpl, TypeDefinitionKind};
@@ -796,21 +796,22 @@ impl Resolver {
                     }
                 }
                 if isl_version == IslVersion::V2_0 {
-                    if let Some(user_reserved_fields_struct) =
-                        schema_header.get("user_reserved_fields").and_then(|it| {
-                            if !it.annotations().is_empty() {
-                                None
-                            } else {
-                                it.as_struct()
-                            }
-                        })
+                    if let Some(user_reserved_fields_element) =
+                        schema_header.get("user_reserved_fields")
                     {
+                        if !user_reserved_fields_element.annotations().is_empty() {
+                            return invalid_schema_error(
+                                "User reserved field must be an unannotated struct",
+                            )?;
+                        }
+                        let user_reserved_fields_struct = user_reserved_fields_element
+                            .as_struct()
+                            .ok_or(invalid_schema_error_raw(
+                                "User reserved field must be non-null struct",
+                            ))?;
+
                         isl_user_reserved_fields =
                             UserReservedFields::from_ion_elements(user_reserved_fields_struct)?;
-                    } else {
-                        return invalid_schema_error(
-                            "User reserved field must be non-null and unannotated struct",
-                        );
                     }
                     isl_user_reserved_fields.validate_field_names_in_header(schema_header)?;
                 }
