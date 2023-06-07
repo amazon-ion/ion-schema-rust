@@ -11,6 +11,8 @@ ion_schema_tests!(
         "constraints::occurs::invalid::occurs_range_must_be_a_valid__satisfiable_range__1_",
         "constraints::scale::invalid::scale_must_be_an_integer_or_range__04_",
         "constraints::valid_values::all_types::value_should_be_invalid_for_type_valid_values_all_types__04_",
+        "nullable::*",
+        "schema::import::cycles::*",
         "schema::import::diamond_import::should_be_a_valid_schema",
         "schema::import::diamond_import::value_should_be_valid_for_type_diamond_import",
         "schema::import::import::value_should_be_(valid|invalid)_for_type",

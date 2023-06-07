@@ -862,6 +862,7 @@ impl Resolver {
                 // open content
                 if isl_version == IslVersion::V2_0
                     && value.ion_type() == IonType::Symbol
+                    && !value.is_null()
                     && is_isl_version_marker(value.as_text().unwrap())
                 {
                     return invalid_schema_error(

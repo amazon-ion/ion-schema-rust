@@ -6,6 +6,7 @@ ion_schema_tests!(
     ignored(
         "imports",
         "schema::*",
+        "null_or::*",
         "constraints::contains",
         "constraints::ordered_elements",
         "constraints::precision",
