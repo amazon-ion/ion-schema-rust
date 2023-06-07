@@ -5,11 +5,13 @@ use crate::external::ion_rs::IonType;
 use crate::ion_path::IonPath;
 use crate::isl::isl_constraint::IslConstraintImpl;
 use crate::isl::isl_type::IslTypeImpl;
-use crate::result::{invalid_schema_error, IonSchemaResult};
+use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
 use crate::violation::{Violation, ViolationCode};
 use ion_rs::element::{Element, Struct};
 use ion_rs::Symbol;
+use regex::Regex;
 use std::fmt::{Display, Formatter};
+use std::sync::OnceLock;
 /// A [`try`]-like macro to workaround the [`Option`]/[`Result`] nested APIs.
 /// These API require checking the type and then calling the appropriate getter function
 /// (which returns a None if you got it wrong). This macro turns the `None` into
@@ -41,6 +43,54 @@ pub mod violation;
 pub mod external {
     pub use ion_rs;
 }
+
+static ISL_VERSION_MARKER_REGEX: OnceLock<Regex> = OnceLock::new();
+static RESERVED_WORD_REGEX: OnceLock<Regex> = OnceLock::new();
+
+/// Checks if a value is an ISL version marker.
+fn is_isl_version_marker(text: &str) -> bool {
+    ISL_VERSION_MARKER_REGEX
+        .get_or_init(|| Regex::new(r"^\$ion_schema_\d.*$").unwrap())
+        .is_match(text)
+}
+
+/// Checks is a value is reserved keyword ISL version maker.
+fn is_reserved_word(text: &str) -> bool {
+    RESERVED_WORD_REGEX
+        .get_or_init(|| Regex::new(r"^(\$ion_schema(_.*)?|[a-z][a-z0-9]*(_[a-z0-9]+)*)$").unwrap())
+        .is_match(text)
+}
+
+const ISL_2_0_KEYWORDS: [&str; 28] = [
+    "all_of",
+    "annotations",
+    "any_of",
+    "as",
+    "byte_length",
+    "codepoint_length",
+    "container_length",
+    "contains",
+    "element",
+    "exponent",
+    "field_names",
+    "fields",
+    "id",
+    "imports",
+    "name",
+    "not",
+    "occurs",
+    "one_of",
+    "ordered_elements",
+    "precision",
+    "regex",
+    "schema_footer",
+    "schema_header",
+    "timestamp_precision",
+    "type",
+    "user_reserved_fields",
+    "utf8_byte_length",
+    "valid_values",
+];
 
 /// Provide an Ion schema Element which includes all Elements and a document type
 ///
@@ -175,37 +225,64 @@ pub struct UserReservedFields {
 
 impl UserReservedFields {
     /// Parse use reserved fields inside a [Struct]
-    pub(crate) fn from_ion_elements(user_reserved_fields: &Struct) -> Self {
-        Self {
+    pub(crate) fn from_ion_elements(user_reserved_fields: &Struct) -> IonSchemaResult<Self> {
+        if user_reserved_fields.fields().any(|(f, v)| {
+            f.text() != Some("schema_header")
+                && f.text() != Some("schema_footer")
+                && f.text() != Some("type")
+        }) {
+            return invalid_schema_error(
+               "User reserved fields can only have schema_header, schema_footer or type as the field names",
+           );
+        }
+        Ok(Self {
             schema_header_fields: UserReservedFields::field_names_from_ion_elements(
                 "schema_header",
                 user_reserved_fields,
-            ),
+            )?,
             schema_footer_fields: UserReservedFields::field_names_from_ion_elements(
                 "schema_footer",
                 user_reserved_fields,
-            ),
+            )?,
             type_fields: UserReservedFields::field_names_from_ion_elements(
                 "type",
                 user_reserved_fields,
-            ),
-        }
+            )?,
+        })
     }
 
     fn field_names_from_ion_elements(
         user_reserved_fields_type: &str,
         user_reserved_fields: &Struct,
-    ) -> Vec<String> {
+    ) -> IonSchemaResult<Vec<String>> {
         let user_reserved_elements: Vec<&Element> = user_reserved_fields
             .get(user_reserved_fields_type)
             .and_then(|it| it.as_sequence().map(|s| s.elements().collect()))
+            .ok_or(invalid_schema_error_raw(
+                "User reserved fields mut be non null",
+            ))?;
+
+        let user_reserved_fields = user_reserved_elements
+            .iter()
+            .filter(|e| e.annotations().is_empty() && !e.is_null())
+            .map(|e| e.as_text().map(|s| s.to_owned()))
+            .collect::<Option<Vec<String>>>()
             .unwrap_or(vec![]);
 
-        user_reserved_elements
+        if user_reserved_fields.len() != user_reserved_elements.len() {
+            return invalid_schema_error("User reserved fields mut be unannotated");
+        }
+
+        if user_reserved_fields
             .iter()
-            .map(|e| e.as_string().map(|s| s.to_owned()))
-            .collect::<Option<Vec<String>>>()
-            .unwrap_or(vec![])
+            .any(|f| is_reserved_word(f) || ISL_2_0_KEYWORDS.binary_search(&f.as_str()).is_ok())
+        {
+            return invalid_schema_error(
+                "ISl 2.0 keywords may not be declared as user reserved fields",
+            );
+        }
+
+        Ok(user_reserved_fields)
     }
 
     pub(crate) fn validate_field_names_in_header(

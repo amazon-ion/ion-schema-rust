@@ -299,7 +299,7 @@ fn generate_preamble(root_dir_path: &Path) -> TokenStream {
             } else {
                 match schema {
                     Ok(_) => Err("Expected schema to be invalid".to_string()),
-                    Err(e) => Err(format!("{:?}", e)),
+                    Err(e) => Ok(()),
                 }
             }
         }

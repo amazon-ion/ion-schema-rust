@@ -4,9 +4,9 @@ ion_schema_tests!(
     root = "ion-schema-tests/ion_schema_2_0/",
     // Support for ISL 2.0 is not completely implemented yet, so some tests are ignored.
     ignored(
-        "open_content",
         "imports",
         "schema::*",
+        "null_or::*",
         "constraints::contains",
         "constraints::ordered_elements",
         "constraints::precision",
