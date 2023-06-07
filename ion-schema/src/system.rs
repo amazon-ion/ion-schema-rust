@@ -30,7 +30,7 @@ use crate::result::{
 };
 use crate::schema::Schema;
 use crate::types::{BuiltInTypeDefinition, Nullability, TypeDefinitionImpl, TypeDefinitionKind};
-use crate::{is_isl_version_marker, is_reserved_keyword_isl_version_marker, UserReservedFields};
+use crate::{is_isl_version_marker, is_reserved_word, UserReservedFields};
 use ion_rs::element::{Annotations, Element};
 use ion_rs::types::IonType::Struct;
 use ion_rs::IonType;
@@ -874,7 +874,7 @@ impl Resolver {
                     && value
                         .annotations()
                         .iter()
-                        .any(|a| is_reserved_keyword_isl_version_marker(a.text().unwrap()))
+                        .any(|a| is_reserved_word(a.text().unwrap()))
                 {
                     return invalid_schema_error(
                         "top level open content may not be annotated with any reserved keyword",

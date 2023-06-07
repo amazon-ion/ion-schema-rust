@@ -45,7 +45,7 @@ pub mod external {
 }
 
 static ISL_VERSION_MARKER_REGEX: OnceLock<Regex> = OnceLock::new();
-static RESERVED_KEYWORD_ISL_VERSION_MARKER: OnceLock<Regex> = OnceLock::new();
+static RESERVED_WORD_REGEX: OnceLock<Regex> = OnceLock::new();
 
 /// Checks if a value is an ISL version marker.
 fn is_isl_version_marker(text: &str) -> bool {
@@ -55,8 +55,8 @@ fn is_isl_version_marker(text: &str) -> bool {
 }
 
 /// Checks is a value is reserved keyword ISL version maker.
-fn is_reserved_keyword_isl_version_marker(text: &str) -> bool {
-    RESERVED_KEYWORD_ISL_VERSION_MARKER
+fn is_reserved_word(text: &str) -> bool {
+    RESERVED_WORD_REGEX
         .get_or_init(|| Regex::new(r"^(\$ion_schema(_.*)?|[a-z][a-z0-9]*(_[a-z0-9]+)*)$").unwrap())
         .is_match(text)
 }
@@ -273,10 +273,10 @@ impl UserReservedFields {
             return invalid_schema_error("User reserved fields mut be unannotated");
         }
 
-        if user_reserved_fields.iter().any(|f| {
-            is_reserved_keyword_isl_version_marker(f)
-                || ISL_2_0_KEYWORDS.binary_search(&f.as_str()).is_ok()
-        }) {
+        if user_reserved_fields
+            .iter()
+            .any(|f| is_reserved_word(f) || ISL_2_0_KEYWORDS.binary_search(&f.as_str()).is_ok())
+        {
             return invalid_schema_error(
                 "ISl 2.0 keywords may not be declared as user reserved fields",
             );
