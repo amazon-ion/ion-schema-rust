@@ -1513,6 +1513,7 @@ mod schema_system_tests {
             (
                 "sample_number.isl",
                 r#"
+                    $ion_schema_2_0
                     schema_header::{
                       imports: [],
                     }
@@ -1537,6 +1538,7 @@ mod schema_system_tests {
             (
                 "sample_decimal.isl",
                 r#"
+                    $ion_schema_2_0
                     schema_header::{
                       imports: [],
                     }
