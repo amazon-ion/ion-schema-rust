@@ -1,9 +1,10 @@
 use crate::isl::isl_range::{Range, RangeType};
-use crate::isl::IslVersion;
+use crate::isl::{IslVersion, WriteToIsl};
 use crate::result::{invalid_schema_error, IonSchemaError, IonSchemaResult};
+use ion_rs::element::writer::ElementWriter;
 use ion_rs::element::Element;
 use ion_rs::types::timestamp::Precision;
-use ion_rs::{Symbol, Timestamp};
+use ion_rs::{IonWriter, Symbol, Timestamp};
 use num_traits::abs;
 use std::cmp::Ordering;
 use std::fmt;
@@ -51,6 +52,20 @@ impl Annotation {
             // for any value the default annotation is `optional`
             false
         }
+    }
+}
+
+impl WriteToIsl for Annotation {
+    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
+        if self.isl_version == IslVersion::V1_0 {
+            if self.is_required {
+                writer.set_annotations(["required"]);
+            } else {
+                writer.set_annotations(["optional"]);
+            }
+        }
+        writer.write_symbol(&self.value)?;
+        Ok(())
     }
 }
 
@@ -206,6 +221,16 @@ impl Display for ValidValue {
     }
 }
 
+impl WriteToIsl for ValidValue {
+    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
+        match self {
+            ValidValue::Range(range) => range.write_to(writer)?,
+            ValidValue::Element(element) => writer.write_element(element)?,
+        }
+        Ok(())
+    }
+}
+
 /// Represent a timestamp offset
 /// Known timestamp offset value is stored in minutes as i32 value
 /// For example, "+07::00" wil be stored as `TimestampOffset::Known(420)`
@@ -278,6 +303,21 @@ impl Display for TimestampOffset {
     }
 }
 
+impl WriteToIsl for TimestampOffset {
+    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
+        match &self {
+            TimestampOffset::Known(offset) => {
+                let sign = if offset < &0 { "-" } else { "+" };
+                let hours = abs(*offset) / 60;
+                let minutes = abs(*offset) - hours * 60;
+                writer.write_string(format!("{sign}{hours:02}:{minutes:02}"))?;
+            }
+            TimestampOffset::Unknown => writer.write_string("-00:00")?,
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Ieee754InterchangeFormat {
     Binary16,
@@ -312,5 +352,16 @@ impl Display for Ieee754InterchangeFormat {
                 Ieee754InterchangeFormat::Binary64 => "binary64",
             }
         )
+    }
+}
+
+impl WriteToIsl for Ieee754InterchangeFormat {
+    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
+        writer.write_symbol(match self {
+            Ieee754InterchangeFormat::Binary16 => "binary16",
+            Ieee754InterchangeFormat::Binary32 => "binary32",
+            Ieee754InterchangeFormat::Binary64 => "binary64",
+        })?;
+        Ok(())
     }
 }
