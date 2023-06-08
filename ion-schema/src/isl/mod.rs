@@ -312,6 +312,7 @@ impl IslSchemaImpl {
 
 #[cfg(test)]
 mod isl_tests {
+    use crate::authority::FileSystemDocumentAuthority;
     use crate::isl::isl_constraint::v_1_0::*;
     use crate::isl::isl_constraint::IslConstraint;
     use crate::isl::isl_range::DecimalRange;
@@ -330,14 +331,18 @@ mod isl_tests {
     use crate::isl::IslVersion;
     use crate::isl::*;
     use crate::result::IonSchemaResult;
+    use crate::system::SchemaSystem;
     use ion_rs::element::Element;
     use ion_rs::types::decimal::*;
     use ion_rs::types::integer::Int as IntegerValue;
     use ion_rs::types::timestamp::Timestamp;
-    use ion_rs::IonType;
     use ion_rs::Symbol;
+    use ion_rs::{IonType, TextWriterBuilder};
+    use nom::AsBytes;
     use rstest::*;
     use std::io::Write;
+    use std::path::Path;
+    use test_generator::test_resources;
 
     // helper function to create NamedIslType for isl tests using ISL 1.0
     fn load_named_type(text: &str) -> IslType {
@@ -1001,5 +1006,45 @@ mod isl_tests {
         let mut buf = Vec::new();
         write!(&mut buf, "{}", range.into()).unwrap();
         assert_eq!(expected, String::from_utf8(buf).unwrap());
+    }
+
+    const SKIP_LIST: [&str; 5] = [
+        "ion-schema-schemas/json/json.isl", // the file contains `nan` which fails on equivalence for two schemas
+        "ion-schema-tests/ion_schema_1_0/nullable.isl", // Needs `nullable` annotation related fixes
+        "ion-schema-tests/ion_schema_1_0/schema/import/import_inline.isl", // related to order of types in the schema file
+        "ion-schema-tests/ion_schema_2_0/imports/tree/inline_import_a.isl", // related to order of types in the schema file
+        "ion-schema-tests/ion_schema_2_0/imports/tree/inline_import_c.isl", // related to order of types in the schema file
+    ];
+
+    #[test_resources("ion-schema-tests/**/*.isl")]
+    #[test_resources("ion-schema-schemas/**/*.isl")]
+    fn test_write_to_isl(file_name: &str) {
+        if SKIP_LIST.contains(&file_name) {
+            return;
+        }
+        let mut schema_system =
+            SchemaSystem::new(vec![Box::new(FileSystemDocumentAuthority::new(
+                Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap(),
+            ))]);
+
+        let expected_schema_result = schema_system.load_isl_schema(file_name);
+        assert!(expected_schema_result.is_ok());
+
+        let expected_schema = expected_schema_result.unwrap();
+
+        let mut buffer = Vec::new();
+        let mut writer = TextWriterBuilder::pretty().build(&mut buffer).unwrap();
+        let write_schema_result = expected_schema.write_to(&mut writer);
+        assert!(write_schema_result.is_ok());
+
+        let schema_content = writer.output().as_bytes();
+        println!("{}", String::from_utf8(schema_content.to_vec()).unwrap());
+
+        let actual_schema_result = schema_system.new_isl_schema(schema_content, file_name);
+
+        assert!(actual_schema_result.is_ok());
+        let actual_schema = actual_schema_result.unwrap();
+
+        assert_eq!(actual_schema, expected_schema);
     }
 }
