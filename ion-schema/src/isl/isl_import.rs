@@ -60,7 +60,21 @@ impl IslImport {
 
 impl WriteToIsl for IslImport {
     fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
-        todo!()
+        writer.step_in(IonType::Struct)?;
+        match self {
+            IslImport::Schema(schema_import) => {
+                writer.set_field_name("id");
+                writer.write_string(schema_import)?;
+            }
+            IslImport::Type(type_import) => {
+                type_import.write_to(writer)?;
+            }
+            IslImport::TypeAlias(type_alias_import) => {
+                type_alias_import.write_to(writer)?;
+            }
+        }
+        writer.step_out()?;
+        Ok(())
     }
 }
 
@@ -98,6 +112,14 @@ impl IslImportType {
 
 impl WriteToIsl for IslImportType {
     fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
-        todo!()
+        writer.set_field_name("id");
+        writer.write_symbol(&self.id)?;
+        writer.set_field_name("type");
+        writer.write_symbol(&self.type_name)?;
+        if let Some(alias) = &self.alias {
+            writer.set_field_name("as");
+            writer.write_symbol(alias)?;
+        }
+        Ok(())
     }
 }
