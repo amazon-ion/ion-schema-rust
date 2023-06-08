@@ -807,7 +807,7 @@ impl Resolver {
                         let user_reserved_fields_struct = user_reserved_fields_element
                             .as_struct()
                             .ok_or(invalid_schema_error_raw(
-                                "User reserved field must be non-null struct",
+                                "User reserved field must be a non-null struct",
                             ))?;
 
                         isl_user_reserved_fields =
@@ -2195,7 +2195,7 @@ mod schema_system_tests {
     fn new_schema_test() {
         let mut schema_system = SchemaSystem::new(vec![]);
         let schema = schema_system.new_schema(
-            r#"
+            br#"
                 $ion_schema_2_0
                 schema_header::{}
                 
@@ -2205,8 +2205,7 @@ mod schema_system_tests {
                 }
                 
                 schema_footer::{}
-            "#
-            .as_bytes(),
+            "#,
             "sample.isl",
         );
         assert!(schema.is_ok());
@@ -2216,7 +2215,7 @@ mod schema_system_tests {
     fn new_schema_invalid_test() {
         let mut schema_system = SchemaSystem::new(vec![]);
         let schema = schema_system.new_schema(
-            r#"
+            br#"
                 $ion_schema_2_0
                 schema_header::{}
                 
@@ -2226,8 +2225,7 @@ mod schema_system_tests {
                 }
                 
                 schema_footer::{}
-            "#
-            .as_bytes(),
+            "#,
             "sample.isl",
         );
         assert!(schema.is_err());
@@ -2237,7 +2235,7 @@ mod schema_system_tests {
     fn new_isl_schema_test() {
         let mut schema_system = SchemaSystem::new(vec![]);
         let isl = schema_system.new_isl_schema(
-            r#"
+            br#"
                 $ion_schema_2_0
                 schema_header::{}
                 
@@ -2247,8 +2245,7 @@ mod schema_system_tests {
                 }
                 
                 schema_footer::{}
-            "#
-            .as_bytes(),
+            "#,
             "sample.isl",
         );
         assert!(isl.is_ok());
@@ -2258,7 +2255,7 @@ mod schema_system_tests {
     fn new_isl_schema_invalid_test() {
         let mut schema_system = SchemaSystem::new(vec![]);
         let isl = schema_system.new_isl_schema(
-            r#"
+            br#"
                 $ion_schema_2_0
                 schema_header::{}
                 
@@ -2268,8 +2265,7 @@ mod schema_system_tests {
                 }
                 
                 schema_footer::{}
-            "#
-            .as_bytes(),
+            "#,
             "sample.isl",
         );
         assert!(isl.is_err());
