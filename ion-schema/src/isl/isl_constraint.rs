@@ -4,9 +4,11 @@ use crate::isl::isl_range::{Range, RangeType};
 use crate::isl::isl_type_reference::{IslTypeRefImpl, IslVariablyOccurringTypeRef};
 use crate::isl::util::{Annotation, Ieee754InterchangeFormat, TimestampOffset, ValidValue};
 use crate::isl::IslVersion;
+use crate::isl::WriteToIsl;
 use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
+use ion_rs::element::writer::ElementWriter;
 use ion_rs::element::Element;
-use ion_rs::IonType;
+use ion_rs::{IonType, IonWriter};
 use std::collections::HashMap;
 use std::convert::TryInto;
 
@@ -1052,6 +1054,12 @@ impl IslConstraintImpl {
         }
 
         Ok(fields_map)
+    }
+}
+
+impl WriteToIsl for IslConstraintImpl {
+    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
+        todo!()
     }
 }
 

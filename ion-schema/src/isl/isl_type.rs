@@ -221,7 +221,15 @@ impl IslTypeImpl {
 
 impl WriteToIsl for IslTypeImpl {
     fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
-        todo!()
+        writer.set_annotations(["type"]);
+        writer.step_in(IonType::Struct)?;
+        writer.set_field_name("name");
+        writer.write_symbol(self.name.clone().unwrap())?;
+        for constraint in self.constraints() {
+            constraint.write_to(writer)?;
+        }
+        writer.step_out()?;
+        Ok(())
     }
 }
 
