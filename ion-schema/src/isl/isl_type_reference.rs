@@ -2,6 +2,7 @@ use crate::isl::isl_import::{IslImport, IslImportType};
 use crate::isl::isl_range::{Range, RangeType};
 use crate::isl::isl_type::IslTypeImpl;
 use crate::isl::IslVersion;
+use crate::isl::WriteToIsl;
 use crate::result::{
     invalid_schema_error, invalid_schema_error_raw, unresolvable_schema_error, IonSchemaResult,
 };
@@ -9,7 +10,7 @@ use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::type_reference::{TypeReference, VariablyOccurringTypeRef};
 use crate::types::TypeDefinitionImpl;
 use ion_rs::element::Element;
-use ion_rs::IonType;
+use ion_rs::{IonType, IonWriter};
 
 /// Provides public facing APIs for constructing ISL type references programmatically for ISL 1.0
 pub mod v_1_0 {
@@ -114,6 +115,21 @@ pub enum NullabilityModifier {
     Nullable,
     NullOr,
     Nothing, // Represents that no modifiers were provided with the type reference
+}
+
+impl WriteToIsl for NullabilityModifier {
+    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
+        match self {
+            NullabilityModifier::Nullable => {
+                writer.set_annotations(["nullable"]);
+            }
+            NullabilityModifier::NullOr => {
+                writer.set_annotations(["$null_or"]);
+            }
+            NullabilityModifier::Nothing => {}
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -332,6 +348,32 @@ impl IslTypeRefImpl {
     }
 }
 
+impl WriteToIsl for IslTypeRefImpl {
+    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
+        match self {
+            IslTypeRefImpl::Named(name, nullability_modifier) => {
+                nullability_modifier.write_to(writer)?;
+                writer.write_symbol(name)?;
+            }
+            IslTypeRefImpl::TypeImport(type_import, nullability_modifier) => {
+                nullability_modifier.write_to(writer)?;
+                writer.step_in(IonType::Struct)?;
+                type_import.write_to(writer)?;
+                writer.step_out()?;
+            }
+            IslTypeRefImpl::Anonymous(type_def, nullability_modifier) => {
+                nullability_modifier.write_to(writer)?;
+                writer.step_in(IonType::Struct)?;
+                for constraint in type_def.constraints() {
+                    constraint.write_to(writer)?;
+                }
+                writer.step_out()?;
+            }
+        }
+        Ok(())
+    }
+}
+
 /// Represents a [variably occurring type reference] that will be used by `ordered_elements` and `fields` constraints.
 ///  
 /// ```ion
@@ -458,5 +500,33 @@ impl IslVariablyOccurringTypeRef {
         )?;
 
         Ok(VariablyOccurringTypeRef::new(type_ref, self.occurs()))
+    }
+}
+
+impl WriteToIsl for IslVariablyOccurringTypeRef {
+    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
+        match &self.type_ref {
+            IslTypeRefImpl::Named(name, nullability_modifier) => {
+                nullability_modifier.write_to(writer)?;
+                writer.write_symbol(name)?;
+            }
+            IslTypeRefImpl::TypeImport(type_import, nullability_modifier) => {
+                nullability_modifier.write_to(writer)?;
+                writer.step_in(IonType::Struct)?;
+                type_import.write_to(writer)?;
+                writer.step_out()?;
+            }
+            IslTypeRefImpl::Anonymous(type_def, nullability_modifier) => {
+                nullability_modifier.write_to(writer)?;
+                writer.step_in(IonType::Struct)?;
+                for constraint in type_def.constraints() {
+                    constraint.write_to(writer)?;
+                }
+                writer.set_field_name("occurs");
+                self.occurs.write_to(writer)?;
+                writer.step_out()?;
+            }
+        }
+        Ok(())
     }
 }
