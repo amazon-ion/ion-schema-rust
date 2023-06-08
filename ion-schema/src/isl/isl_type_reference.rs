@@ -233,8 +233,12 @@ impl IslTypeRefImpl {
                         return invalid_schema_error("an inline import type reference does not have `type` field specified")
                     }
                     IslImport::Type(isl_import_type) => { isl_import_type }
-                    IslImport::TypeAlias(_) => {
+                    IslImport::TypeAlias(_) if isl_version == IslVersion::V2_0 => {
                         return invalid_schema_error("an inline import type reference can not have `alias` field specified")
+                    }
+                    IslImport::TypeAlias(isl_import_type) => {
+                        // consider the type alias as open content for ISL 1.0
+                        IslImportType::new(isl_import_type.id().to_owned(), isl_import_type.type_name().to_owned(), None)
                     }
                 };
                 // if an inline import type is encountered add it in the inline_imports_types

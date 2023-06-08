@@ -25,8 +25,8 @@ use crate::isl::isl_import::{IslImport, IslImportType};
 use crate::isl::isl_type::{IslType, IslTypeImpl};
 use crate::isl::{IslSchema, IslVersion};
 use crate::result::{
-    invalid_schema_error, unresolvable_schema_error, unresolvable_schema_error_raw, IonSchemaError,
-    IonSchemaResult,
+    invalid_schema_error, invalid_schema_error_raw, unresolvable_schema_error,
+    unresolvable_schema_error_raw, IonSchemaError, IonSchemaResult,
 };
 use crate::schema::Schema;
 use crate::types::{BuiltInTypeDefinition, Nullability, TypeDefinitionImpl, TypeDefinitionKind};
@@ -796,21 +796,22 @@ impl Resolver {
                     }
                 }
                 if isl_version == IslVersion::V2_0 {
-                    if let Some(user_reserved_fields_struct) =
-                        schema_header.get("user_reserved_fields").and_then(|it| {
-                            if !it.annotations().is_empty() {
-                                None
-                            } else {
-                                it.as_struct()
-                            }
-                        })
+                    if let Some(user_reserved_fields_element) =
+                        schema_header.get("user_reserved_fields")
                     {
+                        if !user_reserved_fields_element.annotations().is_empty() {
+                            return invalid_schema_error(
+                                "User reserved field must be an unannotated struct",
+                            )?;
+                        }
+                        let user_reserved_fields_struct = user_reserved_fields_element
+                            .as_struct()
+                            .ok_or(invalid_schema_error_raw(
+                                "User reserved field must be a non-null struct",
+                            ))?;
+
                         isl_user_reserved_fields =
                             UserReservedFields::from_ion_elements(user_reserved_fields_struct)?;
-                    } else {
-                        return invalid_schema_error(
-                            "User reserved field must be non-null and unannotated struct",
-                        );
                     }
                     isl_user_reserved_fields.validate_field_names_in_header(schema_header)?;
                 }
@@ -1144,11 +1145,32 @@ impl SchemaSystem {
             .load_schema(id, &mut TypeStore::default(), None)
     }
 
+    /// Constructs a new schema using provided ISL content.
+    pub fn new_schema(&mut self, schema_content: &[u8], id: &str) -> IonSchemaResult<Arc<Schema>> {
+        let elements = Element::read_all(schema_content)?;
+        let isl = self
+            .resolver
+            .isl_schema_from_elements(elements.into_iter(), id)?;
+        self.resolver
+            .schema_from_isl_schema(isl.version(), isl, &mut TypeStore::default(), None)
+    }
+
     /// Requests each of the provided [`DocumentAuthority`]s, in order, to get ISL model for the
     /// requested schema id until one successfully resolves it.
     /// If an authority throws an exception, resolution silently proceeds to the next authority.
     pub fn load_isl_schema<A: AsRef<str>>(&mut self, id: A) -> IonSchemaResult<IslSchema> {
         self.resolver.load_isl_schema(id, None)
+    }
+
+    /// Constructs a new ISL model using provided ISL content.
+    pub fn new_isl_schema(
+        &mut self,
+        schema_content: &[u8],
+        id: &str,
+    ) -> IonSchemaResult<IslSchema> {
+        let elements = Element::read_all(schema_content)?;
+        self.resolver
+            .isl_schema_from_elements(elements.into_iter(), id)
     }
 
     /// Resolves given ISL 1.0 model into a [Schema].
@@ -1491,6 +1513,7 @@ mod schema_system_tests {
             (
                 "sample_number.isl",
                 r#"
+                    $ion_schema_2_0
                     schema_header::{
                       imports: [],
                     }
@@ -1515,6 +1538,7 @@ mod schema_system_tests {
             (
                 "sample_decimal.isl",
                 r#"
+                    $ion_schema_2_0
                     schema_header::{
                       imports: [],
                     }
@@ -2165,6 +2189,86 @@ mod schema_system_tests {
 
         // verify the resolved schema generated from the ISL 2.0 model that contains ISL 1.0 constraints is invalid
         assert!(&schema.is_err());
+    }
+
+    #[test]
+    fn new_schema_test() {
+        let mut schema_system = SchemaSystem::new(vec![]);
+        let schema = schema_system.new_schema(
+            br#"
+                $ion_schema_2_0
+                schema_header::{}
+                
+                type::{
+                  name: my_type,
+                  type: string,
+                }
+                
+                schema_footer::{}
+            "#,
+            "sample.isl",
+        );
+        assert!(schema.is_ok());
+    }
+
+    #[test]
+    fn new_schema_invalid_test() {
+        let mut schema_system = SchemaSystem::new(vec![]);
+        let schema = schema_system.new_schema(
+            br#"
+                $ion_schema_2_0
+                schema_header::{}
+                
+                type::{
+                  name: my_type,
+                  type: nullable::string, // `nullable` annotation is not supported in ISL 2.0
+                }
+                
+                schema_footer::{}
+            "#,
+            "sample.isl",
+        );
+        assert!(schema.is_err());
+    }
+
+    #[test]
+    fn new_isl_schema_test() {
+        let mut schema_system = SchemaSystem::new(vec![]);
+        let isl = schema_system.new_isl_schema(
+            br#"
+                $ion_schema_2_0
+                schema_header::{}
+                
+                type::{
+                  name: my_type,
+                  type: string,
+                }
+                
+                schema_footer::{}
+            "#,
+            "sample.isl",
+        );
+        assert!(isl.is_ok());
+    }
+
+    #[test]
+    fn new_isl_schema_invalid_test() {
+        let mut schema_system = SchemaSystem::new(vec![]);
+        let isl = schema_system.new_isl_schema(
+            br#"
+                $ion_schema_2_0
+                schema_header::{}
+                
+                type::{
+                  name: my_type,
+                  type: nullable::string, // `nullable` annotation is not supported in ISL 2.0
+                }
+                
+                schema_footer::{}
+            "#,
+            "sample.isl",
+        );
+        assert!(isl.is_err());
     }
 
     #[test]

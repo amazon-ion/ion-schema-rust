@@ -296,6 +296,7 @@ impl UserReservedFields {
                     .schema_header_fields
                     .contains(&f.text().unwrap().to_owned())
                     && f.text().unwrap() != "user_reserved_fields"
+                    && f.text().unwrap() != "imports"
             })
             .collect();
 

@@ -94,7 +94,7 @@ pub mod util;
 
 /// Represents Ion Schema Language Versions
 /// Currently it support v1.0 and v2.0
-#[derive(Debug, Clone, PartialEq, Copy)]
+#[derive(Debug, Clone, PartialEq, Eq, Copy)]
 pub enum IslVersion {
     V1_0,
     V2_0,

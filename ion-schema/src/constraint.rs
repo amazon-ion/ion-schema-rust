@@ -184,6 +184,7 @@ impl Constraint {
                         &a,
                         annotations_modifiers.contains(&"required"),
                     ),
+                    IslVersion::V1_0,
                 )
             })
             .collect();
