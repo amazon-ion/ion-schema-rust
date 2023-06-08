@@ -341,7 +341,7 @@ mod isl_tests {
     use nom::AsBytes;
     use rstest::*;
     use std::io::Write;
-    use std::path::Path;
+    use std::path::{Path, MAIN_SEPARATOR};
     use test_generator::test_resources;
 
     // helper function to create NamedIslType for isl tests using ISL 1.0
@@ -1016,10 +1016,17 @@ mod isl_tests {
         "ion-schema-tests/ion_schema_2_0/imports/tree/inline_import_c.isl", // related to order of types in the schema file
     ];
 
+    fn is_skip_list_path(file_name: &str) -> bool {
+        SKIP_LIST
+            .iter()
+            .map(|p| p.replace('/', &MAIN_SEPARATOR.to_string()))
+            .any(|p| p == file_name)
+    }
+
     #[test_resources("ion-schema-tests/**/*.isl")]
     #[test_resources("ion-schema-schemas/**/*.isl")]
     fn test_write_to_isl(file_name: &str) {
-        if SKIP_LIST.contains(&file_name) {
+        if is_skip_list_path(&file_name) {
             return;
         }
         let mut schema_system =
@@ -1038,7 +1045,6 @@ mod isl_tests {
         assert!(write_schema_result.is_ok());
 
         let schema_content = writer.output().as_bytes();
-        println!("{}", String::from_utf8(schema_content.to_vec()).unwrap());
 
         let actual_schema_result = schema_system.new_isl_schema(schema_content, file_name);
 
