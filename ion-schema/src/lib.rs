@@ -5,10 +5,11 @@ use crate::external::ion_rs::IonType;
 use crate::ion_path::IonPath;
 use crate::isl::isl_constraint::IslConstraintImpl;
 use crate::isl::isl_type::IslTypeImpl;
+use crate::isl::WriteToIsl;
 use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
 use crate::violation::{Violation, ViolationCode};
 use ion_rs::element::{Element, Struct};
-use ion_rs::Symbol;
+use ion_rs::{IonWriter, Symbol};
 use regex::Regex;
 use std::fmt::{Display, Formatter};
 use std::sync::OnceLock;
@@ -357,5 +358,11 @@ impl UserReservedFields {
             ));
         }
         Ok(())
+    }
+}
+
+impl WriteToIsl for UserReservedFields {
+    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
+        todo!()
     }
 }

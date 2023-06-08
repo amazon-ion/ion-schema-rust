@@ -81,8 +81,11 @@
 
 use crate::isl::isl_import::{IslImport, IslImportType};
 use crate::isl::isl_type::IslType;
+use crate::result::IonSchemaResult;
 use crate::UserReservedFields;
+use ion_rs::element::writer::ElementWriter;
 use ion_rs::element::Element;
+use ion_rs::{IonType, IonWriter};
 use std::fmt::{Display, Formatter};
 
 pub mod isl_constraint;
@@ -111,6 +114,11 @@ impl Display for IslVersion {
             }
         )
     }
+}
+
+/// Provides a method to write an ISL model using an Ion writer
+pub trait WriteToIsl {
+    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()>;
 }
 
 /// Provides an internal representation of an schema file
@@ -193,6 +201,55 @@ impl IslSchema {
     /// Otherwise returns None
     pub fn user_reserved_fields(&self) -> Option<&UserReservedFields> {
         self.schema.user_reserved_fields.as_ref()
+    }
+
+    fn write_header<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
+        writer.set_annotations(["schema_header"]);
+        writer.step_in(IonType::Struct)?;
+        if !self.schema.imports.is_empty() {
+            writer.set_field_name("imports");
+            writer.step_in(IonType::List)?;
+            for import in &self.schema.imports {
+                import.write_to(writer)?;
+            }
+            writer.step_out()?;
+        }
+        if let Some(user_reserved_fields) = &self.schema.user_reserved_fields {
+            user_reserved_fields.write_to(writer)?;
+        }
+        writer.step_out()?;
+
+        Ok(())
+    }
+}
+
+impl WriteToIsl for IslSchema {
+    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
+        let version = self.schema.version;
+        // write the version marker for given schema
+        match version {
+            IslVersion::V1_0 => {
+                writer.write_symbol("$ion_schema_1_0")?;
+            }
+            IslVersion::V2_0 => {
+                writer.write_symbol("$ion_schema_2_0")?;
+            }
+        }
+        self.write_header(writer)?;
+        for isl_type in &self.schema.types {
+            isl_type.type_definition.write_to(writer)?;
+        }
+        // write open content at the end of the schema
+        for value in &self.schema.open_content {
+            writer.write_element(value)?;
+        }
+
+        // write footer for given schema
+        writer.set_annotations(["schema_footer"]);
+        writer.step_in(IonType::Struct)?;
+        writer.step_out()?;
+        writer.flush()?;
+        Ok(())
     }
 }
 

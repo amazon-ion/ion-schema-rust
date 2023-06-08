@@ -1,8 +1,10 @@
 use crate::isl::isl_constraint::{IslConstraint, IslConstraintImpl};
 use crate::isl::isl_import::IslImportType;
 use crate::isl::IslVersion;
+use crate::isl::WriteToIsl;
 use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
 use ion_rs::element::Element;
+use ion_rs::{IonType, IonWriter};
 
 /// Provides public facing APIs for constructing ISL types programmatically for ISL 1.0
 pub mod v_1_0 {
@@ -214,6 +216,12 @@ impl IslTypeImpl {
             constraints,
             Some(ion.to_owned()),
         ))
+    }
+}
+
+impl WriteToIsl for IslTypeImpl {
+    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
+        todo!()
     }
 }
 

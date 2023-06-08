@@ -1,5 +1,7 @@
+use crate::isl::WriteToIsl;
 use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
 use ion_rs::element::Element;
+use ion_rs::{IonType, IonWriter};
 
 /// Represents an [import] in an ISL schema.
 ///
@@ -56,6 +58,12 @@ impl IslImport {
     }
 }
 
+impl WriteToIsl for IslImport {
+    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
+        todo!()
+    }
+}
+
 /// Represents typed and type aliased [IslImport]s
 /// Typed import grammar: `{ id: <ID>, type: <TYPE_NAME> }`
 /// Type aliased import grammar: `{ id: <ID>, type: <TYPE_NAME>, as: <TYPE_ALIAS> }`
@@ -85,5 +93,11 @@ impl IslImportType {
 
     pub fn alias(&self) -> &Option<String> {
         &self.alias
+    }
+}
+
+impl WriteToIsl for IslImportType {
+    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
+        todo!()
     }
 }
