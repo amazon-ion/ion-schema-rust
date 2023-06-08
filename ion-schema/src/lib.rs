@@ -363,6 +363,27 @@ impl UserReservedFields {
 
 impl WriteToIsl for UserReservedFields {
     fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
-        todo!()
+        writer.set_field_name("user_reserved_fields");
+        writer.step_in(IonType::Struct)?;
+        writer.set_field_name("schema_header");
+        writer.step_in(IonType::List)?;
+        for value in &self.schema_header_fields {
+            writer.write_symbol(value)?;
+        }
+        writer.step_out()?;
+        writer.set_field_name("type");
+        writer.step_in(IonType::List)?;
+        for value in &self.type_fields {
+            writer.write_symbol(value)?;
+        }
+        writer.step_out()?;
+        writer.set_field_name("schema_footer");
+        writer.step_in(IonType::List)?;
+        for value in &self.schema_footer_fields {
+            writer.write_symbol(value)?;
+        }
+        writer.step_out()?;
+        writer.step_out()?;
+        Ok(())
     }
 }
