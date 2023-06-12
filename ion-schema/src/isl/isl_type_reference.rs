@@ -514,6 +514,8 @@ impl WriteToIsl for IslVariablyOccurringTypeRef {
                 nullability_modifier.write_to(writer)?;
                 writer.step_in(IonType::Struct)?;
                 type_import.write_to(writer)?;
+                writer.set_field_name("occurs");
+                self.occurs.write_to(writer)?;
                 writer.step_out()?;
             }
             IslTypeRefImpl::Anonymous(type_def, nullability_modifier) => {
