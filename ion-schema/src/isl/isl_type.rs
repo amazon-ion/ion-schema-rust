@@ -224,7 +224,13 @@ impl WriteToIsl for IslTypeImpl {
         writer.set_annotations(["type"]);
         writer.step_in(IonType::Struct)?;
         writer.set_field_name("name");
-        writer.write_symbol(self.name.clone().unwrap())?;
+        let _ = self
+            .name
+            .as_ref()
+            .map(|name| writer.write_symbol(name))
+            .ok_or(invalid_schema_error_raw(
+                "Top level type definitions must contain a `name` field",
+            ))?;
         for constraint in self.constraints() {
             constraint.write_to(writer)?;
         }
