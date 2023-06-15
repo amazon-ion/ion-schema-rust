@@ -67,6 +67,61 @@
 //! assert!(schema.unwrap().get_type("my_type_name").is_some())
 //! ```
 //!
+//!  ## Example of serializing a programmatically constructed schema into a schema file:
+//! ```
+//! use ion_rs::{IonWriter, TextWriterBuilder};
+//! use ion_schema::isl::{isl_type::v_1_0::*, isl_constraint::v_1_0::*, isl_type_reference::v_1_0::*, IslSchema, WriteToIsl};
+//! use ion_schema::schema::Schema;
+//! use ion_schema::system::SchemaSystem;
+//!
+//! let isl_type = named_type(
+//!     // represents the `name` of the defined type
+//!     "my_type_name".to_owned(),
+//!     vec![
+//!         // represents the `type: int` constraint
+//!         type_constraint(
+//!             named_type_ref("int")
+//!         ),
+//!         // represents `all_of` with anonymous type `{ type: bool }` constraint
+//!         all_of(
+//!             vec![
+//!                 anonymous_type_ref(
+//!                     vec![
+//!                         type_constraint(
+//!                             named_type_ref("bool")
+//!                         )
+//!                     ]
+//!                 )
+//!             ]
+//!         )
+//!     ]
+//! );
+//!
+//! // create an ISL schema using above IslType
+//! let isl_schema = IslSchema::schema_v_1_0("my_schema", vec![], vec![isl_type.to_owned()], vec![], vec![]);
+//!
+//! // initiate an Ion pretty text writer
+//! let mut buffer = Vec::new();
+//! let mut writer = TextWriterBuilder::pretty().build(&mut buffer).unwrap();
+//!
+//! // write the previously constructed ISL model into a schema file using `write_to`
+//! let write_schema_result = isl_schema.write_to(&mut writer);
+//! assert!(write_schema_result.is_ok());
+//!
+//! // The above written schema file looks like following:
+//! // $ion_schema_1_0
+//! // schema_header::{}
+//! // type::{
+//! //    name: my_type_name,
+//! //   type: int,
+//! //   all_of: [
+//! //       {
+//! //           type: bool
+//! //       }
+//! //   ]
+//! // }
+//! // schema_footer::{}
+//! ```
 //! Note that all the above functions to construct a type, constraint and type reference comes from `v_1_0` module which represents functions for [ISL 1.0](https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec).
 //! In order to programmatically construct [ISL 2.0](https://amazon-ion.github.io/ion-schema/docs/isl-2-0/spec) types, constraints and type references use `v_2_0` module.
 
