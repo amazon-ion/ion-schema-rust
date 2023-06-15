@@ -5,10 +5,11 @@ use crate::external::ion_rs::IonType;
 use crate::ion_path::IonPath;
 use crate::isl::isl_constraint::IslConstraintImpl;
 use crate::isl::isl_type::IslTypeImpl;
+use crate::isl::WriteToIsl;
 use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
 use crate::violation::{Violation, ViolationCode};
 use ion_rs::element::{Element, Struct};
-use ion_rs::Symbol;
+use ion_rs::{IonWriter, Symbol};
 use regex::Regex;
 use std::fmt::{Display, Formatter};
 use std::sync::OnceLock;
@@ -356,6 +357,42 @@ impl UserReservedFields {
                 "schema footer contains unexpected fields: {unexpected_fields:?}"
             ));
         }
+        Ok(())
+    }
+}
+
+impl WriteToIsl for UserReservedFields {
+    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
+        // this function assumes that we are already inside a schema header struct
+        // writes `user_reserved_fields` in the schema header
+        writer.set_field_name("user_reserved_fields");
+        writer.step_in(IonType::Struct)?;
+
+        // writes user reserved fields for `schema_header`
+        writer.set_field_name("schema_header");
+        writer.step_in(IonType::List)?;
+        for value in &self.schema_header_fields {
+            writer.write_symbol(value)?;
+        }
+        writer.step_out()?;
+
+        // writes user reserved fields for `type`
+        writer.set_field_name("type");
+        writer.step_in(IonType::List)?;
+        for value in &self.type_fields {
+            writer.write_symbol(value)?;
+        }
+        writer.step_out()?;
+
+        // writes user reserved fields for `schema_footer`
+        writer.set_field_name("schema_footer");
+        writer.step_in(IonType::List)?;
+        for value in &self.schema_footer_fields {
+            writer.write_symbol(value)?;
+        }
+        writer.step_out()?;
+
+        writer.step_out()?;
         Ok(())
     }
 }

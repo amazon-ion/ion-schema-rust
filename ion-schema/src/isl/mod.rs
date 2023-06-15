@@ -81,8 +81,11 @@
 
 use crate::isl::isl_import::{IslImport, IslImportType};
 use crate::isl::isl_type::IslType;
+use crate::result::IonSchemaResult;
 use crate::UserReservedFields;
+use ion_rs::element::writer::ElementWriter;
 use ion_rs::element::Element;
+use ion_rs::{IonType, IonWriter};
 use std::fmt::{Display, Formatter};
 
 pub mod isl_constraint;
@@ -111,6 +114,11 @@ impl Display for IslVersion {
             }
         )
     }
+}
+
+/// Provides a method to write an ISL model using an Ion writer
+pub trait WriteToIsl {
+    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()>;
 }
 
 /// Provides an internal representation of an schema file
@@ -194,6 +202,55 @@ impl IslSchema {
     pub fn user_reserved_fields(&self) -> Option<&UserReservedFields> {
         self.schema.user_reserved_fields.as_ref()
     }
+
+    fn write_header<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
+        writer.set_annotations(["schema_header"]);
+        writer.step_in(IonType::Struct)?;
+        if !self.schema.imports.is_empty() {
+            writer.set_field_name("imports");
+            writer.step_in(IonType::List)?;
+            for import in &self.schema.imports {
+                import.write_to(writer)?;
+            }
+            writer.step_out()?;
+        }
+        if let Some(user_reserved_fields) = &self.schema.user_reserved_fields {
+            user_reserved_fields.write_to(writer)?;
+        }
+        writer.step_out()?;
+
+        Ok(())
+    }
+}
+
+impl WriteToIsl for IslSchema {
+    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
+        let version = self.schema.version;
+        // write the version marker for given schema
+        match version {
+            IslVersion::V1_0 => {
+                writer.write_symbol("$ion_schema_1_0")?;
+            }
+            IslVersion::V2_0 => {
+                writer.write_symbol("$ion_schema_2_0")?;
+            }
+        }
+        self.write_header(writer)?;
+        for isl_type in &self.schema.types {
+            isl_type.type_definition.write_to(writer)?;
+        }
+        // write open content at the end of the schema
+        for value in &self.schema.open_content {
+            writer.write_element(value)?;
+        }
+
+        // write footer for given schema
+        writer.set_annotations(["schema_footer"]);
+        writer.step_in(IonType::Struct)?;
+        writer.step_out()?;
+        writer.flush()?;
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -255,6 +312,7 @@ impl IslSchemaImpl {
 
 #[cfg(test)]
 mod isl_tests {
+    use crate::authority::FileSystemDocumentAuthority;
     use crate::isl::isl_constraint::v_1_0::*;
     use crate::isl::isl_constraint::IslConstraint;
     use crate::isl::isl_range::DecimalRange;
@@ -273,14 +331,17 @@ mod isl_tests {
     use crate::isl::IslVersion;
     use crate::isl::*;
     use crate::result::IonSchemaResult;
+    use crate::system::SchemaSystem;
     use ion_rs::element::Element;
     use ion_rs::types::decimal::*;
     use ion_rs::types::integer::Int as IntegerValue;
     use ion_rs::types::timestamp::Timestamp;
-    use ion_rs::IonType;
     use ion_rs::Symbol;
+    use ion_rs::{IonType, TextWriterBuilder};
     use rstest::*;
     use std::io::Write;
+    use std::path::{Path, MAIN_SEPARATOR};
+    use test_generator::test_resources;
 
     // helper function to create NamedIslType for isl tests using ISL 1.0
     fn load_named_type(text: &str) -> IslType {
@@ -944,5 +1005,59 @@ mod isl_tests {
         let mut buf = Vec::new();
         write!(&mut buf, "{}", range.into()).unwrap();
         assert_eq!(expected, String::from_utf8(buf).unwrap());
+    }
+
+    const SKIP_LIST: [&str; 5] = [
+        "ion-schema-schemas/json/json.isl", // the file contains `nan` which fails on equivalence for two schemas
+        "ion-schema-tests/ion_schema_1_0/nullable.isl", // Needs `nullable` annotation related fixes
+        // following skip list files are related to order of types in the schema file
+        // https://github.com/amazon-ion/ion-schema-rust/issues/184
+        "ion-schema-tests/ion_schema_1_0/schema/import/import_inline.isl",
+        "ion-schema-tests/ion_schema_2_0/imports/tree/inline_import_a.isl",
+        "ion-schema-tests/ion_schema_2_0/imports/tree/inline_import_c.isl",
+    ];
+
+    fn is_skip_list_path(file_name: &str) -> bool {
+        SKIP_LIST
+            .iter()
+            .map(|p| p.replace('/', &MAIN_SEPARATOR.to_string()))
+            .any(|p| p == file_name)
+    }
+
+    #[test_resources("ion-schema-tests/**/*.isl")]
+    #[test_resources("ion-schema-schemas/**/*.isl")]
+    fn test_write_to_isl(file_name: &str) {
+        if is_skip_list_path(&file_name) {
+            return;
+        }
+
+        // creates a schema system that will be sued to load schema files into a schema model
+        let mut schema_system =
+            SchemaSystem::new(vec![Box::new(FileSystemDocumentAuthority::new(
+                Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap(),
+            ))]);
+
+        // construct an ISL model from a schema file
+        let expected_schema_result = schema_system.load_isl_schema(file_name);
+        assert!(expected_schema_result.is_ok());
+        let expected_schema = expected_schema_result.unwrap();
+
+        // initiate an Ion pretty text writer
+        let mut buffer = Vec::new();
+        let mut writer = TextWriterBuilder::pretty().build(&mut buffer).unwrap();
+
+        // write the previously constructed ISL model into a schema file using `write_to`
+        let write_schema_result = expected_schema.write_to(&mut writer);
+        assert!(write_schema_result.is_ok());
+
+        // create a new schema model from the schema file generated by the previous step
+        let actual_schema_result =
+            schema_system.new_isl_schema(writer.output().as_slice(), file_name);
+        assert!(actual_schema_result.is_ok());
+        let actual_schema = actual_schema_result.unwrap();
+
+        // compare the actual schema model that was generated from dynamically created schema file
+        // with the expected schema model that was constructed from given schema file
+        assert_eq!(actual_schema, expected_schema);
     }
 }

@@ -1,14 +1,16 @@
 use crate::isl::isl_range::RangeBoundaryValue::*;
 use crate::isl::util::TimestampPrecision;
 use crate::isl::IslVersion;
+use crate::isl::WriteToIsl;
 use crate::result::{
     invalid_schema_error, invalid_schema_error_raw, IonSchemaError, IonSchemaResult,
 };
+use ion_rs::element::writer::ElementWriter;
 use ion_rs::element::Element;
 use ion_rs::external::bigdecimal::num_bigint::BigInt;
 use ion_rs::external::bigdecimal::{BigDecimal, One};
 use ion_rs::types::integer::IntAccess;
-use ion_rs::{element, Decimal, Int, IonType, Timestamp};
+use ion_rs::{element, Decimal, Int, IonType, IonWriter, Timestamp};
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
 use std::prelude::rust_2021::TryInto;
@@ -418,6 +420,26 @@ impl Display for Range {
     }
 }
 
+impl WriteToIsl for Range {
+    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
+        writer.set_annotations(["range"]);
+        match &self {
+            Range::Integer(integer) => integer.write_to(writer)?,
+            Range::NonNegativeInteger(non_negative_integer) => {
+                non_negative_integer.write_to(writer)?
+            }
+            Range::TimestampPrecision(timestamp_precision) => {
+                timestamp_precision.write_to(writer)?
+            }
+            Range::Timestamp(timestamp) => timestamp.write_to(writer)?,
+            Range::Decimal(decimal) => decimal.write_to(writer)?,
+            Range::Float(float) => float.write_to(writer)?,
+            Range::Number(number) => number.write_to(writer)?,
+        }
+        Ok(())
+    }
+}
+
 /// Represents a generic range where some constraints can be defined using this range
 // this is a generic implementation of ranges
 #[derive(Debug, Clone, PartialEq)]
@@ -736,6 +758,16 @@ impl<T: Display> Display for RangeImpl<T> {
     }
 }
 
+impl<T: Display> WriteToIsl for RangeImpl<T> {
+    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
+        writer.step_in(IonType::List)?;
+        self.start.write_to(writer)?;
+        self.end.write_to(writer)?;
+        writer.step_out()?;
+        Ok(())
+    }
+}
+
 // This lets us turn any `T` into a RangeBoundaryValue<T>::Value(_, Inclusive)
 impl<T> From<T> for RangeBoundaryValue<T> {
     fn from(value: T) -> RangeBoundaryValue<T> {
@@ -941,6 +973,23 @@ impl<T: Display> Display for RangeBoundaryValue<T> {
                 }
             }
         )
+    }
+}
+
+impl<T: Display> WriteToIsl for RangeBoundaryValue<T> {
+    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
+        match &self {
+            Max => writer.write_symbol("max")?,
+            Min => writer.write_symbol("min")?,
+            Value(value, range_boundary_type) => {
+                if range_boundary_type == &RangeBoundaryType::Exclusive {
+                    writer.set_annotations(["exclusive"]);
+                }
+                let element = Element::read_one(format!("{value}").as_bytes())?;
+                writer.write_element(&element)?;
+            }
+        }
+        Ok(())
     }
 }
 
