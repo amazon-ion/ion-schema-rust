@@ -145,9 +145,9 @@ use std::fmt::{Display, Formatter};
 
 pub mod isl_constraint;
 pub mod isl_import;
-pub mod isl_range;
 pub mod isl_type;
 pub mod isl_type_reference;
+pub mod ranges;
 pub mod util;
 
 /// Represents Ion Schema Language Versions
@@ -368,33 +368,25 @@ impl IslSchemaImpl {
 #[cfg(test)]
 mod isl_tests {
     use crate::authority::FileSystemDocumentAuthority;
+    use crate::ion_extension::ElementExtensions;
     use crate::isl::isl_constraint::v_1_0::*;
     use crate::isl::isl_constraint::IslConstraint;
-    use crate::isl::isl_range::DecimalRange;
-    use crate::isl::isl_range::FloatRange;
-    use crate::isl::isl_range::IntegerRange;
-    use crate::isl::isl_range::Number;
-    use crate::isl::isl_range::NumberRange;
-    use crate::isl::isl_range::TimestampPrecisionRange;
-    use crate::isl::isl_range::TimestampRange;
-    use crate::isl::isl_range::{Range, RangeBoundaryValue, RangeType};
     use crate::isl::isl_type::v_1_0::*;
     use crate::isl::isl_type::{IslType, IslTypeImpl};
     use crate::isl::isl_type_reference::v_1_0::*;
+    use crate::isl::ranges::*;
     use crate::isl::util::Ieee754InterchangeFormat;
     use crate::isl::util::TimestampPrecision;
+    use crate::isl::util::ValidValue;
     use crate::isl::IslVersion;
     use crate::isl::*;
     use crate::result::IonSchemaResult;
     use crate::system::SchemaSystem;
     use ion_rs::element::Element;
     use ion_rs::types::Decimal;
-    use ion_rs::types::Int as IntegerValue;
-    use ion_rs::types::Timestamp;
     use ion_rs::Symbol;
     use ion_rs::{IonType, TextWriterBuilder};
     use rstest::*;
-    use std::io::Write;
     use std::path::{Path, MAIN_SEPARATOR};
     use test_generator::test_resources;
 
@@ -553,13 +545,13 @@ mod isl_tests {
         load_anonymous_type(r#" // For a schema with ordered_elements constraint as below:
                     { ordered_elements: [  symbol, { type: int },  ] }
                 "#),
-        anonymous_type([ordered_elements([variably_occurring_type_ref(named_type_ref("symbol"), Range::required()), variably_occurring_type_ref(anonymous_type_ref([type_constraint(named_type_ref("int"))]), Range::required())])])
+        anonymous_type([ordered_elements([variably_occurring_type_ref(named_type_ref("symbol"), UsizeRange::new_single_value(1)), variably_occurring_type_ref(anonymous_type_ref([type_constraint(named_type_ref("int"))]), UsizeRange::new_single_value(1))])])
     ),
     case::fields_constraint(
         load_anonymous_type(r#" // For a schema with fields constraint as below:
                     { fields: { name: string, id: int} }
                 "#),
-        anonymous_type([fields(vec![("name".to_owned(), variably_occurring_type_ref(named_type_ref("string"), Range::optional())), ("id".to_owned(), variably_occurring_type_ref(named_type_ref("int"), Range::optional()))].into_iter())]),
+        anonymous_type([fields(vec![("name".to_owned(), variably_occurring_type_ref(named_type_ref("string"), UsizeRange::zero_or_one())), ("id".to_owned(), variably_occurring_type_ref(named_type_ref("int"), UsizeRange::zero_or_one()))].into_iter())]),
     ),
     case::field_names_constraint(
         load_anonymous_type_v2_0(r#" // For a schema with field_names constraint as below:
@@ -625,37 +617,39 @@ mod isl_tests {
         load_anonymous_type(r#" // For a schema with scale constraint as below:
                         { scale: 2 }
                     "#),
-        anonymous_type([scale(IntegerValue::I64(2).into())])
+        anonymous_type([scale(2.into())])
     ),
     case::exponent_constraint(
         load_anonymous_type_v2_0(r#" // For a schema with exponent constraint as below:
-                        { exponent: -2 }
+                        { exponent: 2 }
                     "#),
-        isl_type::v_2_0::anonymous_type([isl_constraint::v_2_0::exponent(IntegerValue::I64(-2).into())])
+        isl_type::v_2_0::anonymous_type([isl_constraint::v_2_0::exponent(2.into())])
     ),
     case::timestamp_precision_constraint(
         load_anonymous_type(r#" // For a schema with timestamp_precision constraint as below:
                             { timestamp_precision: year }
                         "#),
-        anonymous_type([timestamp_precision("year".try_into().unwrap())])
+        anonymous_type([timestamp_precision(TimestampPrecisionRange::new_single_value(TimestampPrecision::Year))])
     ),
     case::valid_values_constraint(
         load_anonymous_type(r#" // For a schema with valid_values constraint as below:
                         { valid_values: [2, 3.5, 5e7, "hello", hi] }
                     "#),
-        anonymous_type([valid_values_with_values(vec![2.into(), Decimal::new(35, -1).into(), 5e7.into(), "hello".to_owned().into(), Symbol::from("hi").into()]).unwrap()])
+        anonymous_type([valid_values(vec![2.into(), Decimal::new(35, -1).into(), 5e7.into(), "hello".to_owned().into(), Symbol::from("hi").into()]).unwrap()])
     ),
     case::valid_values_with_range_constraint(
         load_anonymous_type(r#" // For a schema with valid_values constraint as below:
                         { valid_values: range::[1, 5.5] }
                     "#),
         anonymous_type(
-                [valid_values_with_range(
-                    NumberRange::new(
-                        Number::from(&IntegerValue::I64(1)),
-                        Number::from(&Decimal::new(55, -1))
-                    ).unwrap().into())
-                ]
+                [valid_values(vec![
+                    ValidValue::NumberRange(
+                        NumberRange::new_inclusive(
+                            1.into(),
+                            Decimal::new(55, -1)
+                        ).unwrap()
+                    )
+                ]).unwrap()]
             )
         ),
     case::utf8_byte_length_constraint(
@@ -698,368 +692,28 @@ mod isl_tests {
         assert_eq!(isl_type1, isl_type2);
     }
 
-    // helper function to create a range
-    fn load_range(text: &str, isl_version: IslVersion) -> IonSchemaResult<Range> {
-        Range::from_ion_element(
+    // helper function to create a timestamp precision range
+    fn load_timestamp_precision_range(text: &str) -> IonSchemaResult<TimestampPrecisionRange> {
+        TimestampPrecisionRange::from_ion_element(
             &Element::read_one(text.as_bytes()).expect("parsing failed unexpectedly"),
-            RangeType::Any,
-            isl_version,
+            |e| {
+                let symbol_text = e.as_symbol().and_then(Symbol::text)?;
+                TimestampPrecision::try_from(symbol_text).ok()
+            },
         )
     }
 
-    // helper function to create a timestamp precision range
-    fn load_timestamp_precision_range(text: &str) -> IonSchemaResult<Range> {
-        Range::from_ion_element(
+    // helper function to create a number range
+    fn load_number_range(text: &str) -> IonSchemaResult<NumberRange> {
+        NumberRange::from_ion_element(
             &Element::read_one(text.as_bytes()).expect("parsing failed unexpectedly"),
-            RangeType::TimestampPrecision,
-            IslVersion::V1_0,
-        )
-    }
-
-    // helper function to create a timestamp precision range
-    fn load_number_range(text: &str) -> IonSchemaResult<Range> {
-        Range::from_ion_element(
-            &Element::read_one(text.as_bytes()).expect("parsing failed unexpectedly"),
-            RangeType::NumberOrTimestamp,
-            IslVersion::V1_0,
+            Element::any_number_as_decimal,
         )
     }
 
     // helper function to return Elements for range `contains` tests
     fn elements<T: Into<Element> + std::clone::Clone>(values: &[T]) -> Vec<Element> {
         values.iter().cloned().map(|v| v.into()).collect()
-    }
-
-    #[rstest(
-        range1,
-        range2,
-        case::range_with_integer(
-            load_range(
-                r#"
-                    range::[min, 5]
-                "#,
-                IslVersion::V1_0
-            ).unwrap(),
-            IntegerRange::new(
-                RangeBoundaryValue::Min,
-                IntegerValue::I64(5)
-            ).unwrap()
-        ),
-        case::range_with_float(
-            load_range(
-                r#"
-                    range::[2e1, 5e1]
-                "#,
-                IslVersion::V1_0
-            ).unwrap(),
-            FloatRange::new(
-                2e1,
-                5e1
-            ).unwrap()
-        ),
-        case::range_with_decimal(
-            load_range(
-                r#"
-                    range::[20.4, 50.5]
-                "#,
-                IslVersion::V1_0
-            ).unwrap(),
-            DecimalRange::new(
-                Decimal::new(204, -1),
-                Decimal::new(505, -1)
-            ).unwrap()
-        ),
-        case::range_with_timestamp(
-            load_range(
-                r#"
-                    range::[2020-01-01T, 2021-01-01T]
-                "#,
-                IslVersion::V2_0
-            ).unwrap(),
-            TimestampRange::new(
-                Timestamp::with_year(2020).with_month(1).with_day(1).build().unwrap(),
-                Timestamp::with_year(2021).with_month(1).with_day(1).build().unwrap()
-            ).unwrap()
-        ),
-        case::range_with_timestamp_precision(
-            load_timestamp_precision_range(
-                r#"
-                    range::[year, month]
-                "#
-            ).unwrap(),
-            TimestampPrecisionRange::new(
-                TimestampPrecision::Year,
-                TimestampPrecision::Month
-            ).unwrap()
-        ),
-        case::range_with_number(
-            load_number_range(
-                r#"
-                    range::[1, 5.5]
-                "#
-            ).unwrap(),
-            NumberRange::new(
-                Number::from(&IntegerValue::I64(1)),
-                Number::try_from(&Decimal::new(55, -1)).unwrap()
-            ).unwrap()
-        )
-    )]
-    fn owned_struct_to_range(range1: Range, range2: impl Into<Range>) {
-        // assert if both the ranges are same
-        assert_eq!(range1, range2.into());
-    }
-
-    #[rstest(
-        range,
-        case::range_with_min_max(load_range(
-            r#"
-                range::[min, max]
-            "#,
-            IslVersion::V1_0
-        )),
-        case::range_with_max_lower_bound(load_range(
-            r#"
-                range::[max, 5]
-            "#,
-            IslVersion::V1_0
-        )),
-        case::range_with_min_upper_bound(load_range(
-            r#"
-                range::[5, min]
-            "#,
-            IslVersion::V1_0
-        )),
-        case::range_with_mismatched_bounds(load_range(
-            r#"
-                range::[5, 7.834]
-            "#,
-            IslVersion::V1_0
-        )),
-        case::range_with_lower_bound_greater_than_upper_bound(load_range(
-            r#"
-                range::[10, 5]
-            "#,
-            IslVersion::V1_0
-        ))
-    )]
-    fn invalid_ranges(range: IonSchemaResult<Range>) {
-        // determine that the range is created with an error for an invalid range
-        assert!(range.is_err());
-    }
-
-    #[rstest(
-        range,
-        valid_values,
-        invalid_values,
-        case::int_range(
-            load_range(
-            r#"
-                range::[0, 10]
-            "#,
-            IslVersion::V1_0
-            ),
-            elements(&[5, 0, 10]),
-            elements(&[-5, 11])
-        ),
-        case::int_range_with_min(
-            load_range(
-            r#"
-                range::[min, 10]
-            "#,
-            IslVersion::V1_0
-            ),
-            elements(&[5, -5, 0]),
-            elements(&[11])
-        ),
-        case::int_range_with_max(
-            load_range(
-            r#"
-                range::[0, max]
-            "#,
-            IslVersion::V1_0
-            ),
-            elements(&[5, 0, 11]),
-            elements(&[-5])
-        ),
-        case::int_range_with_exclusive(
-            load_range(
-            r#"
-                range::[exclusive::0, exclusive::10]
-            "#,
-            IslVersion::V1_0
-            ),
-            elements(&[5, 9]),
-            elements(&[-5, 0, 10])
-        ),
-        case::decimal_range(
-            load_range(
-            r#"
-                range::[0.0, 10.0]
-            "#,
-            IslVersion::V1_0
-            ),
-            elements(&[Decimal::new(55,-1), Decimal::new(0, 0), Decimal::new(100, -1)]),
-            elements(&[Decimal::new(-55, -1), Decimal::new(115, -1)])
-        ),
-        case::decimal_range_with_min(
-            load_range(
-            r#"
-                range::[min, 10.0]
-            "#,
-            IslVersion::V1_0
-            ),
-            elements(&[Decimal::new(50, -1), Decimal::new(-55, -1), Decimal::new(0, 0)]),
-            elements(&[Decimal::new(115, -1)])
-        ),
-        case::decimal_range_with_max(
-            load_range(
-            r#"
-                range::[0.0, max]
-            "#,
-            IslVersion::V1_0
-            ),
-            elements(&[Decimal::new(55, -1), Decimal::new(115, -1)]),
-            elements(&[Decimal::new(-55, -1)])
-        ),
-        case::decimal_range_with_exclusive(
-            load_range(
-            r#"
-                range::[exclusive::1.0, exclusive::10.0]
-            "#,
-            IslVersion::V1_0
-            ),
-            elements(&[Decimal::new(50, -1), Decimal::new(95, -1)]),
-            elements(&[Decimal::new(-55, -1), Decimal::new(10, -1), Decimal::new(100, -1)])
-        ),
-        case::float_range(
-            load_range(
-            r#"
-                range::[1e2, 5e2]
-            "#,
-            IslVersion::V1_0
-            ),
-            elements(&[2e2, 1e2, 5e2]),
-            elements(&[-1e2,1e1, 6e2, f64::NAN, 0e0, -0e0])
-        ),
-        case::float_range_with_min(
-            load_range(
-            r#"
-                range::[min, 2e5]
-            "#,
-            IslVersion::V1_0
-            ),
-            elements(&[f64::NEG_INFINITY, 2.2250738585072014e-308, 2e5, -2e5, 0e0, -0e0]),
-            elements(&[3e5, f64::NAN])
-        ),
-        case::float_range_with_max(
-            load_range(
-            r#"
-                range::[1e5, max]
-            "#,
-            IslVersion::V1_0
-            ),
-            elements(&[1e5, 5e5, 1e6, 1.7976931348623157e308, f64::INFINITY]),
-            elements(&[-5e5, 1e2, f64::NAN])
-        ),
-        case::float_range_with_exclusive(
-            load_range(
-            r#"
-                range::[exclusive::1e2, exclusive::5e2]
-            "#,
-            IslVersion::V1_0
-            ),
-            elements(&[2e2]),
-            elements(&[-1e2 ,1e1, 6e2, 1e2, 5e2, f64::NAN])
-        ),
-        case::timestamp_precision_range(
-            load_timestamp_precision_range(
-            r#"
-                range::[minute, second]
-            "#
-            ),
-            elements(&[Timestamp::with_ymd(2020, 1, 1).with_hms(0, 1, 0).build_at_offset(4 * 60).unwrap(),
-                Timestamp::with_ymd(2020, 1, 1).with_hour_and_minute(0, 1).build_at_offset(4 * 60).unwrap()]),
-            elements(&[Timestamp::with_year(2020).build().unwrap(),
-                Timestamp::with_ymd(2020, 1, 1).with_hms(0, 1, 0).with_milliseconds(678).build_at_offset(4 * 60).unwrap()])
-        ),
-        case::number_range(
-            load_number_range(
-                r#"
-                    range::[-1, 5.5]
-                "#
-            ),
-            vec![0.into(), (-1).into(), 1.into(), Decimal::new(55, -1).into(), 5e0.into()],
-            vec![(-2).into() , Decimal::new(-15, -1).into(), Decimal::new(56, -1).into(), 5e1.into()]
-        ),
-    )]
-    fn range_contains(
-        range: IonSchemaResult<Range>,
-        valid_values: Vec<Element>,
-        invalid_values: Vec<Element>,
-    ) {
-        // verify if the range contains given valid values
-        for valid_value in valid_values {
-            let range_contains_result = range.as_ref().unwrap().contains(&valid_value);
-            assert!(range_contains_result)
-        }
-
-        // verify that range doesn't contain the invalid values
-        for invalid_value in invalid_values {
-            let range_contains_result = range.as_ref().unwrap().contains(&invalid_value);
-            assert!(!range_contains_result)
-        }
-    }
-
-    #[rstest(
-    range,
-    expected,
-    case::range_with_integer(
-        IntegerRange::new(
-            RangeBoundaryValue::Min,
-            IntegerValue::I64(5)
-        ).unwrap(),
-        "range::[ min, 5 ]"
-    ),
-    case::range_with_float(
-        FloatRange::new(
-            2e1,
-            5e1
-        ).unwrap(),
-        "range::[ 20, 50 ]"
-    ),
-    case::range_with_decimal(
-        DecimalRange::new(
-            Decimal::new(204, -1),
-            Decimal::new(505, -1)
-        ).unwrap(),
-        "range::[ 20.4, 50.5 ]"
-    ),
-    case::range_with_timestamp(
-        TimestampRange::new(
-            Timestamp::with_year(2020).with_month(1).with_day(1).build().unwrap(),
-            Timestamp::with_year(2021).with_month(1).with_day(1).build().unwrap()
-        ).unwrap(),
-        "range::[ 2020-01-01T, 2021-01-01T ]"
-    ),
-    case::range_with_timestamp_precision(
-        TimestampPrecisionRange::new(
-            TimestampPrecision::Year,
-            TimestampPrecision::Month
-        ).unwrap(),
-        "range::[ year, month ]"
-    ),
-    case::range_with_number(
-        NumberRange::new(
-            Number::from(&IntegerValue::I64(1)),
-            Number::try_from(&Decimal::new(55, -1)).unwrap()
-        ).unwrap(),
-        "range::[ 1, 5.5 ]"
-    )
-    )]
-    fn range_display(range: impl Into<Range>, expected: String) {
-        let mut buf = Vec::new();
-        write!(&mut buf, "{}", range.into()).unwrap();
-        assert_eq!(expected, String::from_utf8(buf).unwrap());
     }
 
     const SKIP_LIST: [&str; 5] = [
@@ -1075,14 +729,14 @@ mod isl_tests {
     fn is_skip_list_path(file_name: &str) -> bool {
         SKIP_LIST
             .iter()
-            .map(|p| p.replace('/', &MAIN_SEPARATOR.to_string()))
+            .map(|p| p.replace('/', std::path::MAIN_SEPARATOR_STR))
             .any(|p| p == file_name)
     }
 
     #[test_resources("ion-schema-tests/**/*.isl")]
     #[test_resources("ion-schema-schemas/**/*.isl")]
     fn test_write_to_isl(file_name: &str) {
-        if is_skip_list_path(&file_name) {
+        if is_skip_list_path(file_name) {
             return;
         }
 

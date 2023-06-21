@@ -1,13 +1,15 @@
+use crate::ion_extension::ElementExtensions;
 use crate::ion_path::{IonPath, IonPathElement};
 use crate::isl::isl_constraint::{IslAnnotationsConstraint, IslConstraintImpl, IslRegexConstraint};
-use crate::isl::isl_range::{Range, RangeImpl};
 use crate::isl::isl_type_reference::{
     IslTypeRefImpl, IslVariablyOccurringTypeRef, NullabilityModifier,
 };
+use crate::isl::ranges::{I64Range, Limit, TimestampPrecisionRange, U64Range, UsizeRange};
 use crate::isl::util::{
     Annotation, Ieee754InterchangeFormat, TimestampOffset, TimestampPrecision, ValidValue,
 };
 use crate::isl::IslVersion;
+use crate::isl_require;
 use crate::nfa::{FinalState, NfaBuilder, NfaEvaluation};
 use crate::result::{
     invalid_schema_error, invalid_schema_error_raw, IonSchemaResult, ValidationResult,
@@ -18,8 +20,9 @@ use crate::types::TypeValidator;
 use crate::violation::{Violation, ViolationCode};
 use crate::IonSchemaElement;
 use ion_rs::element::Element;
+use ion_rs::element::Value;
 use ion_rs::IonData;
-use ion_rs::{Int, IonType};
+use ion_rs::IonType;
 use num_traits::ToPrimitive;
 use regex::{Regex, RegexBuilder};
 use std::collections::{HashMap, HashSet};
@@ -130,7 +133,7 @@ impl Constraint {
             .map(|id| {
                 VariablyOccurringTypeRef::new(
                     TypeReference::new(*id, NullabilityModifier::Nothing),
-                    Range::required(),
+                    UsizeRange::new_single_value(1),
                 )
             })
             .collect();
@@ -142,23 +145,19 @@ impl Constraint {
         Constraint::Contains(ContainsConstraint::new(values.into()))
     }
 
-    /// Creates a [Constraint::ContainerLength] from a [Range] specifying a length range.
-    pub fn container_length(length: RangeImpl<usize>) -> Constraint {
-        Constraint::ContainerLength(ContainerLengthConstraint::new(Range::NonNegativeInteger(
-            length,
-        )))
+    /// Creates a [Constraint::ContainerLength] from a [U64Range] specifying a length range.
+    pub fn container_length(length: UsizeRange) -> Constraint {
+        Constraint::ContainerLength(ContainerLengthConstraint::new(length))
     }
 
-    /// Creates a [Constraint::ByteLength] from a [Range] specifying a length range.
-    pub fn byte_length(length: RangeImpl<usize>) -> Constraint {
-        Constraint::ByteLength(ByteLengthConstraint::new(Range::NonNegativeInteger(length)))
+    /// Creates a [Constraint::ByteLength] from a [UsizeRange] specifying a length range.
+    pub fn byte_length(length: UsizeRange) -> Constraint {
+        Constraint::ByteLength(ByteLengthConstraint::new(length))
     }
 
-    /// Creates a [Constraint::CodePointLength] from a [Range] specifying a length range.
-    pub fn codepoint_length(length: RangeImpl<usize>) -> Constraint {
-        Constraint::CodepointLength(CodepointLengthConstraint::new(Range::NonNegativeInteger(
-            length,
-        )))
+    /// Creates a [Constraint::CodePointLength] from a [UsizeRange] specifying a length range.
+    pub fn codepoint_length(length: UsizeRange) -> Constraint {
+        Constraint::CodepointLength(CodepointLengthConstraint::new(length))
     }
 
     /// Creates a [Constraint::Element] referring to the type represented by the provided [TypeId] and the boolean represents whether distinct elements are required or not.
@@ -204,26 +203,22 @@ impl Constraint {
     }
 
     /// Creates a [Constraint::Precision] from a [Range] specifying a precision range.
-    pub fn precision(precision: RangeImpl<usize>) -> Constraint {
-        Constraint::Precision(PrecisionConstraint::new(Range::NonNegativeInteger(
-            precision,
-        )))
+    pub fn precision(precision: U64Range) -> Constraint {
+        Constraint::Precision(PrecisionConstraint::new(precision))
     }
 
     /// Creates a [Constraint::Scale] from a [Range] specifying a precision range.
-    pub fn scale(scale: RangeImpl<Int>) -> Constraint {
-        Constraint::Scale(ScaleConstraint::new(Range::Integer(scale)))
+    pub fn scale(scale: I64Range) -> Constraint {
+        Constraint::Scale(ScaleConstraint::new(scale))
     }
     /// Creates a [Constraint::Exponent] from a [Range] specifying an exponent range.
-    pub fn exponent(exponent: RangeImpl<Int>) -> Constraint {
-        Constraint::Exponent(ExponentConstraint::new(Range::Integer(exponent)))
+    pub fn exponent(exponent: I64Range) -> Constraint {
+        Constraint::Exponent(ExponentConstraint::new(exponent))
     }
 
     /// Creates a [Constraint::TimestampPrecision] from a [Range] specifying a precision range.
-    pub fn timestamp_precision(precision: RangeImpl<TimestampPrecision>) -> Constraint {
-        Constraint::TimestampPrecision(TimestampPrecisionConstraint::new(
-            Range::TimestampPrecision(precision),
-        ))
+    pub fn timestamp_precision(precision: TimestampPrecisionRange) -> Constraint {
+        Constraint::TimestampPrecision(TimestampPrecisionConstraint::new(precision))
     }
 
     /// Creates an [Constraint::TimestampOffset] using the offset list specified in it
@@ -232,10 +227,8 @@ impl Constraint {
     }
 
     /// Creates a [Constraint::Utf8ByteLength] from a [Range] specifying a length range.
-    pub fn utf8_byte_length(length: RangeImpl<usize>) -> Constraint {
-        Constraint::Utf8ByteLength(Utf8ByteLengthConstraint::new(Range::NonNegativeInteger(
-            length,
-        )))
+    pub fn utf8_byte_length(length: UsizeRange) -> Constraint {
+        Constraint::Utf8ByteLength(Utf8ByteLengthConstraint::new(length))
     }
 
     /// Creates a [Constraint::Fields] referring to the fields represented by the provided field name and [TypeId]s.
@@ -250,7 +243,7 @@ impl Constraint {
                     field_name,
                     VariablyOccurringTypeRef::new(
                         TypeReference::new(type_id, NullabilityModifier::Nothing),
-                        Range::optional(),
+                        UsizeRange::zero_or_one(),
                     ),
                 )
             })
@@ -272,6 +265,7 @@ impl Constraint {
         values: Vec<Element>,
         isl_version: IslVersion,
     ) -> IonSchemaResult<Constraint> {
+        // TODO: Do something about this
         let valid_values: IonSchemaResult<Vec<ValidValue>> = values
             .iter()
             .map(|e| ValidValue::from_ion_element(e, isl_version))
@@ -279,13 +273,6 @@ impl Constraint {
         Ok(Constraint::ValidValues(ValidValuesConstraint {
             valid_values: valid_values?,
         }))
-    }
-
-    /// Creates a [Constraint::ValidValues] using the [Range] specified inside it
-    pub fn valid_values_with_range(value: Range) -> Constraint {
-        Constraint::ValidValues(ValidValuesConstraint {
-            valid_values: vec![ValidValue::Range(value)],
-        })
     }
 
     /// Creates a [Constraint::Regex] from the expression and flags (case_insensitive, multi_line) and also specify the ISL version
@@ -482,9 +469,12 @@ impl Constraint {
                     )?,
                 ))
             }
-            IslConstraintImpl::Precision(precision_range) => Ok(Constraint::Precision(
-                PrecisionConstraint::new(precision_range.to_owned()),
-            )),
+            IslConstraintImpl::Precision(precision_range) => {
+                isl_require!(precision_range.lower() != &Limit::Closed(0u64) => "Precision range cannot be 0")?;
+                Ok(Constraint::Precision(PrecisionConstraint::new(
+                    precision_range.to_owned(),
+                )))
+            }
             IslConstraintImpl::Regex(regex) => Ok(Constraint::Regex(RegexConstraint::from_isl(
                 regex,
                 isl_version,
@@ -872,10 +862,9 @@ impl OrderedElementsConstraint {
         let mut final_states = HashSet::new();
         for (state_id, variably_occurring_type_reference) in type_ids.iter().enumerate() {
             let type_reference = variably_occurring_type_reference.type_ref();
-            let occurs_range: &Range = variably_occurring_type_reference.occurs_range();
-
-            // unwrap here won't lead to panic as the check for non negative range was already done while parsing ordered_elements constraint
-            let (min, max) = occurs_range.non_negative_range_boundaries().unwrap();
+            let (min, max) = variably_occurring_type_reference
+                .occurs_range()
+                .inclusive_endpoints();
 
             // if the current state is required then that is the only final state till now
             if min > 0 {
@@ -1050,10 +1039,10 @@ impl ConstraintValidator for FieldsConstraint {
             ion_path.push(IonPathElement::Field(field_name.to_owned()));
 
             // perform occurs validation for type_def for all values of the given field_name
-            let occurs_range: &Range = variably_occurring_type_ref.occurs_range();
+            let occurs_range: &UsizeRange = variably_occurring_type_ref.occurs_range();
 
             // verify if values follow occurs_range constraint
-            if !occurs_range.contains(&(values.len() as i64).into()) {
+            if !occurs_range.contains(&values.len()) {
                 violations.push(Violation::new(
                     "fields",
                     ViolationCode::TypeMismatched,
@@ -1242,15 +1231,15 @@ impl ConstraintValidator for ContainsConstraint {
 /// [container_length]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#container_length
 #[derive(Debug, Clone, PartialEq)]
 pub struct ContainerLengthConstraint {
-    length_range: Range,
+    length_range: UsizeRange,
 }
 
 impl ContainerLengthConstraint {
-    pub fn new(length_range: Range) -> Self {
+    pub fn new(length_range: UsizeRange) -> Self {
         Self { length_range }
     }
 
-    pub fn length(&self) -> &Range {
+    pub fn length(&self) -> &UsizeRange {
         &self.length_range
     }
 }
@@ -1296,10 +1285,10 @@ impl ConstraintValidator for ContainerLengthConstraint {
         };
 
         // get isl length as a range
-        let length_range: &Range = self.length();
+        let length_range: &UsizeRange = self.length();
 
         // return a Violation if the container size didn't follow container_length constraint
-        if !length_range.contains(&(size as i64).into()) {
+        if !length_range.contains(&size) {
             return Err(Violation::new(
                 "container_length",
                 ViolationCode::InvalidLength,
@@ -1316,15 +1305,15 @@ impl ConstraintValidator for ContainerLengthConstraint {
 /// [byte_length]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#byte_length
 #[derive(Debug, Clone, PartialEq)]
 pub struct ByteLengthConstraint {
-    length_range: Range,
+    length_range: UsizeRange,
 }
 
 impl ByteLengthConstraint {
-    pub fn new(length_range: Range) -> Self {
+    pub fn new(length_range: UsizeRange) -> Self {
         Self { length_range }
     }
 
-    pub fn length(&self) -> &Range {
+    pub fn length(&self) -> &UsizeRange {
         &self.length_range
     }
 }
@@ -1344,10 +1333,10 @@ impl ConstraintValidator for ByteLengthConstraint {
             .len();
 
         // get isl length as a range
-        let length_range: &Range = self.length();
+        let length_range: &UsizeRange = self.length();
 
         // return a Violation if the clob/blob size didn't follow byte_length constraint
-        if !length_range.contains(&(size as i64).into()) {
+        if !length_range.contains(&size) {
             return Err(Violation::new(
                 "byte_length",
                 ViolationCode::InvalidLength,
@@ -1364,15 +1353,15 @@ impl ConstraintValidator for ByteLengthConstraint {
 /// [codepoint_length]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#codepoint_length
 #[derive(Debug, Clone, PartialEq)]
 pub struct CodepointLengthConstraint {
-    length_range: Range,
+    length_range: UsizeRange,
 }
 
 impl CodepointLengthConstraint {
-    pub fn new(length_range: Range) -> Self {
+    pub fn new(length_range: UsizeRange) -> Self {
         Self { length_range }
     }
 
-    pub fn length(&self) -> &Range {
+    pub fn length(&self) -> &UsizeRange {
         &self.length_range
     }
 }
@@ -1397,10 +1386,10 @@ impl ConstraintValidator for CodepointLengthConstraint {
             .count();
 
         // get isl length as a range
-        let length_range: &Range = self.length();
+        let length_range: &UsizeRange = self.length();
 
         // return a Violation if the string/symbol codepoint size didn't follow codepoint_length constraint
-        if !length_range.contains(&(size as i64).into()) {
+        if !length_range.contains(&size) {
             return Err(Violation::new(
                 "codepoint_length",
                 ViolationCode::InvalidLength,
@@ -1785,15 +1774,15 @@ impl ConstraintValidator for AnnotationsConstraint {
 /// [precision]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#precision
 #[derive(Debug, Clone, PartialEq)]
 pub struct PrecisionConstraint {
-    precision_range: Range,
+    precision_range: U64Range,
 }
 
 impl PrecisionConstraint {
-    pub fn new(precision_range: Range) -> Self {
+    pub fn new(precision_range: U64Range) -> Self {
         Self { precision_range }
     }
 
-    pub fn precision(&self) -> &Range {
+    pub fn precision(&self) -> &U64Range {
         &self.precision_range
     }
 }
@@ -1813,10 +1802,10 @@ impl ConstraintValidator for PrecisionConstraint {
             .precision();
 
         // get isl decimal precision as a range
-        let precision_range: &Range = self.precision();
+        let precision_range: &U64Range = self.precision();
 
         // return a Violation if the value didn't follow precision constraint
-        if !precision_range.contains(&(value_precision as i64).into()) {
+        if !precision_range.contains(&value_precision) {
             return Err(Violation::new(
                 "precision",
                 ViolationCode::InvalidLength,
@@ -1833,15 +1822,15 @@ impl ConstraintValidator for PrecisionConstraint {
 /// [scale]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#scale
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScaleConstraint {
-    scale_range: Range,
+    scale_range: I64Range,
 }
 
 impl ScaleConstraint {
-    pub fn new(scale_range: Range) -> Self {
+    pub fn new(scale_range: I64Range) -> Self {
         Self { scale_range }
     }
 
-    pub fn scale(&self) -> &Range {
+    pub fn scale(&self) -> &I64Range {
         &self.scale_range
     }
 }
@@ -1861,10 +1850,10 @@ impl ConstraintValidator for ScaleConstraint {
             .scale();
 
         // get isl decimal scale as a range
-        let scale_range: &Range = self.scale();
+        let scale_range: &I64Range = self.scale();
 
         // return a Violation if the value didn't follow scale constraint
-        if !scale_range.contains(&(value_scale).into()) {
+        if !scale_range.contains(&value_scale) {
             return Err(Violation::new(
                 "scale",
                 ViolationCode::InvalidLength,
@@ -1881,15 +1870,15 @@ impl ConstraintValidator for ScaleConstraint {
 /// [exponent]: https://amazon-ion.github.io/ion-schema/docs/isl-2-0/spec#exponent
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExponentConstraint {
-    exponent_range: Range,
+    exponent_range: I64Range,
 }
 
 impl ExponentConstraint {
-    pub fn new(exponent_range: Range) -> Self {
+    pub fn new(exponent_range: I64Range) -> Self {
         Self { exponent_range }
     }
 
-    pub fn exponent(&self) -> &Range {
+    pub fn exponent(&self) -> &I64Range {
         &self.exponent_range
     }
 }
@@ -1910,10 +1899,10 @@ impl ConstraintValidator for ExponentConstraint {
             .neg();
 
         // get isl decimal exponent as a range
-        let exponent_range: &Range = self.exponent();
+        let exponent_range: &I64Range = self.exponent();
 
         // return a Violation if the value didn't follow exponent constraint
-        if !exponent_range.contains(&(value_exponent).into()) {
+        if !exponent_range.contains(&value_exponent) {
             return Err(Violation::new(
                 "exponent",
                 ViolationCode::InvalidLength,
@@ -1930,17 +1919,17 @@ impl ConstraintValidator for ExponentConstraint {
 /// [timestamp_precision]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#timestamp_precision
 #[derive(Debug, Clone, PartialEq)]
 pub struct TimestampPrecisionConstraint {
-    timestamp_precision_range: Range,
+    timestamp_precision_range: TimestampPrecisionRange,
 }
 
 impl TimestampPrecisionConstraint {
-    pub fn new(scale_range: Range) -> Self {
+    pub fn new(scale_range: TimestampPrecisionRange) -> Self {
         Self {
             timestamp_precision_range: scale_range,
         }
     }
 
-    pub fn timestamp_precision(&self) -> &Range {
+    pub fn timestamp_precision(&self) -> &TimestampPrecisionRange {
         &self.timestamp_precision_range
     }
 }
@@ -1959,18 +1948,14 @@ impl ConstraintValidator for TimestampPrecisionConstraint {
             .unwrap();
 
         // get isl timestamp precision as a range
-        let precision_range: &Range = self.timestamp_precision();
-
+        let precision_range: &TimestampPrecisionRange = self.timestamp_precision();
+        let precision = &TimestampPrecision::from_timestamp(timestamp_value);
         // return a Violation if the value didn't follow timestamp precision constraint
-        if !precision_range.contains(&(timestamp_value.to_owned()).into()) {
+        if !precision_range.contains(precision) {
             return Err(Violation::new(
                 "precision",
                 ViolationCode::InvalidLength,
-                format!(
-                    "expected precision {} found {:?}",
-                    precision_range,
-                    timestamp_value.precision()
-                ),
+                format!("expected precision {precision_range} found {precision:?}"),
                 ion_path,
             ));
         }
@@ -1987,20 +1972,8 @@ pub struct ValidValuesConstraint {
 }
 
 impl ValidValuesConstraint {
-    /// Provides a way to programmatically construct valid_values constraint
-    /// Returns IonSchemaError whenever annotations are provided within ValidValue::Element
-    /// only `range` annotations are accepted for ValidValue::Element
     pub fn new(valid_values: Vec<ValidValue>, isl_version: IslVersion) -> IonSchemaResult<Self> {
-        let valid_values: IonSchemaResult<Vec<ValidValue>> = valid_values
-            .iter()
-            .map(|v| match v {
-                ValidValue::Range(r) => Ok(v.to_owned()),
-                ValidValue::Element(e) => ValidValue::from_ion_element(e, isl_version),
-            })
-            .collect();
-        Ok(Self {
-            valid_values: valid_values?,
-        })
+        Ok(Self { valid_values })
     }
 }
 
@@ -2026,38 +1999,35 @@ impl ConstraintValidator for ValidValuesConstraint {
         ion_path: &mut IonPath,
     ) -> ValidationResult {
         match value {
-            IonSchemaElement::SingleElement(value) => {
+            IonSchemaElement::SingleElement(element) => {
                 for valid_value in &self.valid_values {
-                    match valid_value {
-                        ValidValue::Range(range) => match value.ion_type() {
-                            IonType::Int
-                            | IonType::Float
-                            | IonType::Decimal
-                            | IonType::Timestamp => {
-                                if range.contains(value) {
-                                    return Ok(());
-                                }
-                            }
-                            _ => {}
-                        },
-                        ValidValue::Element(element) => {
-                            // get value without annotations
-                            let value: IonData<_> = value.value().into();
-                            let actual_value: IonData<_> = element.value().into();
-
+                    let does_match = match valid_value {
+                        ValidValue::Element(valid_value) => {
                             // this comparison uses the Ion equivalence based on Ion specification
-                            if actual_value == value {
-                                return Ok(());
+                            IonData::eq(valid_value, element.value())
+                        }
+                        ValidValue::NumberRange(range) => match element.any_number_as_decimal() {
+                            Some(d) => range.contains(&d),
+                            _ => false,
+                        },
+                        ValidValue::TimestampRange(range) => {
+                            if let Value::Timestamp(t) = element.value() {
+                                range.contains(t)
+                            } else {
+                                false
                             }
                         }
                     };
+                    if does_match {
+                        return Ok(());
+                    }
                 }
                 Err(Violation::new(
                     "valid_values",
                     ViolationCode::InvalidValue,
                     format!(
                         "expected valid_values to be from {}, found {}",
-                        &self, value
+                        &self, element
                     ),
                     ion_path,
                 ))
@@ -2321,15 +2291,15 @@ impl PartialEq for RegexConstraint {
 /// [utf8_byte_length]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#utf8_byte_length
 #[derive(Debug, Clone, PartialEq)]
 pub struct Utf8ByteLengthConstraint {
-    length_range: Range,
+    length_range: UsizeRange,
 }
 
 impl Utf8ByteLengthConstraint {
-    pub fn new(length_range: Range) -> Self {
+    pub fn new(length_range: UsizeRange) -> Self {
         Self { length_range }
     }
 
-    pub fn length(&self) -> &Range {
+    pub fn length(&self) -> &UsizeRange {
         &self.length_range
     }
 }
@@ -2353,10 +2323,10 @@ impl ConstraintValidator for Utf8ByteLengthConstraint {
             .len();
 
         // get isl length as a range
-        let length_range: &Range = self.length();
+        let length_range: &UsizeRange = self.length();
 
         // return a Violation if the string/symbol size didn't follow utf8_byte_length constraint
-        if !length_range.contains(&(size as i64).into()) {
+        if !length_range.contains(&size) {
             return Err(Violation::new(
                 "utf8_byte_length",
                 ViolationCode::InvalidLength,

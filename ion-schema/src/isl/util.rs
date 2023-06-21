@@ -1,10 +1,12 @@
-use crate::isl::isl_range::{Range, RangeType};
+use crate::ion_extension::ElementExtensions;
+use crate::isl::ranges::{NumberRange, TimestampRange};
 use crate::isl::{IslVersion, WriteToIsl};
+use crate::isl_require;
 use crate::result::{invalid_schema_error, IonSchemaError, IonSchemaResult};
 use ion_rs::element::writer::ElementWriter;
-use ion_rs::element::Element;
+use ion_rs::element::{Element, Value};
 use ion_rs::types::Precision;
-use ion_rs::{IonWriter, Symbol, Timestamp};
+use ion_rs::{IonType, IonWriter, Timestamp};
 use num_traits::abs;
 use std::cmp::Ordering;
 use std::fmt;
@@ -103,6 +105,20 @@ impl TimestampPrecision {
             },
         }
     }
+
+    fn string_value(&self) -> String {
+        match self {
+            TimestampPrecision::Year => "year".to_string(),
+            TimestampPrecision::Month => "month".to_string(),
+            TimestampPrecision::Day => "day".to_string(),
+            TimestampPrecision::Minute => "minute".to_string(),
+            TimestampPrecision::Second => "second".to_string(),
+            TimestampPrecision::Millisecond => "millisecond".to_string(),
+            TimestampPrecision::Microsecond => "microsecond".to_string(),
+            TimestampPrecision::Nanosecond => "nanosecond".to_string(),
+            TimestampPrecision::OtherFractionalSeconds(i) => format!("fractional second (10e{i})"),
+        }
+    }
 }
 
 impl TryFrom<&str> for TimestampPrecision {
@@ -158,21 +174,22 @@ impl PartialOrd for TimestampPrecision {
     }
 }
 
+impl WriteToIsl for TimestampPrecision {
+    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
+        writer.write_symbol(self.string_value())?;
+        Ok(())
+    }
+}
+
+impl From<TimestampPrecision> for Element {
+    fn from(value: TimestampPrecision) -> Self {
+        Element::symbol(value.string_value())
+    }
+}
+
 impl Display for TimestampPrecision {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        match &self {
-            TimestampPrecision::Year => write!(f, "year"),
-            TimestampPrecision::Month => write!(f, "month"),
-            TimestampPrecision::Day => write!(f, "day"),
-            TimestampPrecision::Minute => write!(f, "minute"),
-            TimestampPrecision::Second => write!(f, "second"),
-            TimestampPrecision::Millisecond => write!(f, "millisecond"),
-            TimestampPrecision::Microsecond => write!(f, "microsecond"),
-            TimestampPrecision::Nanosecond => write!(f, "nanosecond"),
-            TimestampPrecision::OtherFractionalSeconds(scale) => {
-                write!(f, "fractional second (10e{})", scale * -1)
-            }
-        }
+        f.write_str(&self.string_value())
     }
 }
 
@@ -186,28 +203,36 @@ impl Display for TimestampPrecision {
 /// `valid_values`: `<https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#valid_values>`
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValidValue {
-    Range(Range),
-    Element(Element),
+    NumberRange(NumberRange),
+    TimestampRange(TimestampRange),
+    Element(Value),
 }
 
 impl ValidValue {
-    pub fn from_ion_element(value: &Element, isl_version: IslVersion) -> IonSchemaResult<Self> {
-        if value.annotations().contains("range") {
-            Ok(ValidValue::Range(Range::from_ion_element(
-                value,
-                RangeType::NumberOrTimestamp,
-                isl_version,
-            )?))
-        } else if value
-            .annotations()
-            .iter()
-            .any(|a| a != &Symbol::from("range"))
-        {
-            invalid_schema_error(
-                "Annotations are not allowed for valid_values constraint except `range` annotation",
-            )
+    pub fn from_ion_element(element: &Element, isl_version: IslVersion) -> IonSchemaResult<Self> {
+        let annotation = element.annotations();
+        if element.annotations().contains("range") {
+            isl_require!(annotation.len() == 1 => "Unexpected annotation(s) on valid values argument: {element}")?;
+            // Does it contain any timestamps
+            let has_timestamp = element.as_sequence().map_or(false, |s| {
+                s.elements().any(|it| it.ion_type() == IonType::Timestamp)
+            });
+            let range = if has_timestamp {
+                ValidValue::TimestampRange(TimestampRange::from_ion_element(element, |e| {
+                    e.as_timestamp()
+                        .cloned()
+                        .filter(|t| isl_version != IslVersion::V1_0 || t.offset().is_some())
+                })?)
+            } else {
+                ValidValue::NumberRange(NumberRange::from_ion_element(
+                    element,
+                    Element::any_number_as_decimal,
+                )?)
+            };
+            Ok(range)
         } else {
-            Ok(ValidValue::Element(value.to_owned()))
+            isl_require!(annotation.is_empty() => "Unexpected annotation(s) on valid values argument: {element}")?;
+            Ok(ValidValue::Element(element.value().to_owned()))
         }
     }
 }
@@ -215,8 +240,9 @@ impl ValidValue {
 impl Display for ValidValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
-            ValidValue::Range(range) => write!(f, "{range}"),
             ValidValue::Element(element) => write!(f, "{element}"),
+            ValidValue::NumberRange(r) => write!(f, "{r}"),
+            ValidValue::TimestampRange(r) => write!(f, "{r}"),
         }
     }
 }
@@ -224,10 +250,30 @@ impl Display for ValidValue {
 impl WriteToIsl for ValidValue {
     fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
         match self {
-            ValidValue::Range(range) => range.write_to(writer)?,
-            ValidValue::Element(element) => writer.write_element(element)?,
+            // TODO: replace with write_value once https://github.com/amazon-ion/ion-rust/pull/579 is released
+            ValidValue::Element(value) => writer.write_element(&value.to_owned().into())?,
+            ValidValue::NumberRange(r) => r.write_to(writer)?,
+            ValidValue::TimestampRange(r) => r.write_to(writer)?,
         }
         Ok(())
+    }
+}
+
+impl From<NumberRange> for ValidValue {
+    fn from(number_range: NumberRange) -> Self {
+        ValidValue::NumberRange(number_range)
+    }
+}
+
+impl From<TimestampRange> for ValidValue {
+    fn from(timestamp_range: TimestampRange) -> Self {
+        ValidValue::TimestampRange(timestamp_range)
+    }
+}
+
+impl<T: Into<Value>> From<T> for ValidValue {
+    fn from(value: T) -> Self {
+        ValidValue::Element(value.into())
     }
 }
 

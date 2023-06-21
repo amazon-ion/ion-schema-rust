@@ -605,17 +605,15 @@ mod type_definition_tests {
     use super::*;
     use crate::constraint::Constraint;
     use crate::isl::isl_constraint::v_1_0::*;
-    use crate::isl::isl_range::Number;
-    use crate::isl::isl_range::NumberRange;
-    use crate::isl::isl_range::Range;
     use crate::isl::isl_type::v_1_0::*;
     use crate::isl::isl_type::IslType;
     use crate::isl::isl_type_reference::v_1_0::*;
+    use crate::isl::ranges::*;
     use crate::isl::util::Ieee754InterchangeFormat;
+    use crate::isl::util::TimestampPrecision;
     use crate::isl::*;
     use crate::system::PendingTypes;
-    use ion_rs::Decimal;
-    use ion_rs::Int;
+
     use rstest::*;
     use std::collections::HashSet;
 
@@ -696,14 +694,14 @@ mod type_definition_tests {
         /* For a schema with ordered_elements constraint as below:
             { ordered_elements: [ symbol, { type: int }, ] }
         */
-        anonymous_type([ordered_elements([variably_occurring_type_ref(named_type_ref("symbol"), Range::required()), variably_occurring_type_ref(anonymous_type_ref([type_constraint(named_type_ref("int"))]), Range::required())])]),
+        anonymous_type([ordered_elements([variably_occurring_type_ref(named_type_ref("symbol"), UsizeRange::new_single_value(1)), variably_occurring_type_ref(anonymous_type_ref([type_constraint(named_type_ref("int"))]), UsizeRange::new_single_value(1))])]),
     TypeDefinitionKind::anonymous([Constraint::ordered_elements([5, 36]), Constraint::type_constraint(34)])
     ),
     case::fields_constraint(
         /* For a schema with fields constraint as below:
             { fields: { name: string, id: int} }
         */
-        anonymous_type([fields(vec![("name".to_owned(), variably_occurring_type_ref(named_type_ref("string"), Range::optional())), ("id".to_owned(), variably_occurring_type_ref(named_type_ref("int"), Range::optional()))].into_iter())]),
+        anonymous_type([fields(vec![("name".to_owned(), variably_occurring_type_ref(named_type_ref("string"), UsizeRange::zero_or_one())), ("id".to_owned(), variably_occurring_type_ref(named_type_ref("int"), UsizeRange::zero_or_one()))].into_iter())]),
     TypeDefinitionKind::anonymous([Constraint::fields(vec![("name".to_owned(), 4), ("id".to_owned(), 0)].into_iter()), Constraint::type_constraint(34)])
     ),
     case::field_names_constraint(
@@ -780,50 +778,22 @@ mod type_definition_tests {
         /* For a schema with scale constraint as below:
             { scale: 2 }
         */
-        anonymous_type([scale(Int::I64(2).into())]),
-    TypeDefinitionKind::anonymous([Constraint::scale(Int::I64(2).into()), Constraint::type_constraint(34)])
+        anonymous_type([scale(2.into())]),
+    TypeDefinitionKind::anonymous([Constraint::scale(2.into()), Constraint::type_constraint(34)])
     ),
     case::exponent_constraint(
         /* For a schema with exponent constraint as below:
             { exponent: 2 }
         */
-        isl_type::v_2_0::anonymous_type([isl_constraint::v_2_0::exponent(Int::I64(2).into())]),
-    TypeDefinitionKind::anonymous([Constraint::exponent(Int::I64(2).into()), Constraint::type_constraint(34)])
+        isl_type::v_2_0::anonymous_type([isl_constraint::v_2_0::exponent(2.into())]),
+    TypeDefinitionKind::anonymous([Constraint::exponent(2.into()), Constraint::type_constraint(34)])
     ),
     case::timestamp_precision_constraint(
         /* For a schema with timestamp_precision constraint as below:
             { timestamp_precision: month }
         */
-        anonymous_type([timestamp_precision("month".try_into().unwrap())]),
-    TypeDefinitionKind::anonymous([Constraint::timestamp_precision("month".try_into().unwrap()), Constraint::type_constraint(34)])
-    ),
-    case::valid_values_constraint(
-        /* For a schema with valid_values constraint as below:
-            { valid_values: [2, 3.5, 5e7, "hello", hi] }
-        */
-        anonymous_type([valid_values_with_values(vec![2.into(), Decimal::new(35, -1).into(), 5e7.into(), "hello".to_owned().into(), Symbol::from("hi").into()]).unwrap()]),
-    TypeDefinitionKind::anonymous([Constraint::valid_values_with_values(vec![2.into(), Decimal::new(35, -1).into(), 5e7.into(), "hello".to_owned().into(), Symbol::from("hi").into()], IslVersion::V1_0).unwrap(), Constraint::type_constraint(34)])
-    ),
-    case::valid_values_with_range_constraint(
-        /* For a schema with valid_values constraint as below:
-            { valid_values: range::[1, 5.5] }
-        */
-        anonymous_type(
-            [valid_values_with_range(
-                NumberRange::new(
-                    Number::from(&Int::I64(1)),
-                    Number::from(&Decimal::new(55, -1))
-                ).unwrap().into())
-            ]
-        ),
-    TypeDefinitionKind::anonymous([
-            Constraint::valid_values_with_range(
-            NumberRange::new(
-                Number::from(&Int::I64(1)),
-                Number::from(&Decimal::new(55, -1))
-            ).unwrap().into()),
-            Constraint::type_constraint(34)
-        ])
+        anonymous_type([timestamp_precision(TimestampPrecisionRange::new_single_value(TimestampPrecision::Month))]),
+    TypeDefinitionKind::anonymous([Constraint::timestamp_precision(TimestampPrecision::Month.into()), Constraint::type_constraint(34)])
     ),
     case::utf8_byte_length_constraint(
         /* For a schema with utf8_byte_length constraint as below:

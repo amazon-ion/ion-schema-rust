@@ -1,25 +1,27 @@
+use crate::ion_extension::ElementExtensions;
 use crate::isl::isl_import::{IslImport, IslImportType};
-use crate::isl::isl_range::{Range, RangeType};
 use crate::isl::isl_type::IslTypeImpl;
+use crate::isl::ranges::{Limit, UsizeRange};
 use crate::isl::IslVersion;
 use crate::isl::WriteToIsl;
+use crate::isl_require;
 use crate::result::{
     invalid_schema_error, invalid_schema_error_raw, unresolvable_schema_error, IonSchemaResult,
 };
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::type_reference::{TypeReference, VariablyOccurringTypeRef};
 use crate::types::TypeDefinitionImpl;
-use ion_rs::element::Element;
+use ion_rs::element::{Element, Value};
 use ion_rs::{IonType, IonWriter};
 
 /// Provides public facing APIs for constructing ISL type references programmatically for ISL 1.0
 pub mod v_1_0 {
     use crate::isl::isl_constraint::{IslConstraint, IslConstraintImpl};
-    use crate::isl::isl_range::Range;
     use crate::isl::isl_type::IslTypeImpl;
     use crate::isl::isl_type_reference::{
         IslTypeRef, IslTypeRefImpl, IslVariablyOccurringTypeRef, NullabilityModifier,
     };
+    use crate::isl::ranges::UsizeRange;
     use ion_rs::IonType;
 
     /// Creates a named [IslTypeRef] using the name of the type referenced inside it
@@ -54,7 +56,7 @@ pub mod v_1_0 {
     /// Creates an [IslVariablyOccurringTypeRef] using the [IslConstraint]s and [Range] referenced inside it
     pub fn variably_occurring_type_ref(
         type_ref: IslTypeRef,
-        occurs: Range,
+        occurs: UsizeRange,
     ) -> IslVariablyOccurringTypeRef {
         IslVariablyOccurringTypeRef::new(type_ref, occurs)
     }
@@ -63,10 +65,10 @@ pub mod v_1_0 {
 /// Provides public facing APIs for constructing ISL type references programmatically for ISL 2.0
 pub mod v_2_0 {
     use crate::isl::isl_constraint::IslConstraint;
-    use crate::isl::isl_range::Range;
     use crate::isl::isl_type_reference::{
         v_1_0, IslTypeRef, IslTypeRefImpl, IslVariablyOccurringTypeRef, NullabilityModifier,
     };
+    use crate::isl::ranges::UsizeRange;
 
     /// Creates a named [IslTypeRef] using the name of the type referenced inside it
     pub fn named_type_ref<A: Into<String>>(name: A) -> IslTypeRef {
@@ -89,7 +91,7 @@ pub mod v_2_0 {
     /// Creates an anonymous [IslTypeRef] using the [IslConstraint]s and [Range] referenced inside it
     pub fn variably_occurring_type_ref(
         type_ref: IslTypeRef,
-        occurs: Range,
+        occurs: UsizeRange,
     ) -> IslVariablyOccurringTypeRef {
         v_1_0::variably_occurring_type_ref(type_ref, occurs)
     }
@@ -237,7 +239,7 @@ impl IslTypeRefImpl {
                         } else {
                             // for ISL 1.0 `occurs` field is a no op when used with constraints other than `fields` and `ordered_elements`.
                             // Although ISL 1.0 will treat this `occurs` field as no op it still has to serialize the `occurs` range to see if its a valid range.
-                            IslVariablyOccurringTypeRef::occurs_from_ion_element(occurs_field, isl_version)?;
+                            IslVariablyOccurringTypeRef::occurs_from_ion_element(occurs_field)?;
                         }
                     }
 
@@ -390,11 +392,11 @@ impl WriteToIsl for IslTypeRefImpl {
 #[derive(Debug, Clone, PartialEq)]
 pub struct IslVariablyOccurringTypeRef {
     type_ref: IslTypeRefImpl,
-    occurs: Range,
+    occurs: UsizeRange,
 }
 
 impl IslVariablyOccurringTypeRef {
-    pub(crate) fn new(type_ref: IslTypeRef, occurs: Range) -> Self {
+    pub(crate) fn new(type_ref: IslTypeRef, occurs: UsizeRange) -> Self {
         Self {
             type_ref: type_ref.type_reference,
             occurs,
@@ -404,18 +406,18 @@ impl IslVariablyOccurringTypeRef {
     pub fn optional(type_ref: IslTypeRef) -> Self {
         Self {
             type_ref: type_ref.type_reference,
-            occurs: Range::optional(),
+            occurs: UsizeRange::zero_or_one(),
         }
     }
 
     pub fn required(type_ref: IslTypeRef) -> Self {
         Self {
             type_ref: type_ref.type_reference,
-            occurs: Range::required(),
+            occurs: UsizeRange::new_single_value(1),
         }
     }
 
-    pub fn occurs(&self) -> Range {
+    pub fn occurs(&self) -> UsizeRange {
         self.occurs.to_owned()
     }
 
@@ -433,55 +435,35 @@ impl IslVariablyOccurringTypeRef {
             true,
         )?;
 
-        let occurs: Range = value
+        let occurs: UsizeRange = value
             .as_struct()
             .and_then(|s| {
                 s.get("occurs")
-                    .map(|r| IslVariablyOccurringTypeRef::occurs_from_ion_element(r, isl_version))
+                    .map(IslVariablyOccurringTypeRef::occurs_from_ion_element)
             })
             .unwrap_or(if constraint_name == "fields" {
-                Ok(Range::optional())
+                Ok(UsizeRange::zero_or_one())
             } else {
-                Ok(Range::required())
+                Ok(UsizeRange::new_single_value(1))
             })?;
 
+        isl_require!(occurs.upper() != &Limit::Closed(0usize) => "Occurs cannot be 0")?;
         Ok(IslVariablyOccurringTypeRef { type_ref, occurs })
     }
 
-    fn occurs_from_ion_element(value: &Element, isl_version: IslVersion) -> IonSchemaResult<Range> {
-        use IonType::*;
+    fn occurs_from_ion_element(value: &Element) -> IonSchemaResult<UsizeRange> {
         if value.is_null() {
             return invalid_schema_error(
                 "expected an integer or integer range for an `occurs` constraint, found null",
             );
         }
-        match value.ion_type() {
-            Symbol => {
-                let sym = try_to!(try_to!(value.as_symbol()).text());
-                match sym {
-                    "optional" => Ok(Range::optional()),
-                    "required" => Ok(Range::required()),
-                    _ => {
-                        invalid_schema_error(format!(
-                            "only optional and required symbols are supported with occurs constraint, found {sym}"
-                        ))
-                    }
-                }
+        match value.value() {
+            Value::Symbol(s) if s.text() == Some("optional") => Ok(UsizeRange::zero_or_one()),
+            Value::Symbol(s) if s.text() == Some("required") => Ok(UsizeRange::new_single_value(1)),
+            Value::List(_) | Value::Int(_) => {
+                UsizeRange::from_ion_element(value, Element::as_usize)
             }
-            List | Int => {
-                if value.ion_type() == Int && value.as_int().unwrap() <= &ion_rs::Int::I64(0) {
-                    return invalid_schema_error("occurs constraint can not be 0");
-                }
-                Ok(Range::from_ion_element(
-                    value,
-                    RangeType::NonNegativeInteger,
-                    isl_version,
-                )?)
-            }
-            _ => invalid_schema_error(format!(
-                "ion type: {:?} is not supported with occurs constraint",
-                value.ion_type()
-            )),
+            _ => invalid_schema_error(format!("Invalid occurs value: {value}")),
         }
     }
 

@@ -30,6 +30,7 @@ macro_rules! try_to {
 pub mod authority;
 mod constraint;
 mod import;
+pub(crate) mod ion_extension;
 mod ion_path;
 pub mod isl;
 mod nfa;
@@ -233,8 +234,8 @@ impl UserReservedFields {
                 && f.text() != Some("type")
         }) {
             return invalid_schema_error(
-               "User reserved fields can only have schema_header, schema_footer or type as the field names",
-           );
+                "User reserved fields can only have schema_header, schema_footer or type as the field names",
+            );
         }
         Ok(Self {
             schema_header_fields: UserReservedFields::field_names_from_ion_elements(

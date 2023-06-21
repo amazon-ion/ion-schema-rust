@@ -1,6 +1,6 @@
 use crate::ion_path::IonPath;
-use crate::isl::isl_range::Range;
 use crate::isl::isl_type_reference::NullabilityModifier;
+use crate::isl::ranges::UsizeRange;
 use crate::result::ValidationResult;
 use crate::system::{TypeId, TypeStore};
 use crate::types::TypeValidator;
@@ -78,11 +78,11 @@ impl TypeValidator for TypeReference {
 #[derive(Debug, Clone, PartialEq)]
 pub struct VariablyOccurringTypeRef {
     type_ref: TypeReference,
-    occurs_range: Range, // represents the range provided by `occurs` field for given type reference
+    occurs_range: UsizeRange, // represents the range provided by `occurs` field for given type reference
 }
 
 impl VariablyOccurringTypeRef {
-    pub fn new(type_ref: TypeReference, occurs_range: Range) -> Self {
+    pub fn new(type_ref: TypeReference, occurs_range: UsizeRange) -> Self {
         Self {
             type_ref,
             occurs_range,
@@ -93,7 +93,7 @@ impl VariablyOccurringTypeRef {
         self.type_ref
     }
 
-    pub fn occurs_range(&self) -> &Range {
+    pub fn occurs_range(&self) -> &UsizeRange {
         &self.occurs_range
     }
 }
