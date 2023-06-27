@@ -388,9 +388,9 @@ mod isl_tests {
     use crate::result::IonSchemaResult;
     use crate::system::SchemaSystem;
     use ion_rs::element::Element;
-    use ion_rs::types::decimal::*;
-    use ion_rs::types::integer::Int as IntegerValue;
-    use ion_rs::types::timestamp::Timestamp;
+    use ion_rs::types::Decimal;
+    use ion_rs::types::Int as IntegerValue;
+    use ion_rs::types::Timestamp;
     use ion_rs::Symbol;
     use ion_rs::{IonType, TextWriterBuilder};
     use rstest::*;

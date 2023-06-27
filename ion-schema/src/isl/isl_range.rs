@@ -9,7 +9,7 @@ use ion_rs::element::writer::ElementWriter;
 use ion_rs::element::Element;
 use ion_rs::external::bigdecimal::num_bigint::BigInt;
 use ion_rs::external::bigdecimal::{BigDecimal, One};
-use ion_rs::types::integer::IntAccess;
+use ion_rs::types::IntAccess;
 use ion_rs::{element, Decimal, Int, IonType, IonWriter, Timestamp};
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
