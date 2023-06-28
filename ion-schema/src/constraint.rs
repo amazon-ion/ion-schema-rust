@@ -18,7 +18,7 @@ use crate::types::TypeValidator;
 use crate::violation::{Violation, ViolationCode};
 use crate::IonSchemaElement;
 use ion_rs::element::Element;
-use ion_rs::ion_eq::IonEq;
+use ion_rs::IonData;
 use ion_rs::{Int, IonType};
 use num_traits::ToPrimitive;
 use regex::{Regex, RegexBuilder};
@@ -2042,9 +2042,11 @@ impl ConstraintValidator for ValidValuesConstraint {
                         },
                         ValidValue::Element(element) => {
                             // get value without annotations
-                            let value = value.value();
+                            let value: IonData<_> = value.value().into();
+                            let actual_value: IonData<_> = element.value().into();
 
-                            if element.value().ion_eq(value) {
+                            // this comparison uses the Ion equivalence based on Ion specification
+                            if actual_value == value {
                                 return Ok(());
                             }
                         }
