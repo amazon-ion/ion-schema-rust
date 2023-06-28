@@ -265,7 +265,6 @@ impl Constraint {
         values: Vec<Element>,
         isl_version: IslVersion,
     ) -> IonSchemaResult<Constraint> {
-        // TODO: Do something about this
         let valid_values: IonSchemaResult<Vec<ValidValue>> = values
             .iter()
             .map(|e| ValidValue::from_ion_element(e, isl_version))
