@@ -7,11 +7,11 @@
 //!
 //! [IslConstraint]: IslConstraint
 //!
-//! ## Example usage of `version_based_isl` module to create an `IslSchema` using `IslType`:
+//! ## Example usage of `version_based_isl` module to create an `IslSchema` using `IslType` for ISl 1.0:
 //! ```
 //! use ion_rs::element::Element;
 //! use ion_schema::isl::version_based_isl::constraints::IslConstraint;
-//! use ion_schema::isl::version_based_isl::{IslSchema, IslTypeRef, IslV1_0};
+//! use ion_schema::isl::version_based_isl::{IslSchema, IslTypeRef, IslV1_0, UserReservedFields};
 //! use ion_schema::isl::version_based_isl::constraints::open_content::OpenContent;
 //! use crate::ion_schema::isl::version_based_isl::IslType;
 //! use crate::ion_schema::isl::version_based_isl::constraints::r#type::Type;
@@ -22,7 +22,8 @@
 //! //      type: int,
 //! //      all_of: [
 //! //          { type: bool }
-//! //      ]
+//! //      ],
+//! //      open_content: "This is an open content!"
 //! //  }
 //! let isl_type: IslType<IslV1_0> = IslType::named(
 //!     // represents the `name` of the defined type
@@ -51,13 +52,49 @@
 //!
 //! // create an ISL schema using above IslType
 //! let isl_schema = IslSchema::new("my_schema", vec![], vec![isl_type], vec![], vec![]);
+//!
 //! assert_eq!(isl_schema.types().len(), 1);
 //! assert_eq!(isl_schema.types()[0].name(), &Some("my_type_name".to_owned()));
 //! assert_eq!(isl_schema.types()[0].constraints().len(), 3);
 //! // verify that the last constraint is actually an open content field
 //! assert!(matches!(isl_schema.types()[0].constraints()[2], IslConstraint::Unknown(_)));
 //! ```
-
+//!
+//! ## Example usage of `version_based_isl` module to create an `IslSchema` using `IslType` for ISL 2.0:
+//! ```
+//! use ion_rs::element::Element;
+//! use ion_schema::isl::version_based_isl::constraints::IslConstraint;
+//! use ion_schema::isl::version_based_isl::{IslSchema, IslTypeRef, IslV2_0, UserReservedFields};
+//! use ion_schema::isl::version_based_isl::constraints::open_content::OpenContent;
+//! use crate::ion_schema::isl::version_based_isl::IslType;
+//! use crate::ion_schema::isl::version_based_isl::constraints::r#type::Type;
+//!
+//! // below code represents an ISL type:
+//! // type:: {
+//! //      name:my_type_name,
+//! //      type: int,
+//! //  }
+//! let isl_type: IslType<IslV2_0> = IslType::named(
+//!     // represents the `name` of the defined type
+//!     "my_type_name".to_owned(),
+//!     vec![
+//!         // represents the `type: int` constraint
+//!         IslConstraint::type_constraint(
+//!             IslTypeRef::named("int")
+//!         ),
+//!     ]
+//! );
+//!
+//! // create an ISL schema using above IslType
+//! let mut  isl_schema = IslSchema::new("my_schema", vec![], vec![isl_type], vec![], vec![]);
+//! // Performing the following operation with ISL 1.0 schema would result in a compile time error.
+//! isl_schema = isl_schema.with_user_reserved_fields(UserReservedFields::new(vec!["foo".to_string(), "bar".to_string()], vec![], vec![]));
+//!
+//! assert_eq!(isl_schema.types().len(), 1);
+//! // verify that the schema has user reserved fields
+//! assert!(isl_schema.user_reserved_fields().is_some());
+//! assert_eq!(isl_schema.user_reserved_fields().unwrap().schema_header_fields().len(), 2);
+//! ```
 use crate::isl::isl_range::Range;
 use crate::isl::isl_type_reference::NullabilityModifier;
 use crate::isl::version_based_isl::constraints::IslConstraint;
@@ -86,7 +123,7 @@ pub struct UserReservedFields<V: IslVersionTrait> {
 }
 
 impl UserReservedFields<IslV2_0> {
-    pub(crate) fn new(
+    pub fn new(
         schema_header_fields: Vec<String>,
         schema_footer_fields: Vec<String>,
         type_fields: Vec<String>,
@@ -98,6 +135,18 @@ impl UserReservedFields<IslV2_0> {
             phantom: Default::default(),
         }
     }
+
+    pub fn schema_header_fields(&self) -> &Vec<String> {
+        &self.schema_header_fields
+    }
+
+    pub fn schema_footer_fields(&self) -> &Vec<String> {
+        &self.schema_footer_fields
+    }
+
+    pub fn type_fields(&self) -> &Vec<String> {
+        &self.type_fields
+    }
 }
 
 /// Provides an internal representation of an schema file
@@ -108,7 +157,7 @@ pub struct IslSchema<V: IslVersionTrait> {
     /// Represents the user defined reserved fields
     /// For ISL 2.0 this contains the use reserved fields that are defined within schema header,
     /// Otherwise, it is None.
-    user_reserved_fields: Option<UserReservedFields<IslV2_0>>,
+    user_reserved_fields: Option<UserReservedFields<V>>,
     /// Represents all the IslImports inside the schema file.
     /// For more information: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#imports
     imports: Vec<IslImport>,
@@ -154,10 +203,7 @@ impl<V: IslVersionTrait> IslSchema<V> {
         }
     }
 
-    pub fn with_user_reserved_fields(
-        self,
-        user_reserved_fields: UserReservedFields<IslV2_0>,
-    ) -> Self {
+    pub fn with_user_reserved_fields(self, user_reserved_fields: UserReservedFields<V>) -> Self {
         Self {
             id: self.id,
             user_reserved_fields: Some(user_reserved_fields),
@@ -193,7 +239,7 @@ impl<V: IslVersionTrait> IslSchema<V> {
 
     /// Provide user reserved field defined in the given schema for ISL 2.0,
     /// Otherwise returns None
-    pub fn user_reserved_fields(&self) -> Option<&UserReservedFields<IslV2_0>> {
+    pub fn user_reserved_fields(&self) -> Option<&UserReservedFields<V>> {
         self.user_reserved_fields.as_ref()
     }
 }
