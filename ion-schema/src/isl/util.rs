@@ -3,7 +3,7 @@ use crate::isl::{IslVersion, WriteToIsl};
 use crate::result::{invalid_schema_error, IonSchemaError, IonSchemaResult};
 use ion_rs::element::writer::ElementWriter;
 use ion_rs::element::Element;
-use ion_rs::types::timestamp::Precision;
+use ion_rs::types::Precision;
 use ion_rs::{IonWriter, Symbol, Timestamp};
 use num_traits::abs;
 use std::cmp::Ordering;
