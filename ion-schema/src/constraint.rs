@@ -145,7 +145,7 @@ impl Constraint {
         Constraint::Contains(ContainsConstraint::new(values.into()))
     }
 
-    /// Creates a [Constraint::ContainerLength] from a [U64Range] specifying a length range.
+    /// Creates a [Constraint::ContainerLength] from a [UsizeRange] specifying a length range.
     pub fn container_length(length: UsizeRange) -> Constraint {
         Constraint::ContainerLength(ContainerLengthConstraint::new(length))
     }
