@@ -795,6 +795,13 @@ mod type_definition_tests {
         anonymous_type([timestamp_precision(TimestampPrecisionRange::new_single_value(TimestampPrecision::Month))]),
     TypeDefinitionKind::anonymous([Constraint::timestamp_precision(TimestampPrecision::Month.into()), Constraint::type_constraint(34)])
     ),
+    case::valid_values_constraint(
+    /* For a schema with valid_values constraint as below:
+        { valid_values: [2, 3.5, 5e7, "hello", hi, range::[2, 3]] }
+    */
+    anonymous_type([valid_values(vec![2.into(), ion_rs::Decimal::new(35, -1).into(), 5e7.into(), "hello".to_owned().into(), Symbol::from("hi").into(), NumberRange::new_inclusive(2.into(), 3.into()).unwrap().into()]).unwrap()]),
+    TypeDefinitionKind::anonymous([Constraint::valid_values(vec![2.into(), ion_rs::Decimal::new(35, -1).into(), 5e7.into(), "hello".to_owned().into(), Symbol::from("hi").into(), NumberRange::new_inclusive(2.into(), 3.into()).unwrap().into()], IslVersion::V1_0).unwrap(), Constraint::type_constraint(34)])
+    ),
     case::utf8_byte_length_constraint(
         /* For a schema with utf8_byte_length constraint as below:
             { utf8_byte_length: 3 }

@@ -387,7 +387,7 @@ mod isl_tests {
     use ion_rs::Symbol;
     use ion_rs::{IonType, TextWriterBuilder};
     use rstest::*;
-    use std::path::{Path, MAIN_SEPARATOR};
+    use std::path::Path;
     use test_generator::test_resources;
 
     // helper function to create NamedIslType for isl tests using ISL 1.0

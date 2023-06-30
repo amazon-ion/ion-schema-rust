@@ -447,7 +447,7 @@ impl IslVariablyOccurringTypeRef {
                 Ok(UsizeRange::new_single_value(1))
             })?;
 
-        isl_require!(occurs.upper() != &Limit::Closed(0usize) => "Occurs cannot be 0")?;
+        isl_require!(occurs.upper() != &Limit::Inclusive(0usize) => "Occurs cannot be 0")?;
         Ok(IslVariablyOccurringTypeRef { type_ref, occurs })
     }
 

@@ -2,15 +2,18 @@ use ion_rs::element::{Element, Value};
 use ion_rs::external::bigdecimal::BigDecimal;
 use ion_rs::{Decimal, Int};
 use num_traits::ToPrimitive;
-use std::str::FromStr;
 
 /// Trait for adding extensions to [`Element`] that are useful for implementing Ion Schema.
 pub(crate) trait ElementExtensions {
-    /// Returns the value as an `usize` if it is an Ion Int that can be represented as such.
+    /// Returns some `usize` if this `Element` is an Ion Int _and_ it can be represented as (fits in) a `usize`.
+    /// Returns `None` if `self` is not an Ion Int, or self is null.int, or self is out of bounds for `usize`.
     fn as_usize(&self) -> Option<usize>;
-    /// Returns the value as an `u64` if it is an Ion Int that can be represented as such.
+    /// Returns some `u64` if this `Element` is an Ion Int _and_ it can be represented as (fits in) a `u64`.
+    /// Returns `None` if `self` is not an Ion Int, or self is null.int, or self is out of bounds for `u64`.
     fn as_u64(&self) -> Option<u64>;
-    /// Returns the value as a [`Decimal`] if it is any numeric Ion value that can be represented as a [`Decimal`].
+    /// Returns some [`Decimal`] if this `Element` is any Ion number type (`int`, `decimal`, or `float`)
+    /// _and_ it can be represented as (fits in) a `Decimal`. Returns `None` if `self` is not one
+    /// of the Ion number types or not a finite value.
     fn any_number_as_decimal(&self) -> Option<Decimal>;
 }
 impl ElementExtensions for Element {
@@ -30,14 +33,10 @@ impl ElementExtensions for Element {
     }
     fn any_number_as_decimal(&self) -> Option<Decimal> {
         match self.value() {
+            // TODO: Consolidate Int match arms once https://github.com/amazon-ion/ion-rust/issues/582 is resolved
             Value::Int(Int::I64(i)) => Some(Decimal::from(*i)),
             Value::Int(Int::BigInt(i)) => Some(Decimal::from(BigDecimal::from(i.clone()))),
-            Value::Float(f) => BigDecimal::from_str(&format!(
-                "{f:.PRECISION$e}",
-                PRECISION = f64::MANTISSA_DIGITS as usize
-            ))
-            .ok()
-            .map(|it| it.into()),
+            Value::Float(f) => (*f).try_into().ok(),
             Value::Decimal(d) => Some(d.clone()),
             _ => None,
         }

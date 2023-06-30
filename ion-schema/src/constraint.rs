@@ -261,17 +261,14 @@ impl Constraint {
 
     /// Creates a [Constraint::ValidValues] using the [Element]s specified inside it
     /// Returns an IonSchemaError if any of the Elements have an annotation other than `range`
-    pub fn valid_values_with_values(
-        values: Vec<Element>,
+    pub fn valid_values(
+        valid_values: Vec<ValidValue>,
         isl_version: IslVersion,
     ) -> IonSchemaResult<Constraint> {
-        let valid_values: IonSchemaResult<Vec<ValidValue>> = values
-            .iter()
-            .map(|e| ValidValue::from_ion_element(e, isl_version))
-            .collect();
-        Ok(Constraint::ValidValues(ValidValuesConstraint {
-            valid_values: valid_values?,
-        }))
+        Ok(Constraint::ValidValues(ValidValuesConstraint::new(
+            valid_values,
+            isl_version,
+        )?))
     }
 
     /// Creates a [Constraint::Regex] from the expression and flags (case_insensitive, multi_line) and also specify the ISL version
@@ -469,7 +466,7 @@ impl Constraint {
                 ))
             }
             IslConstraintImpl::Precision(precision_range) => {
-                isl_require!(precision_range.lower() != &Limit::Closed(0u64) => "Precision range cannot be 0")?;
+                isl_require!(precision_range.lower() != &Limit::Inclusive(0) => "precision range must have non-zero values")?;
                 Ok(Constraint::Precision(PrecisionConstraint::new(
                     precision_range.to_owned(),
                 )))
