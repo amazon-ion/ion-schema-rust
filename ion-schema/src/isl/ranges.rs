@@ -5,14 +5,15 @@
 //!
 //! ### Why so many range types?
 //! - [`UsizeRange`] is used for `*_length` constraints and `occurs`
-//! - [`U64Range`] is used for the `precision` constraint because [`Decimal`] precision is measured
-//!   using `u64`. It would be ideal to use [`NonZeroU64`][std::num::NonZeroU64] for this case, but
-//!   `NonZeroU64` is difficult to work with because it doesn't implement core ops (such as `Add`)
-//!   and as a result, it cannot even implement the checked ops traits (such as `CheckedAdd`) from
-//!   the `num_traits` crate. See https://github.com/rust-num/num-traits/issues/274.
+//! - [`U64Range`] is used for the `precision` constraint because [`Decimal`] precision is measured using `u64`.
 //! - [`I64Range`] is used for `exponent` and `scale` constraints
 //! - [`TimestampPrecisionRange`] is used for `timestamp_precision` constraint
 //! - [`NumberRange`] and [`TimestampRange`] are used for valid_values constraint
+
+// It would be ideal to use [`NonZeroU64`][std::num::NonZeroU64] for the `precision` constraint, but
+// `NonZeroU64` is difficult to work with because it doesn't implement core ops (such as `Add`) and
+// as a result, it cannot even implement the checked ops traits (such as `CheckedAdd`) from the
+// `num_traits` crate. See https://github.com/rust-num/num-traits/issues/274.
 
 use crate::isl::ranges::base::RangeValidation;
 use crate::isl::util::TimestampPrecision;
@@ -67,7 +68,7 @@ impl<T: Display> Limit<T> {
 pub type UsizeRange = base::Range<usize>;
 impl RangeValidation<usize> for UsizeRange {
     fn is_empty(start: &Limit<usize>, end: &Limit<usize>) -> bool {
-        base::_is_int_range_empty(start, end)
+        base::is_int_range_empty(start, end)
     }
 }
 impl UsizeRange {
@@ -102,14 +103,14 @@ impl UsizeRange {
 pub type U64Range = base::Range<u64>;
 impl RangeValidation<u64> for U64Range {
     fn is_empty(start: &Limit<u64>, end: &Limit<u64>) -> bool {
-        base::_is_int_range_empty(start, end)
+        base::is_int_range_empty(start, end)
     }
 }
 
 pub type I64Range = base::Range<i64>;
 impl RangeValidation<i64> for I64Range {
     fn is_empty(start: &Limit<i64>, end: &Limit<i64>) -> bool {
-        base::_is_int_range_empty(start, end)
+        base::is_int_range_empty(start, end)
     }
 }
 
@@ -214,7 +215,7 @@ mod base {
     /// Checks if two limits would result in an empty range of integers. Returns true if there are
     /// no integer values between `start` and `end`, taking into consideration the exclusivity of
     /// the limits.
-    pub fn _is_int_range_empty<T: CheckedAdd + One + PartialOrd>(
+    pub fn is_int_range_empty<T: CheckedAdd + One + PartialOrd>(
         start: &Limit<T>,
         end: &Limit<T>,
     ) -> bool {
