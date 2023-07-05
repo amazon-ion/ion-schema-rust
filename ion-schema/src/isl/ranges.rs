@@ -29,8 +29,19 @@ use std::fmt::{Display, Formatter};
 /// An end (upper or lower) of a [`Range`].
 #[derive(Debug, PartialEq, Clone)]
 pub enum Limit<T> {
+    /// Indicates that the end of a range has no limit or appears to have no limit.
+    /// For example, when `NumberRange::lower() == Unbounded`, there is no actual limit to the lower
+    /// end of the range—it is effectively negative infinity. On the other hand, for a finite type
+    /// such as `i64`, when `I64Range::upper() == Unbounded`, it appears that there is no limit to
+    /// the upper end of the range because then the upper limit of the range is effectively the
+    /// maximum value that can be represented by `i64`.
+    ///
+    /// `Unbounded` is represented in Ion Schema Language as `min` or `max`, depending on the
+    /// position in which it occurs.
     Unbounded,
+    /// Indicates that the end of the range includes the given value.
     Inclusive(T),
+    /// Indicates that the end of the range excludes the given value.
     Exclusive(T),
 }
 
