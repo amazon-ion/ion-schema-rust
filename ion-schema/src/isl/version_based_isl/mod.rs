@@ -23,21 +23,21 @@
 //! //      all_of: [
 //! //          { type: bool }
 //! //      ],
-//! //      open_content: "This is an open content!"
+//! //      open_content: "This is open content!"
 //! //  }
 //! let isl_type: IslType<IslV1_0> = IslType::named(
 //!     // represents the `name` of the defined type
-//!     "my_type_name".to_owned(),
-//!     vec![
+//!     "my_type_name",
+//!     [
 //!         // represents the `type: int` constraint
 //!         IslConstraint::type_constraint(
 //!             IslTypeArgument::named("int")
 //!         ),
 //!         // represents `all_of` with anonymous type `{ type: bool }` constraint
 //!         IslConstraint::all_of(
-//!             vec![
+//!             [
 //!                 IslTypeArgument::anonymous(
-//!                     vec![
+//!                     [
 //!                         IslConstraint::type_constraint(
 //!                             IslTypeArgument::named("bool")
 //!                         )
@@ -46,20 +46,20 @@
 //!             ]
 //!         ),
 //!         // represents some open content which will be ignored while doing validation
-//!         IslConstraint::open_content("open_content".to_owned(), Element::string("This is an open content!"))
+//!         IslConstraint::open_content("open_content".to_owned(), Element::string("This is open content!"))
 //!     ]
 //! );
 //!
 //! // create an ISL schema using above IslType
-//! let isl_schema_header = IslSchemaHeader::<IslV1_0>::new(vec![], vec![]);
-//! let mut  isl_schema = IslSchema::new("my_schema", vec![isl_type], vec![], vec![]);
+//! let isl_schema_header = IslSchemaHeader::<IslV1_0>::new([]);
+//! let mut  isl_schema = IslSchema::new("my_schema", [isl_type], [], []);
 //! isl_schema = isl_schema.with_schema_header(isl_schema_header);
 //!
 //! assert_eq!(isl_schema.types().len(), 1);
-//! assert_eq!(isl_schema.types()[0].name(), &Some("my_type_name".to_owned()));
+//! assert_eq!(isl_schema.types()[0].name(), Some("my_type_name"));
 //! assert_eq!(isl_schema.types()[0].constraints().len(), 3);
 //! // verify that the last constraint is actually an open content field
-//! assert!(matches!(isl_schema.types()[0].constraints()[2], IslConstraint::Unknown(_)));
+//! assert!(matches!(isl_schema.types()[0].constraints()[2], IslConstraint::OpenContent(_)));
 //! ```
 //!
 //! ## Example usage of `version_based_isl` module to create an `IslSchema` using `IslType` for ISL 2.0:
@@ -78,8 +78,8 @@
 //! //  }
 //! let isl_type: IslType<IslV2_0> = IslType::named(
 //!     // represents the `name` of the defined type
-//!     "my_type_name".to_owned(),
-//!     vec![
+//!     "my_type_name",
+//!     [
 //!         // represents the `type: int` constraint
 //!         IslConstraint::type_constraint(
 //!             IslTypeArgument::named("int")
@@ -87,12 +87,14 @@
 //!     ]
 //! );
 //!
-//! let mut isl_schema_header =  IslSchemaHeader::<IslV2_0>::new(vec![], vec![]); // no open content or imports are there in schema header
+//! // create schema header with no open content or imports
+//! let mut isl_schema_header =  IslSchemaHeader::<IslV2_0>::new([]);
+//!
 //! // Performing the following operation with ISL 1.0 schema would result in a compile time error.
-//! isl_schema_header = isl_schema_header.with_user_reserved_fields(vec!["foo".to_string(), "bar".to_string()], vec![], vec![]);
+//! isl_schema_header = isl_schema_header.with_user_reserved_header_fields(["foo".to_string(), "bar".to_string()]);
 //!
 //! // create an ISL schema using above IslType
-//! let mut  isl_schema = IslSchema::new("my_schema", vec![isl_type], vec![], vec![]);
+//! let mut  isl_schema = IslSchema::new("my_schema", [isl_type], [], []);
 //!isl_schema = isl_schema.with_schema_header(isl_schema_header);
 //!
 //! assert_eq!(isl_schema.types().len(), 1);
@@ -113,7 +115,7 @@ pub trait IslVersionTrait {}
 pub struct IslV1_0 {}
 impl IslVersionTrait for IslV1_0 {}
 
-// TODO: This can be a trait if we have get a new minor version of ISL
+// TODO: This can be a trait if we get a new minor version of ISL
 #[derive(Debug, Clone)]
 pub struct IslV2_0 {}
 impl IslVersionTrait for IslV2_0 {}
@@ -175,38 +177,59 @@ impl<V: IslVersionTrait> IslSchemaHeader<V> {
     }
 }
 
-impl IslSchemaHeader<IslV1_0> {
-    pub fn new(open_content: Vec<Element>, imports: Vec<IslImport>) -> Self {
+impl<V: IslVersionTrait> IslSchemaHeader<V> {
+    pub fn new<I: IntoIterator<Item = IslImport>>(imports: I) -> Self {
         Self {
-            open_content,
-            imports,
+            open_content: vec![],
+            imports: imports.into_iter().collect(),
             user_reserved_fields: UserReservedFields::default(),
             _version: Default::default(),
+        }
+    }
+
+    pub fn with_open_content<I: IntoIterator<Item = Element>>(self, open_content: I) -> Self {
+        Self {
+            open_content: open_content.into_iter().collect(),
+            ..self
         }
     }
 }
 
 impl IslSchemaHeader<IslV2_0> {
-    pub fn new(open_content: Vec<Element>, imports: Vec<IslImport>) -> Self {
-        Self {
-            open_content,
-            imports,
-            user_reserved_fields: UserReservedFields::default(),
-            _version: Default::default(),
-        }
-    }
-
-    pub fn with_user_reserved_fields(
+    pub fn with_user_reserved_header_fields<I: IntoIterator<Item = String>>(
         self,
-        schema_header_fields: Vec<String>,
-        schema_footer_fields: Vec<String>,
-        type_fields: Vec<String>,
+        schema_header_fields: I,
     ) -> Self {
         Self {
             user_reserved_fields: UserReservedFields {
-                schema_header_fields,
-                schema_footer_fields,
-                type_fields,
+                schema_header_fields: schema_header_fields.into_iter().collect(),
+                ..self.user_reserved_fields
+            },
+            ..self
+        }
+    }
+
+    pub fn with_user_reserved_footer_fields<I: IntoIterator<Item = String>>(
+        self,
+        schema_footer_fields: I,
+    ) -> Self {
+        Self {
+            user_reserved_fields: UserReservedFields {
+                schema_footer_fields: schema_footer_fields.into_iter().collect(),
+                ..self.user_reserved_fields
+            },
+            ..self
+        }
+    }
+
+    pub fn with_user_reserved_type_fields<I: IntoIterator<Item = String>>(
+        self,
+        type_fields: I,
+    ) -> Self {
+        Self {
+            user_reserved_fields: UserReservedFields {
+                type_fields: type_fields.into_iter().collect(),
+                ..self.user_reserved_fields
             },
             ..self
         }
@@ -225,8 +248,10 @@ pub struct IslSchemaFooter {
 }
 
 impl IslSchemaFooter {
-    pub fn new(open_content: Vec<Element>) -> Self {
-        Self { open_content }
+    pub fn new<I: IntoIterator<Item = Element>>(open_content: I) -> Self {
+        Self {
+            open_content: open_content.into_iter().collect(),
+        }
     }
 }
 
@@ -266,19 +291,24 @@ pub struct IslSchema<V: IslVersionTrait> {
 }
 
 impl<V: IslVersionTrait> IslSchema<V> {
-    pub fn new<A: AsRef<str>>(
+    pub fn new<
+        A: AsRef<str>,
+        E: IntoIterator<Item = Element>,
+        I: IntoIterator<Item = IslImportType>,
+        T: IntoIterator<Item = IslType<V>>,
+    >(
         id: A,
-        types: Vec<IslType<V>>,
-        inline_imports: Vec<IslImportType>,
-        open_content: Vec<Element>,
+        types: T,
+        inline_imports: I,
+        open_content: E,
     ) -> Self {
         Self {
             id: id.as_ref().to_owned(),
             schema_header: None,
             schema_footer: None,
-            types,
-            inline_imported_types: inline_imports,
-            open_content,
+            types: types.into_iter().collect(),
+            inline_imported_types: inline_imports.into_iter().collect(),
+            open_content: open_content.into_iter().collect(),
             _version: Default::default(),
         }
     }
@@ -297,8 +327,8 @@ impl<V: IslVersionTrait> IslSchema<V> {
         }
     }
 
-    pub fn id(&self) -> String {
-        self.id.to_owned()
+    pub fn id(&self) -> &str {
+        &self.id
     }
 
     pub fn types(&self) -> &[IslType<V>] {
@@ -311,20 +341,20 @@ impl<V: IslVersionTrait> IslSchema<V> {
 
     /// Provides top level open content for given schema
     /// For open content defined within type definitions use IslType#open_content()
-    pub fn open_content(&self) -> &Vec<Element> {
+    pub fn open_content(&self) -> &[Element] {
         &self.open_content
     }
 
     /// Provides the schema header value if present,
     /// Otherwise returns None.
-    pub fn schema_header(&self) -> &Option<IslSchemaHeader<V>> {
-        &self.schema_header
+    pub fn schema_header(&self) -> Option<&IslSchemaHeader<V>> {
+        self.schema_header.as_ref()
     }
 
     /// Provides the schema footer value if present,
     /// Otherwise returns None.
-    pub fn schema_footer(&self) -> &Option<IslSchemaFooter> {
-        &self.schema_footer
+    pub fn schema_footer(&self) -> Option<&IslSchemaFooter> {
+        self.schema_footer.as_ref()
     }
 }
 
@@ -363,15 +393,15 @@ impl<V: IslVersionTrait> IslType<V> {
 
     /// Provides a name if the ISL type is named type definition
     /// Otherwise returns None
-    pub fn name(&self) -> &Option<String> {
-        &self.name
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
     }
 
     /// Provides open content that is there in the type definition
     pub fn open_content(&self) -> Vec<(&String, &Element)> {
         let mut open_contents = vec![];
         for constraint in &self.constraints {
-            if let IslConstraint::Unknown(open_content) = constraint {
+            if let IslConstraint::OpenContent(open_content) = constraint {
                 open_contents.push((open_content.field_name(), open_content.field_value()))
             }
         }

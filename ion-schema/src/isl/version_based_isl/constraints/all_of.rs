@@ -10,7 +10,7 @@ impl<V: IslVersionTrait> AllOf<V> {
         Self { type_args }
     }
 
-    pub fn type_args(&self) -> &Vec<IslTypeArgument<V>> {
+    pub fn type_args(&self) -> &[IslTypeArgument<V>] {
         &self.type_args
     }
 }

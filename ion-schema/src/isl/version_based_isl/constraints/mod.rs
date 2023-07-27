@@ -21,7 +21,7 @@ pub enum IslConstraint<V: IslVersionTrait> {
     OneOf(OneOf<V>),
     Not(Not<V>),
     Type(Type<V>),
-    Unknown(OpenContent),
+    OpenContent(OpenContent),
 }
 
 impl<V: IslVersionTrait> IslConstraint<V> {
@@ -51,9 +51,9 @@ impl<V: IslVersionTrait> IslConstraint<V> {
         IslConstraint::Not(Not::new(isl_type_ref))
     }
 
-    /// Creates an `open_content` using the field name and value referenced inside it
+    /// Creates open content using the field name and value referenced inside it
     /// Note: This open content has no effect
     pub fn open_content(field_name: String, field_value: Element) -> IslConstraint<V> {
-        IslConstraint::Unknown(OpenContent::new(field_name, field_value))
+        IslConstraint::OpenContent(OpenContent::new(field_name, field_value))
     }
 }
