@@ -19,8 +19,10 @@
 //!
 //! ## Example usage of `isl` module to create an `IslSchema` using `IslType`:
 //! ```
-//! use ion_schema::isl::{isl_type::v_1_0::*, isl_constraint::v_1_0::*, isl_type_reference::v_1_0::*, IslSchema};
-//! use ion_schema::schema::Schema;
+//! use ion_schema::isl::isl_constraint::v_1_0::{all_of, type_constraint};
+//! use ion_schema::isl::isl_type::v_1_0::named_type;
+//! use ion_schema::isl::isl_type_reference::v_1_0::{anonymous_type_ref, named_type_ref};
+//! use ion_schema::isl::IslSchema;
 //! use ion_schema::system::SchemaSystem;
 //!
 //! // below code represents an ISL type:
@@ -31,6 +33,7 @@
 //! //          { type: bool }
 //! //      ]
 //! //  }
+//!
 //! let isl_type = named_type(
 //!     // represents the `name` of the defined type
 //!     "my_type_name".to_owned(),
@@ -149,6 +152,7 @@ pub mod isl_type;
 pub mod isl_type_reference;
 pub mod ranges;
 pub mod util;
+pub mod version_based_isl;
 
 /// Represents Ion Schema Language Versions
 /// Currently it support v1.0 and v2.0
