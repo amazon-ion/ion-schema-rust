@@ -1175,14 +1175,21 @@ impl ConstraintValidator for ContainsConstraint {
         // Create a peekable iterator for given sequence
         let values: Vec<Element> = match &value {
             IonSchemaElement::SingleElement(element) => {
-                match element.as_sequence() {
-                    None => {
+                match element.value() {
+                    Value::List(ion_sequence) | Value::SExp(ion_sequence) => {
+                        ion_sequence.elements().map(|a| a.to_owned()).collect()
+                    }
+                    Value::Struct(ion_struct) => ion_struct
+                        .fields()
+                        .map(|(name, value)| value.to_owned())
+                        .collect(),
+                    _ => {
                         // return Violation if value is not an Ion sequence
                         return Err(Violation::new(
                             "contains",
                             ViolationCode::TypeMismatched,
                             &format!(
-                                "expected list/sexp found {}",
+                                "expected list/sexp/struct/document found {}",
                                 if element.is_null() {
                                     format!("{element}")
                                 } else {
@@ -1192,7 +1199,6 @@ impl ConstraintValidator for ContainsConstraint {
                             ion_path,
                         ));
                     }
-                    Some(ion_sequence) => ion_sequence.elements().map(|a| a.to_owned()).collect(),
                 }
             }
             IonSchemaElement::Document(document) => document.to_owned(),

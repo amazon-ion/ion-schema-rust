@@ -583,6 +583,12 @@ impl IslConstraintImpl {
                     ));
                 }
 
+                if value.annotations().contains("range") {
+                    return invalid_schema_error(format!(
+                        "contains constraint can not have ranges"
+                    ));
+                }
+
                 let values: Vec<Element> = value
                     .as_sequence()
                     .unwrap()
