@@ -129,7 +129,7 @@ impl TryFrom<&str> for TimestampPrecision {
             "year" => TimestampPrecision::Year,
             "month" => TimestampPrecision::Month,
             "day" => TimestampPrecision::Day,
-            "minute" | "hour" => TimestampPrecision::Minute,
+            "minute" => TimestampPrecision::Minute,
             "second" => TimestampPrecision::Second,
             "millisecond" => TimestampPrecision::Millisecond,
             "microsecond" => TimestampPrecision::Microsecond,
