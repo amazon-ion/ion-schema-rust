@@ -351,6 +351,11 @@ impl PendingTypes {
         if let Some(exists) = self.ids_by_name.get(name) {
             return exists.to_owned() + type_store.types_by_id.len();
         }
+
+        if let Some(exists) = type_store.imported_type_ids_by_name.get(name) {
+            return exists.to_owned();
+        }
+
         match type_store.update_deferred_type_def(type_def.to_owned(), name) {
             None => {
                 let type_id = type_id - type_store.types_by_id.len();
