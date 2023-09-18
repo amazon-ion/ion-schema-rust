@@ -165,7 +165,14 @@ impl IslTypeImpl {
                             "type names must be a symbol with defined text",
                         ))
                     }
-                    Some(name) => Some(name.to_owned()),
+                    Some(name) => {
+                        if !name_element.annotations().is_empty() {
+                            return Err(invalid_schema_error_raw(
+                                "type names must be a non null and unannotated symbol with defined text",
+                            ));
+                        }
+                        Some(name.to_owned())
+                    }
                 },
                 None => {
                     return Err(invalid_schema_error_raw(
