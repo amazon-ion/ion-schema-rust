@@ -776,6 +776,7 @@ impl Resolver {
 
         let mut found_header = false;
         let mut found_footer = false;
+        let mut found_type_definition = false;
         let mut found_isl_version_marker = false;
 
         for value in elements {
@@ -798,6 +799,26 @@ impl Resolver {
                 };
                 found_isl_version_marker = true;
             } else if annotations.contains("schema_header") {
+                if isl_version == IslVersion::V2_0 {
+                    if found_type_definition {
+                        return invalid_schema_error(
+                            "The schema header must come before top level type definitions",
+                        );
+                    }
+
+                    if found_header {
+                        return invalid_schema_error(
+                            "Schema must only contain a single schema header",
+                        );
+                    }
+
+                    if annotations.len() > 1 {
+                        return invalid_schema_error(
+                            "schema header must not have any other annotations then `schema_header`",
+                        );
+                    }
+                }
+
                 found_header = true;
 
                 // if we didn't find an isl version marker before finding a schema header
@@ -837,7 +858,9 @@ impl Resolver {
             }
             // load types for schema
             else if annotations.contains("type") {
-                if annotations.len() > 1 {
+                found_type_definition = true;
+
+                if isl_version == IslVersion::V2_0 && annotations.len() > 1 {
                     return invalid_schema_error(
                         "Top level types definitions must not have any other annotations then `type`",
                     );
@@ -880,6 +903,11 @@ impl Resolver {
             else if annotations.contains("schema_footer") {
                 found_footer = true;
                 if isl_version == IslVersion::V2_0 {
+                    if annotations.len() > 1 {
+                        return invalid_schema_error(
+                            "schema footer must not have any other annotations then `schema_footer`",
+                        );
+                    }
                     let schema_footer = try_to!(value.as_struct());
                     isl_user_reserved_fields.validate_field_names_in_footer(schema_footer)?;
                 }
