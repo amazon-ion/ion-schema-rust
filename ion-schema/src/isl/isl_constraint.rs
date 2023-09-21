@@ -584,7 +584,7 @@ impl IslConstraintImpl {
                 }
 
                 if value.annotations().contains("range") {
-                    return invalid_schema_error("contains constraint can not have ranges");
+                    return invalid_schema_error("contains list can not have any annotations");
                 }
 
                 let values: Vec<Element> = value

@@ -166,12 +166,8 @@ impl RangeValidation<TimestampPrecision> for TimestampPrecisionRange {
                 };
 
                 // Checking for e.g. range::[exclusive::1, exclusive::2] which is empty.
-                let adjusted_lower = start_value.checked_add(1);
-                // If the _lower_ bound wraps around when we add one, then we know it's empty.
-                if adjusted_lower.is_none() {
-                    return true;
-                }
-                adjusted_lower.unwrap() >= end_value
+                let adjusted_lower = start_value + 1;
+                adjusted_lower >= end_value
             }
             _ => false,
         }
