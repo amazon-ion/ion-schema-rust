@@ -583,7 +583,7 @@ impl IslConstraintImpl {
                     ));
                 }
 
-                if value.annotations().contains("range") {
+                if !value.annotations().is_empty() {
                     return invalid_schema_error("contains list can not have any annotations");
                 }
 

@@ -119,6 +119,21 @@ impl TimestampPrecision {
             TimestampPrecision::OtherFractionalSeconds(i) => format!("fractional second (10e{i})"),
         }
     }
+
+    pub(crate) fn int_value(&self) -> i64 {
+        use TimestampPrecision::*;
+        match self {
+            Year => -4,
+            Month => -3,
+            Day => -2,
+            Minute => -1,
+            Second => 0,
+            Millisecond => 3,
+            Microsecond => 6,
+            Nanosecond => 9,
+            OtherFractionalSeconds(scale) => *scale,
+        }
+    }
 }
 
 impl TryFrom<&str> for TimestampPrecision {
@@ -145,30 +160,8 @@ impl TryFrom<&str> for TimestampPrecision {
 
 impl PartialOrd for TimestampPrecision {
     fn partial_cmp(&self, other: &TimestampPrecision) -> Option<Ordering> {
-        use TimestampPrecision::*;
-        let self_value = match self {
-            Year => -4,
-            Month => -3,
-            Day => -2,
-            Minute => -1,
-            Second => 0,
-            Millisecond => 3,
-            Microsecond => 6,
-            Nanosecond => 9,
-            OtherFractionalSeconds(scale) => *scale,
-        };
-
-        let other_value = match other {
-            Year => -4,
-            Month => -3,
-            Day => -2,
-            Minute => -1,
-            Second => 0,
-            Millisecond => 3,
-            Microsecond => 6,
-            Nanosecond => 9,
-            OtherFractionalSeconds(scale) => *scale,
-        };
+        let self_value = self.int_value();
+        let other_value = other.int_value();
 
         Some(self_value.cmp(&other_value))
     }

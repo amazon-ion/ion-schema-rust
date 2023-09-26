@@ -134,36 +134,13 @@ impl RangeValidation<Timestamp> for TimestampRange {}
 pub type TimestampPrecisionRange = base::Range<TimestampPrecision>;
 impl RangeValidation<TimestampPrecision> for TimestampPrecisionRange {
     fn is_empty(start: &Limit<TimestampPrecision>, end: &Limit<TimestampPrecision>) -> bool {
-        use crate::isl::util::TimestampPrecision::*;
-
         match (start, end) {
             (Limit::Inclusive(lower), Limit::Inclusive(upper)) => lower > upper,
             (Limit::Exclusive(lower), Limit::Inclusive(upper))
             | (Limit::Inclusive(lower), Limit::Exclusive(upper)) => lower >= upper,
             (Limit::Exclusive(lower), Limit::Exclusive(upper)) => {
-                let start_value = match lower {
-                    Year => -4,
-                    Month => -3,
-                    Day => -2,
-                    Minute => -1,
-                    Second => 0,
-                    Millisecond => 3,
-                    Microsecond => 6,
-                    Nanosecond => 9,
-                    OtherFractionalSeconds(scale) => *scale,
-                };
-
-                let end_value = match upper {
-                    Year => -4,
-                    Month => -3,
-                    Day => -2,
-                    Minute => -1,
-                    Second => 0,
-                    Millisecond => 3,
-                    Microsecond => 6,
-                    Nanosecond => 9,
-                    OtherFractionalSeconds(scale) => *scale,
-                };
+                let start_value = lower.int_value();
+                let end_value = upper.int_value();
 
                 // Checking for e.g. range::[exclusive::1, exclusive::2] which is empty.
                 let adjusted_lower = start_value + 1;
