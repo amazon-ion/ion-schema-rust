@@ -338,7 +338,9 @@ impl IslTypeRefImpl {
             }
             IslTypeRefImpl::TypeImport(isl_import_type, type_ref_modifier) => {
                 // verify if the inline import type already exists in the type_store
-                match type_store.get_type_id_by_name(isl_import_type.type_name()) {
+                match type_store
+                    .get_defined_type_id_or_imported_type_id_by_name(isl_import_type.type_name())
+                {
                     None => unresolvable_schema_error(format!(
                         "inline import type: {} does not exists",
                         isl_import_type.type_name()

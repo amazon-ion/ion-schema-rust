@@ -132,7 +132,24 @@ pub type TimestampRange = base::Range<Timestamp>;
 impl RangeValidation<Timestamp> for TimestampRange {}
 
 pub type TimestampPrecisionRange = base::Range<TimestampPrecision>;
-impl RangeValidation<TimestampPrecision> for TimestampPrecisionRange {}
+impl RangeValidation<TimestampPrecision> for TimestampPrecisionRange {
+    fn is_empty(start: &Limit<TimestampPrecision>, end: &Limit<TimestampPrecision>) -> bool {
+        match (start, end) {
+            (Limit::Inclusive(lower), Limit::Inclusive(upper)) => lower > upper,
+            (Limit::Exclusive(lower), Limit::Inclusive(upper))
+            | (Limit::Inclusive(lower), Limit::Exclusive(upper)) => lower >= upper,
+            (Limit::Exclusive(lower), Limit::Exclusive(upper)) => {
+                let start_value = lower.int_value();
+                let end_value = upper.int_value();
+
+                // Checking for e.g. range::[exclusive::1, exclusive::2] which is empty.
+                let adjusted_lower = start_value + 1;
+                adjusted_lower >= end_value
+            }
+            _ => false,
+        }
+    }
+}
 
 // usize does not implement Into<Element>
 // TODO: Remove after https://github.com/amazon-ion/ion-rust/issues/573 is released

@@ -73,7 +73,7 @@ struct MacroArgs {
 ///
 /// ion_schema_tests!(
 ///     // The root directory of a test suite.
-///     root = "../ion-schema-tests/ion_schema_1_0/",
+///     root = "ion-schema-tests/ion_schema_1_0/",
 ///     // Optional, a list of tests to mark as `#[ignore]`.
 ///     // Strings can be test names or regexes that match test names.
 ///     ignored(

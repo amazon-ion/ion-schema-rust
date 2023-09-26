@@ -32,9 +32,7 @@ use crate::schema::Schema;
 use crate::types::{BuiltInTypeDefinition, Nullability, TypeDefinitionImpl, TypeDefinitionKind};
 use crate::{is_isl_version_marker, is_reserved_word, UserReservedFields};
 use ion_rs::element::{Annotations, Element};
-use ion_rs::types::IonType::Struct;
 use ion_rs::IonType;
-use regex::Regex;
 use std::collections::{HashMap, HashSet};
 use std::io::ErrorKind;
 use std::sync::Arc;
@@ -178,8 +176,8 @@ impl PendingTypes {
         return match self.ids_by_name.get(import_type_name) {
             Some(id) => self.types_by_id[*id]
                 .to_owned()
-                .and_then(|type_def| match type_def {
-                    TypeDefinitionKind::Named(named_type_def) => Some(Ok(named_type_def)),
+                .map(|type_def| match type_def {
+                    TypeDefinitionKind::Named(named_type_def) => Ok(named_type_def),
                     TypeDefinitionKind::Anonymous(_) => {
                         unreachable!(
                             "The TypeDefinition for the imported type '{}' was Anonymous.",
@@ -193,24 +191,26 @@ impl PendingTypes {
                         )
                     }
                 }),
-            None => match type_store.get_type_id_by_name(import_type_name) {
-                Some(id) => match type_store.types_by_id[*id].to_owned() {
-                    TypeDefinitionKind::Named(named_type_def) => Some(Ok(named_type_def)),
-                    TypeDefinitionKind::Anonymous(_) => {
-                        unreachable!(
-                            "The TypeDefinition for the imported type '{}' was Anonymous.",
-                            import_type_name
-                        )
-                    }
-                    TypeDefinitionKind::BuiltIn(_) => {
-                        unreachable!(
-                            "The TypeDefinition for the imported type '{}' was a builtin type.",
-                            import_type_name
-                        )
-                    }
-                },
-                None => None,
-            },
+            None => {
+                match type_store.get_defined_type_id_or_imported_type_id_by_name(import_type_name) {
+                    Some(id) => match type_store.types_by_id[*id].to_owned() {
+                        TypeDefinitionKind::Named(named_type_def) => Some(Ok(named_type_def)),
+                        TypeDefinitionKind::Anonymous(_) => {
+                            unreachable!(
+                                "The TypeDefinition for the imported type '{}' was Anonymous.",
+                                import_type_name
+                            )
+                        }
+                        TypeDefinitionKind::BuiltIn(_) => {
+                            unreachable!(
+                                "The TypeDefinition for the imported type '{}' was a builtin type.",
+                                import_type_name
+                            )
+                        }
+                    },
+                    None => None,
+                }
+            }
         };
     }
 
@@ -335,7 +335,9 @@ impl PendingTypes {
     ) -> Option<TypeId> {
         match self.ids_by_name.get(name) {
             Some(id) => Some(*id + type_store.types_by_id.len()),
-            None => type_store.get_type_id_by_name(name).copied(),
+            None => type_store
+                .get_defined_type_id_or_imported_type_id_by_name(name)
+                .copied(),
         }
     }
 
@@ -351,6 +353,11 @@ impl PendingTypes {
         if let Some(exists) = self.ids_by_name.get(name) {
             return exists.to_owned() + type_store.types_by_id.len();
         }
+
+        if let Some(exists) = type_store.imported_type_ids_by_name.get(name) {
+            return exists.to_owned();
+        }
+
         match type_store.update_deferred_type_def(type_def.to_owned(), name) {
             None => {
                 let type_id = type_id - type_store.types_by_id.len();
@@ -404,7 +411,8 @@ impl PendingTypes {
             if let Some(exists) = self.ids_by_name.get(&name) {
                 return exists.to_owned() + type_store.types_by_id.len();
             }
-            if let Some(exists) = type_store.get_type_id_by_name(&name) {
+            if let Some(exists) = type_store.get_defined_type_id_or_imported_type_id_by_name(&name)
+            {
                 return exists.to_owned();
             }
         }
@@ -562,10 +570,21 @@ impl TypeStore {
 
     /// Provides the [`TypeId`] associated with given name if it exists in the [`TypeStore`] as a type
     /// defined within schema (This doesn't include built-in types); Otherwise returns None
-    pub(crate) fn get_type_id_by_name(&self, name: &str) -> Option<&TypeId> {
+    pub(crate) fn get_defined_type_id_or_imported_type_id_by_name(
+        &self,
+        name: &str,
+    ) -> Option<&TypeId> {
         self.ids_by_name
             .get(name)
             .or_else(|| self.imported_type_ids_by_name.get(name))
+    }
+
+    /// Provides the [`Type`] associated with given name if it exists in the [`TypeStore`] as a type
+    /// defined within schema (This doesn't include built-in types and imported types); Otherwise returns None
+    pub(crate) fn get_type_def_by_name(&self, name: &str) -> Option<&TypeDefinitionKind> {
+        self.ids_by_name
+            .get(name)
+            .and_then(|id| self.types_by_id.get(*id))
     }
 
     /// Provides the [`TypeId`] associated with given type name if it exists in the [`TypeStore`]  
@@ -757,6 +776,7 @@ impl Resolver {
 
         let mut found_header = false;
         let mut found_footer = false;
+        let mut found_type_definition = false;
         let mut found_isl_version_marker = false;
 
         for value in elements {
@@ -779,6 +799,26 @@ impl Resolver {
                 };
                 found_isl_version_marker = true;
             } else if annotations.contains("schema_header") {
+                if isl_version == IslVersion::V2_0 {
+                    if found_type_definition {
+                        return invalid_schema_error(
+                            "The schema header must come before top level type definitions",
+                        );
+                    }
+
+                    if found_header {
+                        return invalid_schema_error(
+                            "Schema must only contain a single schema header",
+                        );
+                    }
+
+                    if annotations.len() > 1 {
+                        return invalid_schema_error(
+                            "schema header must not have any other annotations then `schema_header`",
+                        );
+                    }
+                }
+
                 found_header = true;
 
                 // if we didn't find an isl version marker before finding a schema header
@@ -818,6 +858,13 @@ impl Resolver {
             }
             // load types for schema
             else if annotations.contains("type") {
+                found_type_definition = true;
+
+                if isl_version == IslVersion::V2_0 && annotations.len() > 1 {
+                    return invalid_schema_error(
+                        "Top level types definitions must not have any other annotations then `type`",
+                    );
+                }
                 // if we didn't find an isl version marker before finding a type definition
                 // then isl version will be defaulted to be ISL 1.0
                 if !found_isl_version_marker {
@@ -856,13 +903,17 @@ impl Resolver {
             else if annotations.contains("schema_footer") {
                 found_footer = true;
                 if isl_version == IslVersion::V2_0 {
+                    if annotations.len() > 1 {
+                        return invalid_schema_error(
+                            "schema footer must not have any other annotations then `schema_footer`",
+                        );
+                    }
                     let schema_footer = try_to!(value.as_struct());
                     isl_user_reserved_fields.validate_field_names_in_footer(schema_footer)?;
                 }
             } else {
                 // open content
-                if isl_version == IslVersion::V2_0
-                    && value.ion_type() == IonType::Symbol
+                if value.ion_type() == IonType::Symbol
                     && !value.is_null()
                     && is_isl_version_marker(value.as_text().unwrap())
                 {
@@ -1078,41 +1129,6 @@ impl Resolver {
             };
         }
         unresolvable_schema_error("Unable to load ISL model: ".to_owned() + id)
-    }
-
-    // This is a helper method that returns the ISL version for given schema content
-    // It returns an error for an ISL version that matches the version marker but doesn't match the existing ISL versions.
-    fn find_isl_version(
-        &self,
-        schema_content: &Vec<Element>,
-        isl_version_marker: Regex,
-    ) -> IonSchemaResult<IslVersion> {
-        for value in schema_content {
-            // if find a type definition or a schema header before finding any version marker then this is ISL 1.0
-            if value.ion_type() == Struct
-                && (value.annotations().contains("type")
-                    || value.annotations().contains("schema_header"))
-            {
-                // default ISL 1.0 version will be returned
-                break;
-            }
-            // verify if value is an ISL version marker and if it has valid format
-            if value.ion_type() == IonType::Symbol
-                && isl_version_marker.is_match(value.as_text().unwrap())
-            {
-                // This implementation supports Ion Schema 1.0 and Ion Schema 2.0
-                return match value.as_text().unwrap() {
-                    "$ion_schema_1_0" => Ok(IslVersion::V1_0),
-                    "$ion_schema_2_0" => Ok(IslVersion::V2_0),
-                    _ => invalid_schema_error(format!(
-                        "Unsupported Ion Schema Language version: {value}"
-                    )),
-                };
-            }
-        }
-
-        // default ISL version 1.0 if no version marker is found
-        Ok(IslVersion::V1_0)
     }
 }
 

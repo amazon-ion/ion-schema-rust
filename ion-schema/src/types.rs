@@ -3,7 +3,7 @@ use crate::ion_path::IonPath;
 use crate::isl::isl_constraint::IslConstraintImpl;
 use crate::isl::isl_type::IslTypeImpl;
 use crate::isl::IslVersion;
-use crate::result::{IonSchemaResult, ValidationResult};
+use crate::result::{invalid_schema_error, IonSchemaResult, ValidationResult};
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::violation::{Violation, ViolationCode};
 use crate::IonSchemaElement;
@@ -262,6 +262,14 @@ impl TypeDefinitionKind {
         ))
     }
 
+    /// Provides a boolean that represents whether this type is deferred type or not
+    pub fn is_deferred_type_def(&self) -> bool {
+        match self {
+            TypeDefinitionKind::Named(type_def) => type_def.is_deferred_type_def,
+            _ => false,
+        }
+    }
+
     /// Creates an anonymous [`TypeDefinitionKind`] using the [`Constraint`]s defined within it
     pub fn anonymous<A: Into<Vec<Constraint>>>(constraints: A) -> TypeDefinitionKind {
         TypeDefinitionKind::Anonymous(TypeDefinitionImpl::new(None, constraints.into(), None))
@@ -449,9 +457,17 @@ impl TypeDefinitionImpl {
         // parses an isl_type to a TypeDefinition
         let type_name = isl_type.name();
 
-        // add parent information for named type
-        if type_name.is_some() {
-            pending_types.add_parent(type_name.to_owned().unwrap(), type_store);
+        if let Some(type_name) = type_name {
+            if let Some(type_def) = type_store.get_type_def_by_name(type_name) {
+                if isl_version == IslVersion::V2_0 && !type_def.is_deferred_type_def() {
+                    return invalid_schema_error(format!(
+                        "The schema document can not have two type definitions with same name: {}",
+                        type_name
+                    ));
+                }
+            }
+            // add parent information for named type
+            pending_types.add_parent(type_name.to_owned(), type_store);
         }
 
         // add this unresolved type to context for type_id

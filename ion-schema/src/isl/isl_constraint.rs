@@ -583,6 +583,10 @@ impl IslConstraintImpl {
                     ));
                 }
 
+                if !value.annotations().is_empty() {
+                    return invalid_schema_error("contains list can not have any annotations");
+                }
+
                 let values: Vec<Element> = value
                     .as_sequence()
                     .unwrap()
