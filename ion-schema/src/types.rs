@@ -1,7 +1,7 @@
 use crate::constraint::Constraint;
 use crate::ion_path::IonPath;
-use crate::isl::isl_constraint::IslConstraintImpl;
-use crate::isl::isl_type::IslTypeImpl;
+use crate::isl::isl_constraint::IslConstraintValue;
+use crate::isl::isl_type::IslType;
 use crate::isl::IslVersion;
 use crate::result::{invalid_schema_error, IonSchemaResult, ValidationResult};
 use crate::system::{PendingTypes, TypeId, TypeStore};
@@ -124,7 +124,7 @@ pub(crate) enum Nullability {
 impl BuiltInTypeDefinition {
     pub(crate) fn parse_from_isl_type(
         isl_version: IslVersion,
-        isl_type: &IslTypeImpl,
+        isl_type: &IslType,
         type_store: &mut TypeStore,
         pending_types: &mut PendingTypes,
     ) -> IonSchemaResult<Self> {
@@ -138,7 +138,7 @@ impl BuiltInTypeDefinition {
             // For built in types, open_content is set as true as Ion Schema by default allows open content
             let constraint = Constraint::resolve_from_isl_constraint(
                 isl_version,
-                isl_constraint,
+                &isl_constraint.constraint_value,
                 type_store,
                 pending_types,
                 true,
@@ -442,13 +442,13 @@ impl TypeDefinitionImpl {
         &self.constraints
     }
 
-    /// Parse constraints inside an [`IslTypeImpl`] to a schema type definition, update the [`PendingTypes`]
+    /// Parse constraints inside an [`IslType`] to a schema type definition, update the [`PendingTypes`]
     /// and return its [`TypeId`] if the conversion was successful, otherwise return an [`IonSchemaError`]
     ///
     /// [`IonSchemaError`]: crate::result::IonSchemaError
     pub(crate) fn parse_from_isl_type_and_update_pending_types(
         isl_version: IslVersion,
-        isl_type: &IslTypeImpl,
+        isl_type: &IslType,
         type_store: &mut TypeStore,
         pending_types: &mut PendingTypes,
     ) -> IonSchemaResult<TypeId> {
@@ -476,13 +476,13 @@ impl TypeDefinitionImpl {
         // convert IslConstraint to Constraint
         let mut found_type_constraint = false;
         for isl_constraint in isl_type.constraints() {
-            if let IslConstraintImpl::Type(_) = isl_constraint {
+            if let IslConstraintValue::Type(_) = isl_constraint.constraint_value {
                 found_type_constraint = true;
             }
 
             let constraint = Constraint::resolve_from_isl_constraint(
                 isl_version,
-                isl_constraint,
+                &isl_constraint.constraint_value,
                 type_store,
                 pending_types,
                 isl_type.is_open_content_allowed(),
@@ -502,9 +502,9 @@ impl TypeDefinitionImpl {
                 },
             };
 
-            let isl_constraint: IslConstraintImpl =
+            let isl_constraint: IslConstraintValue =
                     // default type for ISL 1.0 is `any`
-                    IslConstraintImpl::from_ion_element(
+                    IslConstraintValue::from_ion_element(
                         isl_version,
                         "type",
                         &Element::symbol(Symbol::from("any")),
@@ -872,7 +872,7 @@ mod type_definition_tests {
         let this_type_def = {
             let type_id = TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
                 IslVersion::V1_0,
-                &isl_type.type_definition,
+                &isl_type,
                 type_store,
                 pending_types,
             )

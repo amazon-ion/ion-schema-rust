@@ -19,8 +19,10 @@
 //!
 //! ## Example usage of `isl` module to create an `IslSchema` using `IslType`:
 //! ```
-//! use ion_schema::isl::{isl_type::v_1_0::*, isl_constraint::v_1_0::*, isl_type_reference::v_1_0::*, IslSchema};
-//! use ion_schema::schema::Schema;
+//! use ion_schema::isl::isl_constraint::v_1_0::{all_of, type_constraint};
+//! use ion_schema::isl::isl_type::v_1_0::named_type;
+//! use ion_schema::isl::isl_type_reference::v_1_0::{anonymous_type_ref, named_type_ref};
+//! use ion_schema::isl::IslSchema;
 //! use ion_schema::system::SchemaSystem;
 //!
 //! // below code represents an ISL type:
@@ -179,137 +181,6 @@ pub trait WriteToIsl {
 /// Provides an internal representation of an schema file
 #[derive(Debug, Clone, PartialEq)]
 pub struct IslSchema {
-    pub(crate) schema: IslSchemaImpl,
-}
-
-impl IslSchema {
-    /// Creates an ISL schema using the [IslType]s, [IslImport]s, open content and schema id
-    pub fn schema_v_1_0<A: AsRef<str>>(
-        id: A,
-        imports: Vec<IslImport>,
-        types: Vec<IslType>,
-        inline_imports: Vec<IslImportType>,
-        open_content: Vec<Element>,
-    ) -> IslSchema {
-        IslSchema {
-            schema: IslSchemaImpl::new(
-                id.as_ref(),
-                IslVersion::V1_0,
-                None,
-                imports,
-                types,
-                inline_imports,
-                open_content,
-            ),
-        }
-    }
-
-    /// Creates an ISL schema using the [IslType]s, [IslImport]s, [UserReservedFields] open content and schema id
-    pub fn schema_v_2_0<A: AsRef<str>>(
-        id: A,
-        user_reserved_fields: UserReservedFields,
-        imports: Vec<IslImport>,
-        types: Vec<IslType>,
-        inline_imports: Vec<IslImportType>,
-        open_content: Vec<Element>,
-    ) -> IslSchema {
-        IslSchema {
-            schema: IslSchemaImpl::new(
-                id.as_ref(),
-                IslVersion::V2_0,
-                Some(user_reserved_fields),
-                imports,
-                types,
-                inline_imports,
-                open_content,
-            ),
-        }
-    }
-
-    pub fn id(&self) -> String {
-        self.schema.id.to_owned()
-    }
-
-    pub fn version(&self) -> IslVersion {
-        self.schema.version
-    }
-
-    pub fn imports(&self) -> &[IslImport] {
-        &self.schema.imports
-    }
-
-    pub fn types(&self) -> &[IslType] {
-        &self.schema.types
-    }
-
-    pub fn inline_imported_types(&self) -> &[IslImportType] {
-        &self.schema.inline_imported_types
-    }
-
-    /// Provides top level open content for given schema
-    /// For open content defined within type definitions use IslType#open_content()
-    pub fn open_content(&self) -> &Vec<Element> {
-        &self.schema.open_content
-    }
-
-    /// Provide user reserved field defined in the given schema for ISL 2.0,
-    /// Otherwise returns None
-    pub fn user_reserved_fields(&self) -> Option<&UserReservedFields> {
-        self.schema.user_reserved_fields.as_ref()
-    }
-
-    fn write_header<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
-        writer.set_annotations(["schema_header"]);
-        writer.step_in(IonType::Struct)?;
-        if !self.schema.imports.is_empty() {
-            writer.set_field_name("imports");
-            writer.step_in(IonType::List)?;
-            for import in &self.schema.imports {
-                import.write_to(writer)?;
-            }
-            writer.step_out()?;
-        }
-        if let Some(user_reserved_fields) = &self.schema.user_reserved_fields {
-            user_reserved_fields.write_to(writer)?;
-        }
-        writer.step_out()?;
-
-        Ok(())
-    }
-}
-
-impl WriteToIsl for IslSchema {
-    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
-        let version = self.schema.version;
-        // write the version marker for given schema
-        match version {
-            IslVersion::V1_0 => {
-                writer.write_symbol("$ion_schema_1_0")?;
-            }
-            IslVersion::V2_0 => {
-                writer.write_symbol("$ion_schema_2_0")?;
-            }
-        }
-        self.write_header(writer)?;
-        for isl_type in &self.schema.types {
-            isl_type.type_definition.write_to(writer)?;
-        }
-        // write open content at the end of the schema
-        for value in &self.schema.open_content {
-            writer.write_element(value)?;
-        }
-
-        // write footer for given schema
-        writer.set_annotations(["schema_footer"]);
-        writer.step_in(IonType::Struct)?;
-        writer.step_out()?;
-        writer.flush()?;
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct IslSchemaImpl {
     /// Represents an id for the given ISL model
     id: String,
     /// Represents the ISL version for given schema
@@ -343,8 +214,8 @@ pub(crate) struct IslSchemaImpl {
     open_content: Vec<Element>,
 }
 
-impl IslSchemaImpl {
-    pub fn new<A: AsRef<str>>(
+impl IslSchema {
+    pub(crate) fn new<A: AsRef<str>>(
         id: A,
         version: IslVersion,
         user_reserved_fields: Option<UserReservedFields>,
@@ -363,6 +234,126 @@ impl IslSchemaImpl {
             open_content,
         }
     }
+
+    /// Creates an ISL schema using the [IslType]s, [IslImport]s, open content and schema id
+    pub fn schema_v_1_0<A: AsRef<str>>(
+        id: A,
+        imports: Vec<IslImport>,
+        types: Vec<IslType>,
+        inline_imports: Vec<IslImportType>,
+        open_content: Vec<Element>,
+    ) -> IslSchema {
+        IslSchema::new(
+            id.as_ref(),
+            IslVersion::V1_0,
+            None,
+            imports,
+            types,
+            inline_imports,
+            open_content,
+        )
+    }
+
+    /// Creates an ISL schema using the [IslType]s, [IslImport]s, [UserReservedFields] open content and schema id
+    pub fn schema_v_2_0<A: AsRef<str>>(
+        id: A,
+        user_reserved_fields: UserReservedFields,
+        imports: Vec<IslImport>,
+        types: Vec<IslType>,
+        inline_imports: Vec<IslImportType>,
+        open_content: Vec<Element>,
+    ) -> IslSchema {
+        IslSchema::new(
+            id.as_ref(),
+            IslVersion::V2_0,
+            Some(user_reserved_fields),
+            imports,
+            types,
+            inline_imports,
+            open_content,
+        )
+    }
+
+    pub fn id(&self) -> String {
+        self.id.to_owned()
+    }
+
+    pub fn version(&self) -> IslVersion {
+        self.version
+    }
+
+    pub fn imports(&self) -> &[IslImport] {
+        &self.imports
+    }
+
+    pub fn types(&self) -> &[IslType] {
+        &self.types
+    }
+
+    pub fn inline_imported_types(&self) -> &[IslImportType] {
+        &self.inline_imported_types
+    }
+
+    /// Provides top level open content for given schema
+    /// For open content defined within type definitions use IslType#open_content()
+    pub fn open_content(&self) -> &Vec<Element> {
+        &self.open_content
+    }
+
+    /// Provide user reserved field defined in the given schema for ISL 2.0,
+    /// Otherwise returns None
+    pub fn user_reserved_fields(&self) -> Option<&UserReservedFields> {
+        self.user_reserved_fields.as_ref()
+    }
+
+    fn write_header<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
+        writer.set_annotations(["schema_header"]);
+        writer.step_in(IonType::Struct)?;
+        if !self.imports.is_empty() {
+            writer.set_field_name("imports");
+            writer.step_in(IonType::List)?;
+            for import in &self.imports {
+                import.write_to(writer)?;
+            }
+            writer.step_out()?;
+        }
+        if let Some(user_reserved_fields) = &self.user_reserved_fields {
+            user_reserved_fields.write_to(writer)?;
+        }
+        writer.step_out()?;
+
+        Ok(())
+    }
+}
+
+impl WriteToIsl for IslSchema {
+    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
+        let version = self.version;
+        // write the version marker for given schema
+        match version {
+            IslVersion::V1_0 => {
+                writer.write_symbol("$ion_schema_1_0")?;
+            }
+            IslVersion::V2_0 => {
+                writer.write_symbol("$ion_schema_2_0")?;
+            }
+        }
+        self.write_header(writer)?;
+        for isl_type in &self.types {
+            isl_type.write_to(writer)?;
+        }
+        // write open content at the end of the schema
+        for value in &self.open_content {
+            writer.write_element(value)?;
+        }
+
+        // write footer for given schema
+        writer.set_annotations(["schema_footer"]);
+        writer.step_in(IonType::Struct)?;
+        writer.step_out()?;
+        writer.flush()?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -370,9 +361,8 @@ mod isl_tests {
     use crate::authority::FileSystemDocumentAuthority;
     use crate::ion_extension::ElementExtensions;
     use crate::isl::isl_constraint::v_1_0::*;
-    use crate::isl::isl_constraint::IslConstraint;
     use crate::isl::isl_type::v_1_0::*;
-    use crate::isl::isl_type::{IslType, IslTypeImpl};
+    use crate::isl::isl_type::IslType;
     use crate::isl::isl_type_reference::v_1_0::*;
     use crate::isl::ranges::*;
     use crate::isl::util::Ieee754InterchangeFormat;
@@ -384,58 +374,41 @@ mod isl_tests {
     use crate::system::SchemaSystem;
     use ion_rs::element::Element;
     use ion_rs::types::Decimal;
+    use ion_rs::IonType;
     use ion_rs::Symbol;
-    use ion_rs::{IonType, TextWriterBuilder};
+    use ion_rs::TextWriterBuilder;
     use rstest::*;
     use std::path::Path;
     use test_generator::test_resources;
 
     // helper function to create NamedIslType for isl tests using ISL 1.0
     fn load_named_type(text: &str) -> IslType {
-        let type_def = IslTypeImpl::from_owned_element(
+        IslType::from_owned_element(
             IslVersion::V1_0,
             &Element::read_one(text.as_bytes()).expect("parsing failed unexpectedly"),
             &mut vec![],
         )
-        .unwrap();
-        let constraints = type_def
-            .constraints()
-            .iter()
-            .map(|c| IslConstraint::new(IslVersion::V1_0, c.to_owned()))
-            .collect();
-        IslType::new(type_def, constraints)
+        .unwrap()
     }
 
     // helper function to create AnonymousIslType for isl tests using ISL 1.0
     fn load_anonymous_type(text: &str) -> IslType {
-        let type_def = IslTypeImpl::from_owned_element(
+        IslType::from_owned_element(
             IslVersion::V1_0,
             &Element::read_one(text.as_bytes()).expect("parsing failed unexpectedly"),
             &mut vec![],
         )
-        .unwrap();
-        let constraints = type_def
-            .constraints()
-            .iter()
-            .map(|c| IslConstraint::new(IslVersion::V1_0, c.to_owned()))
-            .collect();
-        IslType::new(type_def, constraints)
+        .unwrap()
     }
 
     // helper function to create AnonymousIslType for isl tests using ISL 2.0
     fn load_anonymous_type_v2_0(text: &str) -> IslType {
-        let type_def = IslTypeImpl::from_owned_element(
+        IslType::from_owned_element(
             IslVersion::V2_0,
             &Element::read_one(text.as_bytes()).expect("parsing failed unexpectedly"),
             &mut vec![],
         )
-        .unwrap();
-        let constraints = type_def
-            .constraints()
-            .iter()
-            .map(|c| IslConstraint::new(IslVersion::V2_0, c.to_owned()))
-            .collect();
-        IslType::new(type_def, constraints)
+        .unwrap()
     }
 
     #[test]

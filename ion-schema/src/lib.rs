@@ -3,8 +3,8 @@
 
 use crate::external::ion_rs::IonType;
 use crate::ion_path::IonPath;
-use crate::isl::isl_constraint::IslConstraintImpl;
-use crate::isl::isl_type::IslTypeImpl;
+use crate::isl::isl_constraint::IslConstraintValue;
+use crate::isl::isl_type::IslType;
 use crate::isl::WriteToIsl;
 use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
 use crate::violation::{Violation, ViolationCode};
@@ -312,16 +312,13 @@ impl UserReservedFields {
         Ok(())
     }
 
-    pub(crate) fn validate_field_names_in_type(
-        &self,
-        isl_type: &IslTypeImpl,
-    ) -> IonSchemaResult<()> {
+    pub(crate) fn validate_field_names_in_type(&self, isl_type: &IslType) -> IonSchemaResult<()> {
         let unexpected_fields: &Vec<&String> = &isl_type
             .constraints()
             .iter()
-            .filter(|c| matches!(c, IslConstraintImpl::Unknown(_, _)))
-            .map(|c| match c {
-                IslConstraintImpl::Unknown(f, v) => f,
+            .filter(|c| matches!(c.constraint_value, IslConstraintValue::Unknown(_, _)))
+            .map(|c| match &c.constraint_value {
+                IslConstraintValue::Unknown(f, v) => f,
                 _ => {
                     unreachable!("we have already filtered all other constraints")
                 }

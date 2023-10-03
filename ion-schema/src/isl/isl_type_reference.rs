@@ -1,6 +1,6 @@
 use crate::ion_extension::ElementExtensions;
 use crate::isl::isl_import::{IslImport, IslImportType};
-use crate::isl::isl_type::IslTypeImpl;
+use crate::isl::isl_type::IslType;
 use crate::isl::ranges::{Limit, UsizeRange};
 use crate::isl::IslVersion;
 use crate::isl::WriteToIsl;
@@ -16,41 +16,31 @@ use ion_rs::{IonType, IonWriter};
 
 /// Provides public facing APIs for constructing ISL type references programmatically for ISL 1.0
 pub mod v_1_0 {
-    use crate::isl::isl_constraint::{IslConstraint, IslConstraintImpl};
-    use crate::isl::isl_type::IslTypeImpl;
+    use crate::isl::isl_constraint::IslConstraint;
+    use crate::isl::isl_type::IslType;
     use crate::isl::isl_type_reference::{
-        IslTypeRef, IslTypeRefImpl, IslVariablyOccurringTypeRef, NullabilityModifier,
+        IslTypeRef, IslVariablyOccurringTypeRef, NullabilityModifier,
     };
     use crate::isl::ranges::UsizeRange;
     use ion_rs::IonType;
 
     /// Creates a named [IslTypeRef] using the name of the type referenced inside it
     pub fn named_type_ref<A: Into<String>>(name: A) -> IslTypeRef {
-        IslTypeRef::new(IslTypeRefImpl::Named(
-            name.into(),
-            NullabilityModifier::Nothing,
-        ))
+        IslTypeRef::Named(name.into(), NullabilityModifier::Nothing)
     }
 
     /// Creates a nullable [IslTypeRef] using the [IonType] referenced inside it
     pub fn nullable_built_in_type_ref(name: IonType) -> IslTypeRef {
-        IslTypeRef::new(IslTypeRefImpl::Named(
-            format!("{name}"),
-            NullabilityModifier::Nullable,
-        ))
+        IslTypeRef::Named(format!("{name}"), NullabilityModifier::Nullable)
     }
 
     /// Creates an anonymous [IslTypeRef] using the [IslConstraint]s referenced inside it
     pub fn anonymous_type_ref<A: Into<Vec<IslConstraint>>>(constraints: A) -> IslTypeRef {
         let constraints = constraints.into();
-        let isl_constraints: Vec<IslConstraintImpl> = constraints
-            .iter()
-            .map(|c| c.constraint.to_owned())
-            .collect();
-        IslTypeRef::new(IslTypeRefImpl::Anonymous(
-            IslTypeImpl::new(None, isl_constraints, None),
+        IslTypeRef::Anonymous(
+            IslType::new(None, constraints, None),
             NullabilityModifier::Nothing,
-        ))
+        )
     }
 
     /// Creates an [IslVariablyOccurringTypeRef] using the [IslConstraint]s and [Range] referenced inside it
@@ -66,7 +56,7 @@ pub mod v_1_0 {
 pub mod v_2_0 {
     use crate::isl::isl_constraint::IslConstraint;
     use crate::isl::isl_type_reference::{
-        v_1_0, IslTypeRef, IslTypeRefImpl, IslVariablyOccurringTypeRef, NullabilityModifier,
+        v_1_0, IslTypeRef, IslVariablyOccurringTypeRef, NullabilityModifier,
     };
     use crate::isl::ranges::UsizeRange;
 
@@ -77,10 +67,7 @@ pub mod v_2_0 {
 
     /// Creates a nullable [IslTypeRef] using the name of the type referenced inside it
     pub fn null_or_named_type_ref<A: Into<String>>(name: A) -> IslTypeRef {
-        IslTypeRef::new(IslTypeRefImpl::Named(
-            name.into(),
-            NullabilityModifier::NullOr,
-        ))
+        IslTypeRef::Named(name.into(), NullabilityModifier::NullOr)
     }
 
     /// Creates an anonymous [IslTypeRef] using the [IslConstraint]s referenced inside it
@@ -94,21 +81,6 @@ pub mod v_2_0 {
         occurs: UsizeRange,
     ) -> IslVariablyOccurringTypeRef {
         v_1_0::variably_occurring_type_ref(type_ref, occurs)
-    }
-}
-
-/// Provides an internal representation of a schema type reference.
-/// The type reference grammar is defined in the [Ion Schema Spec]
-///
-/// [Ion Schema spec]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#grammar
-#[derive(Debug, Clone, PartialEq)]
-pub struct IslTypeRef {
-    pub(crate) type_reference: IslTypeRefImpl,
-}
-
-impl IslTypeRef {
-    pub(crate) fn new(type_reference: IslTypeRefImpl) -> Self {
-        Self { type_reference }
     }
 }
 
@@ -134,17 +106,21 @@ impl WriteToIsl for NullabilityModifier {
     }
 }
 
+/// Provides an internal representation of a schema type reference.
+/// The type reference grammar is defined in the [Ion Schema Spec]
+///
+/// [Ion Schema spec]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#grammar
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum IslTypeRefImpl {
+pub enum IslTypeRef {
     /// Represents a reference to a named type (including aliases and built-in types)
     Named(String, NullabilityModifier),
     /// Represents a type reference defined as an inlined import of a type from another schema
     TypeImport(IslImportType, NullabilityModifier),
     /// represents an unnamed type definition reference
-    Anonymous(IslTypeImpl, NullabilityModifier),
+    Anonymous(IslType, NullabilityModifier),
 }
 
-impl IslTypeRefImpl {
+impl IslTypeRef {
     fn from_ion_element_with_occurs_flag(
         isl_version: IslVersion,
         value: &Element,
@@ -193,7 +169,7 @@ impl IslTypeRefImpl {
                         // TODO: currently it only allows for built in types (other than `document`) to be defined with `nullable` annotation. For `document` and all other type references it returns an error.
                         "int" | "float" | "bool" | "decimal" | "string" | "symbol" | "blob" | "clob" | "timestamp" | "struct" | "sexp" | "list" | "text" | "lob" | "number" | "any" | "nothing" |
                         "$null" | "$int" | "$float" | "$bool" | "$decimal" | "$string" | "$symbol" | "$blob" | "$clob" | "$timestamp" | "$struct" | "$sexp" | "$list" | "$text" | "$lob" | "$number" | "$any" => {
-                            Ok(IslTypeRefImpl::Named(type_name.to_owned(), Nullable))
+                            Ok(IslTypeRef::Named(type_name.to_owned(), Nullable))
                         }
                         _ => {
                             invalid_schema_error(
@@ -203,7 +179,7 @@ impl IslTypeRefImpl {
                     }
                 }
 
-                Ok(IslTypeRefImpl::Named(type_name.to_owned(), nullability))
+                Ok(IslTypeRef::Named(type_name.to_owned(), nullability))
             }
             IonType::Struct => {
                 if value.is_null() {
@@ -223,7 +199,7 @@ impl IslTypeRefImpl {
                 let value_struct = try_to!(value.as_struct());
                 // if the struct doesn't have an id field then it must be an anonymous type
                 if value_struct.get("id").is_none() {
-                    let type_def= IslTypeImpl::from_owned_element(isl_version, value, inline_imported_types)?;
+                    let type_def= IslType::from_owned_element(isl_version, value, inline_imported_types)?;
                     // if type reference contains `occurs` field and has modifier `$null_or` then return an error
                     if nullability == NullOr && value_struct.get("occurs").is_some() {
                         return invalid_schema_error(
@@ -243,7 +219,7 @@ impl IslTypeRefImpl {
                         }
                     }
 
-                    return Ok(IslTypeRefImpl::Anonymous(type_def, nullability))
+                    return Ok(IslTypeRef::Anonymous(type_def, nullability))
                 }
                 // if it is an inline import type store it as import type reference
                 let isl_import_type = match IslImport::from_ion_element(value)? {
@@ -262,7 +238,7 @@ impl IslTypeRefImpl {
                 // if an inline import type is encountered add it in the inline_imports_types
                 // this will help resolve these inline imports before we start loading the schema types that uses them as reference
                 inline_imported_types.push(isl_import_type.to_owned());
-                Ok(IslTypeRefImpl::TypeImport(isl_import_type, nullability))
+                Ok(IslTypeRef::TypeImport(isl_import_type, nullability))
             },
             _ => Err(invalid_schema_error_raw(
                 "type reference can either be a symbol(For base/alias type reference) or a struct (for anonymous type reference)",
@@ -270,13 +246,20 @@ impl IslTypeRefImpl {
         }
     }
 
+    pub fn name(&self) -> String {
+        match self {
+            IslTypeRef::Named(name, _) => name.to_string(),
+            IslTypeRef::TypeImport(import_type, _) => import_type.type_name().to_string(),
+            IslTypeRef::Anonymous(anonymous_type, _) => "".to_string(),
+        }
+    }
     /// Tries to create an [IslTypeRef] from the given Element
-    pub fn from_ion_element(
+    pub(crate) fn from_ion_element(
         isl_version: IslVersion,
         value: &Element,
         inline_imported_types: &mut Vec<IslImportType>,
     ) -> IonSchemaResult<Self> {
-        IslTypeRefImpl::from_ion_element_with_occurs_flag(
+        IslTypeRef::from_ion_element_with_occurs_flag(
             isl_version,
             value,
             inline_imported_types,
@@ -314,18 +297,18 @@ impl IslTypeRefImpl {
 
     // TODO: break match arms into helper methods as we add more constraints
     /// Resolves a type_reference into a [TypeId] using the type_store
-    pub fn resolve_type_reference(
+    pub(crate) fn resolve_type_reference(
         isl_version: IslVersion,
-        type_reference: &IslTypeRefImpl,
+        type_reference: &IslTypeRef,
         type_store: &mut TypeStore,
         pending_types: &mut PendingTypes,
     ) -> IonSchemaResult<TypeReference> {
         match type_reference {
-            IslTypeRefImpl::Named(alias, type_ref_modifier) => Ok(TypeReference::new(
-                IslTypeRefImpl::get_type_id_from_type_name(alias, type_store, pending_types)?,
+            IslTypeRef::Named(alias, type_ref_modifier) => Ok(TypeReference::new(
+                IslTypeRef::get_type_id_from_type_name(alias, type_store, pending_types)?,
                 type_ref_modifier.to_owned(),
             )),
-            IslTypeRefImpl::Anonymous(isl_type, type_ref_modifier) => {
+            IslTypeRef::Anonymous(isl_type, type_ref_modifier) => {
                 let type_id = pending_types.get_total_types(type_store);
                 let type_def = TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
                     isl_version,
@@ -336,7 +319,7 @@ impl IslTypeRefImpl {
                 // get the last added anonymous type's type_id for given anonymous type
                 Ok(TypeReference::new(type_id, type_ref_modifier.to_owned()))
             }
-            IslTypeRefImpl::TypeImport(isl_import_type, type_ref_modifier) => {
+            IslTypeRef::TypeImport(isl_import_type, type_ref_modifier) => {
                 // verify if the inline import type already exists in the type_store
                 match type_store
                     .get_defined_type_id_or_imported_type_id_by_name(isl_import_type.type_name())
@@ -352,24 +335,24 @@ impl IslTypeRefImpl {
     }
 }
 
-impl WriteToIsl for IslTypeRefImpl {
+impl WriteToIsl for IslTypeRef {
     fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
         match self {
-            IslTypeRefImpl::Named(name, nullability_modifier) => {
+            IslTypeRef::Named(name, nullability_modifier) => {
                 nullability_modifier.write_to(writer)?;
                 writer.write_symbol(name)?;
             }
-            IslTypeRefImpl::TypeImport(type_import, nullability_modifier) => {
+            IslTypeRef::TypeImport(type_import, nullability_modifier) => {
                 nullability_modifier.write_to(writer)?;
                 writer.step_in(IonType::Struct)?;
                 type_import.write_to(writer)?;
                 writer.step_out()?;
             }
-            IslTypeRefImpl::Anonymous(type_def, nullability_modifier) => {
+            IslTypeRef::Anonymous(type_def, nullability_modifier) => {
                 nullability_modifier.write_to(writer)?;
                 writer.step_in(IonType::Struct)?;
                 for constraint in type_def.constraints() {
-                    constraint.write_to(writer)?;
+                    constraint.constraint_value.write_to(writer)?;
                 }
                 writer.step_out()?;
             }
@@ -393,28 +376,33 @@ impl WriteToIsl for IslTypeRefImpl {
 /// [variably occurring type reference]: https://amazon-ion.github.io/ion-schema/docs/isl-2-0/spec#variably-occurring-type-arguments
 #[derive(Debug, Clone, PartialEq)]
 pub struct IslVariablyOccurringTypeRef {
-    type_ref: IslTypeRefImpl,
+    pub(crate) type_ref: IslTypeRef,
     occurs: UsizeRange,
 }
 
 impl IslVariablyOccurringTypeRef {
     pub(crate) fn new(type_ref: IslTypeRef, occurs: UsizeRange) -> Self {
-        Self {
-            type_ref: type_ref.type_reference,
-            occurs,
-        }
+        Self { type_ref, occurs }
+    }
+
+    pub fn type_reference(&self) -> &IslTypeRef {
+        &self.type_ref
+    }
+
+    pub fn name(&self) -> String {
+        self.type_ref.name()
     }
 
     pub fn optional(type_ref: IslTypeRef) -> Self {
         Self {
-            type_ref: type_ref.type_reference,
+            type_ref,
             occurs: UsizeRange::zero_or_one(),
         }
     }
 
     pub fn required(type_ref: IslTypeRef) -> Self {
         Self {
-            type_ref: type_ref.type_reference,
+            type_ref,
             occurs: UsizeRange::new_single_value(1),
         }
     }
@@ -424,13 +412,13 @@ impl IslVariablyOccurringTypeRef {
     }
 
     /// Tries to create an [IslVariablyOccurringTypeRef] from the given Element
-    pub fn from_ion_element(
+    pub(crate) fn from_ion_element(
         constraint_name: &str,
         isl_version: IslVersion,
         value: &Element,
         inline_imported_types: &mut Vec<IslImportType>,
     ) -> IonSchemaResult<Self> {
-        let type_ref = IslTypeRefImpl::from_ion_element_with_occurs_flag(
+        let type_ref = IslTypeRef::from_ion_element_with_occurs_flag(
             isl_version,
             value,
             inline_imported_types,
@@ -470,13 +458,13 @@ impl IslVariablyOccurringTypeRef {
     }
 
     /// Resolves an [IslVariablyOccurringTypeRef] into a [VariablyOccurringTypeRef] using the type_store
-    pub fn resolve_type_reference(
+    pub(crate) fn resolve_type_reference(
         &self,
         isl_version: IslVersion,
         type_store: &mut TypeStore,
         pending_types: &mut PendingTypes,
     ) -> IonSchemaResult<VariablyOccurringTypeRef> {
-        let type_ref = IslTypeRefImpl::resolve_type_reference(
+        let type_ref = IslTypeRef::resolve_type_reference(
             isl_version,
             &self.type_ref,
             type_store,
@@ -490,11 +478,11 @@ impl IslVariablyOccurringTypeRef {
 impl WriteToIsl for IslVariablyOccurringTypeRef {
     fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
         match &self.type_ref {
-            IslTypeRefImpl::Named(name, nullability_modifier) => {
+            IslTypeRef::Named(name, nullability_modifier) => {
                 nullability_modifier.write_to(writer)?;
                 writer.write_symbol(name)?;
             }
-            IslTypeRefImpl::TypeImport(type_import, nullability_modifier) => {
+            IslTypeRef::TypeImport(type_import, nullability_modifier) => {
                 nullability_modifier.write_to(writer)?;
                 writer.step_in(IonType::Struct)?;
                 type_import.write_to(writer)?;
@@ -502,11 +490,11 @@ impl WriteToIsl for IslVariablyOccurringTypeRef {
                 self.occurs.write_to(writer)?;
                 writer.step_out()?;
             }
-            IslTypeRefImpl::Anonymous(type_def, nullability_modifier) => {
+            IslTypeRef::Anonymous(type_def, nullability_modifier) => {
                 nullability_modifier.write_to(writer)?;
                 writer.step_in(IonType::Struct)?;
                 for constraint in type_def.constraints() {
-                    constraint.write_to(writer)?;
+                    constraint.constraint_value.write_to(writer)?;
                 }
                 writer.set_field_name("occurs");
                 self.occurs.write_to(writer)?;

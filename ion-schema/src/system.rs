@@ -20,9 +20,8 @@
 //! ```
 
 use crate::authority::DocumentAuthority;
-use crate::isl::isl_constraint::IslConstraint;
 use crate::isl::isl_import::{IslImport, IslImportType};
-use crate::isl::isl_type::{IslType, IslTypeImpl};
+use crate::isl::isl_type::IslType;
 use crate::isl::{IslSchema, IslVersion};
 use crate::result::{
     invalid_schema_error, invalid_schema_error_raw, unresolvable_schema_error,
@@ -517,7 +516,7 @@ impl TypeStore {
         // get the derived built in types map and related text value for given type_name [type_ids: 25 - 33]
         let pending_types = &mut PendingTypes::default();
         for text in DERIVED_ISL_TYPES {
-            let isl_type = IslTypeImpl::from_owned_element(
+            let isl_type = IslType::from_owned_element(
                 isl_version,
                 &Element::read_one(text.as_bytes()).expect("parsing failed unexpectedly"),
                 &mut vec![],
@@ -743,7 +742,7 @@ impl Resolver {
 
                     TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
                         isl_version,
-                        &isl_type.type_definition,
+                        isl_type,
                         &mut type_store,
                         pending_types,
                     )?
@@ -872,8 +871,8 @@ impl Resolver {
                 }
 
                 // convert Element to IslType
-                let isl_type: IslTypeImpl =
-                    IslTypeImpl::from_owned_element(isl_version, &value, &mut isl_inline_imports)?;
+                let isl_type: IslType =
+                    IslType::from_owned_element(isl_version, &value, &mut isl_inline_imports)?;
                 if isl_type.name().is_none() {
                     // if a top level type definition doesn't contain `name` field return an error
                     return invalid_schema_error(
@@ -892,12 +891,7 @@ impl Resolver {
                     );
                 }
 
-                let constraints = isl_type
-                    .constraints()
-                    .iter()
-                    .map(|c| IslConstraint::new(isl_version, c.to_owned()))
-                    .collect();
-                isl_types.push(IslType::new(isl_type, constraints));
+                isl_types.push(isl_type);
             }
             // load footer for schema
             else if annotations.contains("schema_footer") {
@@ -1028,7 +1022,7 @@ impl Resolver {
                 let type_id: TypeId =
                     TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
                         isl_version,
-                        &isl_type.type_definition,
+                        isl_type,
                         type_store,
                         pending_types,
                     )?;
