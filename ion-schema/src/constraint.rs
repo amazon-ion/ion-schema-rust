@@ -1,8 +1,10 @@
 use crate::ion_extension::ElementExtensions;
 use crate::ion_path::{IonPath, IonPathElement};
-use crate::isl::isl_constraint::{IslAnnotationsConstraint, IslConstraintImpl, IslRegexConstraint};
+use crate::isl::isl_constraint::{
+    IslAnnotationsConstraint, IslConstraintValue, IslRegexConstraint,
+};
 use crate::isl::isl_type_reference::{
-    IslTypeRefImpl, IslVariablyOccurringTypeRef, NullabilityModifier,
+    IslTypeRef, IslVariablyOccurringTypeRef, NullabilityModifier,
 };
 use crate::isl::ranges::{I64Range, Limit, TimestampPrecisionRange, U64Range, UsizeRange};
 use crate::isl::util::{
@@ -293,29 +295,27 @@ impl Constraint {
     /// Resolves all ISL type references to corresponding [TypeReference]s
     fn resolve_type_references(
         isl_version: IslVersion,
-        type_references: &[IslTypeRefImpl],
+        type_references: &[IslTypeRef],
         type_store: &mut TypeStore,
         pending_types: &mut PendingTypes,
     ) -> IonSchemaResult<Vec<TypeReference>> {
         type_references
             .iter()
-            .map(|t| {
-                IslTypeRefImpl::resolve_type_reference(isl_version, t, type_store, pending_types)
-            })
+            .map(|t| IslTypeRef::resolve_type_reference(isl_version, t, type_store, pending_types))
             .collect::<IonSchemaResult<Vec<TypeReference>>>()
     }
 
     /// Parse an [IslConstraint] to a [Constraint]
     pub(crate) fn resolve_from_isl_constraint(
         isl_version: IslVersion,
-        isl_constraint: &IslConstraintImpl,
+        isl_constraint: &IslConstraintValue,
         type_store: &mut TypeStore,
         pending_types: &mut PendingTypes,
         open_content: bool, // this will be used by Fields constraint to verify if open content is allowed or not
     ) -> IonSchemaResult<Constraint> {
         // TODO: add more constraints below
         match isl_constraint {
-            IslConstraintImpl::AllOf(isl_type_references) => {
+            IslConstraintValue::AllOf(isl_type_references) => {
                 let type_references = Constraint::resolve_type_references(
                     isl_version,
                     isl_type_references,
@@ -324,7 +324,7 @@ impl Constraint {
                 )?;
                 Ok(Constraint::AllOf(AllOfConstraint::new(type_references)))
             }
-            IslConstraintImpl::Annotations(isl_annotations) => match isl_annotations {
+            IslConstraintValue::Annotations(isl_annotations) => match isl_annotations {
                 IslAnnotationsConstraint::SimpleAnnotations(simple_annotations) => {
                     match isl_version {
                         IslVersion::V1_0 => {
@@ -335,7 +335,7 @@ impl Constraint {
                             )))
                         }
                         IslVersion::V2_0 => {
-                            let type_ref = IslTypeRefImpl::resolve_type_reference(
+                            let type_ref = IslTypeRef::resolve_type_reference(
                                 IslVersion::V2_0,
                                 &simple_annotations.convert_to_type_reference()?,
                                 type_store,
@@ -349,7 +349,7 @@ impl Constraint {
                     }
                 }
                 IslAnnotationsConstraint::StandardAnnotations(isl_type_ref) => {
-                    let type_ref = IslTypeRefImpl::resolve_type_reference(
+                    let type_ref = IslTypeRef::resolve_type_reference(
                         isl_version,
                         isl_type_ref,
                         type_store,
@@ -360,7 +360,7 @@ impl Constraint {
                     )))
                 }
             },
-            IslConstraintImpl::AnyOf(isl_type_references) => {
+            IslConstraintValue::AnyOf(isl_type_references) => {
                 let type_references = Constraint::resolve_type_references(
                     isl_version,
                     isl_type_references,
@@ -369,25 +369,25 @@ impl Constraint {
                 )?;
                 Ok(Constraint::AnyOf(AnyOfConstraint::new(type_references)))
             }
-            IslConstraintImpl::ByteLength(byte_length) => Ok(Constraint::ByteLength(
+            IslConstraintValue::ByteLength(byte_length) => Ok(Constraint::ByteLength(
                 ByteLengthConstraint::new(byte_length.to_owned()),
             )),
-            IslConstraintImpl::CodepointLength(codepoint_length) => {
+            IslConstraintValue::CodepointLength(codepoint_length) => {
                 Ok(Constraint::CodepointLength(CodepointLengthConstraint::new(
                     codepoint_length.to_owned(),
                 )))
             }
-            IslConstraintImpl::Contains(values) => {
+            IslConstraintValue::Contains(values) => {
                 let contains_constraint: ContainsConstraint =
                     ContainsConstraint::new(values.to_owned());
                 Ok(Constraint::Contains(contains_constraint))
             }
-            IslConstraintImpl::ContentClosed => Ok(Constraint::ContentClosed),
-            IslConstraintImpl::ContainerLength(isl_length) => Ok(Constraint::ContainerLength(
+            IslConstraintValue::ContentClosed => Ok(Constraint::ContentClosed),
+            IslConstraintValue::ContainerLength(isl_length) => Ok(Constraint::ContainerLength(
                 ContainerLengthConstraint::new(isl_length.to_owned()),
             )),
-            IslConstraintImpl::Element(type_reference, require_distinct_elements) => {
-                let type_id = IslTypeRefImpl::resolve_type_reference(
+            IslConstraintValue::Element(type_reference, require_distinct_elements) => {
+                let type_id = IslTypeRef::resolve_type_reference(
                     isl_version,
                     type_reference,
                     type_store,
@@ -398,8 +398,8 @@ impl Constraint {
                     *require_distinct_elements,
                 )))
             }
-            IslConstraintImpl::FieldNames(isl_type_reference, distinct) => {
-                let type_reference = IslTypeRefImpl::resolve_type_reference(
+            IslConstraintValue::FieldNames(isl_type_reference, distinct) => {
+                let type_reference = IslTypeRef::resolve_type_reference(
                     isl_version,
                     isl_type_reference,
                     type_store,
@@ -410,7 +410,7 @@ impl Constraint {
                     *distinct,
                 )))
             }
-            IslConstraintImpl::Fields(fields, content_closed) => {
+            IslConstraintValue::Fields(fields, content_closed) => {
                 let open_content = match isl_version {
                     IslVersion::V1_0 => open_content,
                     IslVersion::V2_0 => !content_closed, // for ISL 2.0 whether open content is allowed or not depends on `fields` constraint
@@ -425,10 +425,10 @@ impl Constraint {
                     )?;
                 Ok(Constraint::Fields(fields_constraint))
             }
-            IslConstraintImpl::Ieee754Float(iee754_interchange_format) => Ok(
+            IslConstraintValue::Ieee754Float(iee754_interchange_format) => Ok(
                 Constraint::Ieee754Float(Ieee754FloatConstraint::new(*iee754_interchange_format)),
             ),
-            IslConstraintImpl::OneOf(isl_type_references) => {
+            IslConstraintValue::OneOf(isl_type_references) => {
                 let type_references = Constraint::resolve_type_references(
                     isl_version,
                     isl_type_references,
@@ -437,8 +437,8 @@ impl Constraint {
                 )?;
                 Ok(Constraint::OneOf(OneOfConstraint::new(type_references)))
             }
-            IslConstraintImpl::Not(type_reference) => {
-                let type_id = IslTypeRefImpl::resolve_type_reference(
+            IslConstraintValue::Not(type_reference) => {
+                let type_id = IslTypeRef::resolve_type_reference(
                     isl_version,
                     type_reference,
                     type_store,
@@ -446,8 +446,8 @@ impl Constraint {
                 )?;
                 Ok(Constraint::Not(NotConstraint::new(type_id)))
             }
-            IslConstraintImpl::Type(type_reference) => {
-                let type_id = IslTypeRefImpl::resolve_type_reference(
+            IslConstraintValue::Type(type_reference) => {
+                let type_id = IslTypeRef::resolve_type_reference(
                     isl_version,
                     type_reference,
                     type_store,
@@ -455,7 +455,7 @@ impl Constraint {
                 )?;
                 Ok(Constraint::Type(TypeConstraint::new(type_id)))
             }
-            IslConstraintImpl::OrderedElements(isl_type_references) => {
+            IslConstraintValue::OrderedElements(isl_type_references) => {
                 Ok(Constraint::OrderedElements(
                     OrderedElementsConstraint::resolve_from_isl_constraint(
                         isl_version,
@@ -465,41 +465,41 @@ impl Constraint {
                     )?,
                 ))
             }
-            IslConstraintImpl::Precision(precision_range) => {
+            IslConstraintValue::Precision(precision_range) => {
                 isl_require!(precision_range.lower() != &Limit::Inclusive(0) => "precision range must have non-zero values")?;
                 Ok(Constraint::Precision(PrecisionConstraint::new(
                     precision_range.to_owned(),
                 )))
             }
-            IslConstraintImpl::Regex(regex) => Ok(Constraint::Regex(RegexConstraint::from_isl(
+            IslConstraintValue::Regex(regex) => Ok(Constraint::Regex(RegexConstraint::from_isl(
                 regex,
                 isl_version,
             )?)),
-            IslConstraintImpl::Scale(scale_range) => Ok(Constraint::Scale(ScaleConstraint::new(
+            IslConstraintValue::Scale(scale_range) => Ok(Constraint::Scale(ScaleConstraint::new(
                 scale_range.to_owned(),
             ))),
-            IslConstraintImpl::TimestampOffset(timestamp_offset) => {
+            IslConstraintValue::TimestampOffset(timestamp_offset) => {
                 Ok(Constraint::TimestampOffset(TimestampOffsetConstraint::new(
                     timestamp_offset.valid_offsets().to_vec(),
                 )))
             }
-            IslConstraintImpl::Exponent(exponent_range) => Ok(Constraint::Exponent(
+            IslConstraintValue::Exponent(exponent_range) => Ok(Constraint::Exponent(
                 ExponentConstraint::new(exponent_range.to_owned()),
             )),
-            IslConstraintImpl::TimestampPrecision(timestamp_precision_range) => {
+            IslConstraintValue::TimestampPrecision(timestamp_precision_range) => {
                 Ok(Constraint::TimestampPrecision(
                     TimestampPrecisionConstraint::new(timestamp_precision_range.to_owned()),
                 ))
             }
-            IslConstraintImpl::Utf8ByteLength(utf8_byte_length) => Ok(Constraint::Utf8ByteLength(
+            IslConstraintValue::Utf8ByteLength(utf8_byte_length) => Ok(Constraint::Utf8ByteLength(
                 Utf8ByteLengthConstraint::new(utf8_byte_length.to_owned()),
             )),
-            IslConstraintImpl::ValidValues(valid_values) => {
+            IslConstraintValue::ValidValues(valid_values) => {
                 Ok(Constraint::ValidValues(ValidValuesConstraint {
                     valid_values: valid_values.values().to_owned(),
                 }))
             }
-            IslConstraintImpl::Unknown(constraint_name, element) => Ok(Constraint::Unknown(
+            IslConstraintValue::Unknown(constraint_name, element) => Ok(Constraint::Unknown(
                 constraint_name.to_owned(),
                 element.to_owned(),
             )),
