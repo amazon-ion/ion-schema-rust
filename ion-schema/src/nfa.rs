@@ -91,7 +91,7 @@ impl Nfa {
         self.transitions
             .get(&state_id)
             .map(|s| s.to_owned())
-            .unwrap_or(HashSet::new())
+            .unwrap_or_default()
     }
 }
 
@@ -329,11 +329,7 @@ impl NfaBuilder {
         min: usize,
         max: usize,
     ) {
-        let end_states = self
-            .nfa
-            .transitions
-            .entry(start_id)
-            .or_insert_with(HashSet::new);
+        let end_states = self.nfa.transitions.entry(start_id).or_default();
 
         end_states.insert(Transition {
             destination: end_id,
