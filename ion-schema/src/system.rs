@@ -1052,7 +1052,7 @@ impl Resolver {
                 self.resolved_schema_cache
                     .insert(isl.id(), Arc::clone(&schema));
             }
-            Some(isl_import) if matches!(isl_import, IslImport::Schema(_)) => {
+            Some(IslImport::Schema(_)) => {
                 self.resolved_schema_cache
                     .insert(isl.id(), Arc::clone(&schema));
             }
