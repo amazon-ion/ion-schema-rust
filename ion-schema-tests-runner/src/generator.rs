@@ -121,8 +121,8 @@ fn generate_test_cases_for_file(ctx: Context) -> TokenStream {
     // get the schema content from given schema file path
     let ion_content = fs::read(ctx.current_dir.as_path())
         .unwrap_or_else(|e| panic!("Unable to read {path_string} – {e}"));
-    let schema_content = Element::read_all(ion_content)
-        .unwrap_or_else(|e| panic!("Error in {path_string} – {e:?}"));
+    let schema_content =
+        Element::read_all(ion_content).unwrap_or_else(|e| panic!("Error in {path_string} – {e:?}"));
 
     let isl_version = find_isl_version(&schema_content);
 
