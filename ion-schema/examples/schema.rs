@@ -65,7 +65,7 @@ fn validate(command_args: &ArgMatches) -> IonSchemaResult<()> {
     // Extract Ion value provided by user
     let input_file = command_args.value_of("input").unwrap();
     let value = fs::read(input_file).expect("Can not load given ion file");
-    let owned_elements = Element::read_all(&value).expect("parsing failed unexpectedly");
+    let owned_elements = Element::read_all(value).expect("parsing failed unexpectedly");
 
     // Set up authorities vector
     let mut document_authorities: Vec<Box<dyn DocumentAuthority>> = vec![];

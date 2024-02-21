@@ -86,7 +86,7 @@ pub mod v_1_0 {
     {
         IslConstraint::new(
             IslVersion::V1_0,
-            IslConstraintValue::Fields(fields.map(|(s, t)| (s, t)).collect(), false),
+            IslConstraintValue::Fields(fields.collect(), false),
         )
     }
 
@@ -278,7 +278,7 @@ pub mod v_2_0 {
     {
         IslConstraint::new(
             IslVersion::V2_0,
-            IslConstraintValue::Fields(fields.map(|(s, t)| (s, t)).collect(), false),
+            IslConstraintValue::Fields(fields.collect(), false),
         )
     }
 
