@@ -4,7 +4,7 @@ use std::fmt::Formatter;
 use thiserror::Error;
 
 /// Represents [Violation] found during validation with detailed error message, error code and the constraint for which the validation failed
-#[derive(Debug, Clone, PartialEq, Error)]
+#[derive(Debug, Clone, Error)]
 pub struct Violation {
     constraint: String,  // represents the constraint that created this violation
     code: ViolationCode, // represents an error code that indicates the type of the violation
@@ -61,13 +61,11 @@ impl Violation {
     pub fn flattened_violations(&self) -> Vec<&Violation> {
         let mut flattened_violations = Vec::new();
         self.flatten_violations(&mut flattened_violations);
+        flattened_violations.sort_by(|a, b| (a.constraint).cmp(&b.constraint));
         flattened_violations
     }
 
     fn flatten_violations<'a>(&'a self, flattened: &mut Vec<&'a Violation>) {
-        if self.violations.is_empty() {
-            flattened.push(self);
-        }
         for violation in &self.violations {
             if violation.violations.is_empty() {
                 flattened.push(violation);
@@ -86,6 +84,15 @@ impl Violation {
 impl fmt::Display for Violation {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "A validation error occurred: {}", self.message)
+    }
+}
+
+impl PartialEq for Violation {
+    fn eq(&self, other: &Self) -> bool {
+        self.constraint == other.constraint
+            && self.code == other.code
+            && self.message == other.message
+            && self.flattened_violations() == other.flattened_violations()
     }
 }
 
@@ -144,5 +151,61 @@ impl fmt::Display for ViolationCode {
                 ViolationCode::UnexpectedAnnotation => "unexpected_annotation",
             }
         )
+    }
+}
+
+#[cfg(test)]
+mod violation_tests {
+    use crate::ion_path::IonPath;
+    use crate::violation::{Violation, ViolationCode};
+
+    #[test]
+    fn violation_equivalence() {
+        let violation1: Violation = Violation::with_violations(
+            "type_constraint",
+            ViolationCode::TypeMismatched,
+            "type mismatched",
+            &mut IonPath::default(),
+            vec![
+                Violation::new(
+                    "regex",
+                    ViolationCode::RegexMismatched,
+                    "regex mismatched",
+                    &mut IonPath::default(),
+                ),
+                Violation::new(
+                    "container_length",
+                    ViolationCode::InvalidLength,
+                    "invalid length",
+                    &mut IonPath::default(),
+                ),
+            ],
+        );
+        let violation2: Violation = Violation::with_violations(
+            "type_constraint",
+            ViolationCode::TypeMismatched,
+            "type mismatched",
+            &mut IonPath::default(),
+            vec![
+                Violation::new(
+                    "container_length",
+                    ViolationCode::InvalidLength,
+                    "invalid length",
+                    &mut IonPath::default(),
+                ),
+                Violation::new(
+                    "regex",
+                    ViolationCode::RegexMismatched,
+                    "regex mismatched",
+                    &mut IonPath::default(),
+                ),
+            ],
+        );
+        assert_ne!(violation1.violations(), violation2.violations());
+        assert_eq!(
+            violation1.flattened_violations(),
+            violation2.flattened_violations()
+        );
+        assert_eq!(violation1, violation2);
     }
 }
