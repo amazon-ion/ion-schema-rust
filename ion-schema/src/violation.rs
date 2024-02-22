@@ -92,6 +92,7 @@ impl PartialEq for Violation {
         self.constraint == other.constraint
             && self.code == other.code
             && self.message == other.message
+            && self.ion_path == other.ion_path
             && self.flattened_violations() == other.flattened_violations()
     }
 }
@@ -156,12 +157,12 @@ impl fmt::Display for ViolationCode {
 
 #[cfg(test)]
 mod violation_tests {
-    use crate::ion_path::IonPath;
+    use crate::ion_path::{IonPath, IonPathElement};
     use crate::violation::{Violation, ViolationCode};
+    use rstest::rstest;
 
-    #[test]
-    fn violation_equivalence() {
-        let violation1: Violation = Violation::with_violations(
+    #[rstest(violation1, violation2,
+    case::unordered_violations(Violation::with_violations(
             "type_constraint",
             ViolationCode::TypeMismatched,
             "type mismatched",
@@ -180,8 +181,7 @@ mod violation_tests {
                     &mut IonPath::default(),
                 ),
             ],
-        );
-        let violation2: Violation = Violation::with_violations(
+        ), Violation::with_violations(
             "type_constraint",
             ViolationCode::TypeMismatched,
             "type mismatched",
@@ -200,12 +200,171 @@ mod violation_tests {
                     &mut IonPath::default(),
                 ),
             ],
-        );
-        assert_ne!(violation1.violations(), violation2.violations());
+        )
+    ),
+    case::nested_violations(
+        Violation::with_violations(
+            "type_constraint",
+            ViolationCode::TypeMismatched,
+            "type mismatched",
+            &mut IonPath::default(),
+            vec![
+                Violation::with_violations(
+                    "regex",
+                    ViolationCode::RegexMismatched,
+                    "regex mismatched",
+                    &mut IonPath::default(),
+                    vec![
+                        Violation::new(
+                        "container_length",
+                        ViolationCode::InvalidLength,
+                        "invalid length",
+                        &mut IonPath::default(),
+                    )
+                    ]
+                )
+            ],
+        ),
+        Violation::with_violations(
+            "type_constraint",
+            ViolationCode::TypeMismatched,
+            "type mismatched",
+            &mut IonPath::default(),
+            vec![
+                Violation::with_violations(
+                    "regex",
+                    ViolationCode::RegexMismatched,
+                    "regex mismatched",
+                    &mut IonPath::default(),
+                    vec![
+                        Violation::new(
+                        "container_length",
+                        ViolationCode::InvalidLength,
+                        "invalid length",
+                        &mut IonPath::default(),
+                        )
+                    ]
+                )
+            ],
+        )
+    ),
+    case::empty_violations(
+        Violation::with_violations(
+            "type_constraint",
+            ViolationCode::TypeMismatched,
+            "type mismatched",
+            &mut IonPath::default(),
+            vec![],
+        ),
+        Violation::with_violations(
+            "type_constraint",
+            ViolationCode::TypeMismatched,
+            "type mismatched",
+            &mut IonPath::default(),
+            vec![],
+        )
+    ))]
+    fn violation_equivalence(violation1: Violation, violation2: Violation) {
         assert_eq!(
             violation1.flattened_violations(),
             violation2.flattened_violations()
         );
         assert_eq!(violation1, violation2);
+    }
+
+    #[rstest(violation1, violation2,
+    case::different_violations(
+        Violation::with_violations(
+            "type_constraint",
+            ViolationCode::TypeMismatched,
+            "type mismatched",
+            &mut IonPath::default(),
+            vec![
+                Violation::new(
+                    "regex",
+                    ViolationCode::RegexMismatched,
+                    "regex mismatched",
+                    &mut IonPath::default(),
+                ),
+                Violation::new(
+                    "container_length",
+                    ViolationCode::InvalidLength,
+                    "invalid length",
+                    &mut IonPath::default(),
+                ),
+            ],
+        ), Violation::with_violations(
+            "type_constraint",
+            ViolationCode::TypeMismatched,
+            "type mismatched",
+            &mut IonPath::default(),
+            vec![
+            Violation::new(
+                "container_length",
+                ViolationCode::InvalidLength,
+                "invalid length",
+                &mut IonPath::default(),
+            ),
+            ],
+        )
+    ),
+    case::different_constraints(
+        Violation::new(
+            "type_constraint",
+            ViolationCode::TypeMismatched,
+            "type mismatched",
+            &mut IonPath::default(),
+        ),
+        Violation::new(
+            "regex",
+            ViolationCode::TypeMismatched,
+            "type mismatched",
+            &mut IonPath::default(),
+        )
+    ),
+    case::different_violation_code(
+        Violation::new(
+            "type_constraint",
+            ViolationCode::TypeMismatched,
+            "type mismatched",
+            &mut IonPath::default(),
+        ),
+        Violation::new(
+            "type_constraint",
+            ViolationCode::RegexMismatched,
+            "type mismatched",
+            &mut IonPath::default(),
+        )
+    ),
+    case::different_violation_message(
+        Violation::new(
+            "type_constraint",
+            ViolationCode::TypeMismatched,
+            "regex mismatched",
+            &mut IonPath::default(),
+        ),
+        Violation::new(
+            "type_constraint",
+            ViolationCode::TypeMismatched,
+            "type mismatched",
+            &mut IonPath::default(),
+        )
+    ),
+    case::different_ion_path(
+        Violation::new(
+            "type_constraint",
+            ViolationCode::TypeMismatched,
+            "type mismatched",
+            &mut IonPath::new(vec![IonPathElement::Index(2)]),
+        ),
+        Violation::new(
+            "type_constraint",
+            ViolationCode::TypeMismatched,
+            "type mismatched",
+            &mut IonPath::default(),
+        )
+    ))]
+    fn non_equivalent_violations(violation1: Violation, violation2: Violation) {
+        assert_ne!(violation1, violation2);
     }
 }

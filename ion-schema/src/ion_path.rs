@@ -70,6 +70,10 @@ impl IonPath {
     pub fn pop(&mut self) -> Option<IonPathElement> {
         self.ion_path_elements.pop()
     }
+
+    pub(crate) fn new(ion_path_elements: Vec<IonPathElement>) -> Self {
+        Self { ion_path_elements }
+    }
 }
 
 impl From<IonPath> for Element {
