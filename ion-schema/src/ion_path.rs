@@ -4,7 +4,7 @@ use std::fmt;
 use std::fmt::{Debug, Formatter};
 
 /// Represents a single element in Ion Path which is either an index value or a field name depending on its parent container type
-#[derive(Clone, PartialEq, PartialOrd)]
+#[derive(Clone, PartialEq, PartialOrd, Eq, Hash)]
 pub enum IonPathElement {
     Index(usize),
     Field(String),
@@ -57,7 +57,7 @@ impl fmt::Display for IonPathElement {
 /// ```ion
 /// ( greetings 1 ) // here 1 represents the index of "hi" in the Ion list value
 /// ```
-#[derive(Default, Clone, PartialEq, PartialOrd)]
+#[derive(Default, Clone, PartialEq, PartialOrd, Eq, Hash)]
 pub struct IonPath {
     ion_path_elements: Vec<IonPathElement>,
 }

@@ -1,16 +1,18 @@
 use crate::ion_path::IonPath;
+use std::collections::HashSet;
 use std::fmt;
 use std::fmt::Formatter;
+use std::hash::{Hash, Hasher};
 use thiserror::Error;
 
 /// Represents [Violation] found during validation with detailed error message, error code and the constraint for which the validation failed
-#[derive(Debug, Clone, Error)]
+#[derive(Debug, Clone, Eq, Error)]
 pub struct Violation {
     constraint: String,  // represents the constraint that created this violation
     code: ViolationCode, // represents an error code that indicates the type of the violation
     message: String,     // represents the detailed error message for this violation
     ion_path: IonPath,   // represents the path to Ion value for which violation occurred
-    violations: Vec<Violation>,
+    violations: HashSet<Violation>,
 }
 
 impl Violation {
@@ -25,7 +27,7 @@ impl Violation {
             code,
             message: message.as_ref().to_owned(),
             ion_path: ion_path.to_owned(),
-            violations: vec![],
+            violations: HashSet::new(),
         }
     }
 
@@ -41,7 +43,7 @@ impl Violation {
             code,
             message: message.as_ref().to_owned(),
             ion_path: ion_path.to_owned(),
-            violations,
+            violations: HashSet::from_iter(violations),
         }
     }
 
@@ -58,25 +60,27 @@ impl Violation {
     }
 
     /// Provides flattened list of leaf violations which represent the root cause of the top-level violation.
-    pub fn flattened_violations(&self) -> Vec<&Violation> {
-        let mut flattened_violations = Vec::new();
+    pub fn flattened_violations(&self) -> HashSet<&Violation> {
+        let mut flattened_violations = HashSet::new();
         self.flatten_violations(&mut flattened_violations);
-        flattened_violations.sort_by(|a, b| (a.constraint).cmp(&b.constraint));
         flattened_violations
     }
 
-    fn flatten_violations<'a>(&'a self, flattened: &mut Vec<&'a Violation>) {
+    fn flatten_violations<'a>(&'a self, flattened: &mut HashSet<&'a Violation>) {
+        if self.violations.is_empty() {
+            flattened.insert(self);
+        }
         for violation in &self.violations {
             if violation.violations.is_empty() {
-                flattened.push(violation);
+                flattened.insert(violation);
             } else {
                 violation.flatten_violations(flattened)
             }
         }
     }
 
-    pub fn violations(&self) -> &[Violation] {
-        &self.violations
+    pub fn violations(&self) -> impl Iterator<Item = &Violation> {
+        self.violations.iter()
     }
 }
 
@@ -93,12 +97,29 @@ impl PartialEq for Violation {
             && self.code == other.code
             && self.message == other.message
             && self.ion_path == other.ion_path
-            && self.flattened_violations() == other.flattened_violations()
+            // check if violations field is empty then no need to check for flattened violation, 
+            // as that would result in the violation itself.
+            && ((!self.violations.is_empty()
+                && !other.violations.is_empty()
+                && self.flattened_violations() == other.flattened_violations())
+                || (self.violations.is_empty() && other.violations.is_empty()))
+    }
+}
+
+impl Hash for Violation {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.code.hash(state);
+        self.constraint.hash(state);
+        self.message.hash(state);
+        self.ion_path.hash(state);
+        for violation in self.violations.iter() {
+            violation.hash(state);
+        }
     }
 }
 
 /// Represents violation code that indicates the type of the violation
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ViolationCode {
     AllTypesNotMatched,
     AnnotationMismatched,
@@ -263,7 +284,50 @@ mod violation_tests {
             &mut IonPath::default(),
             vec![],
         )
-    ))]
+    ),
+    case::multiple_violations_from_one_constraint(
+        Violation::with_violations(
+        "type_constraint",
+        ViolationCode::TypeMismatched,
+        "type mismatched",
+        &mut IonPath::default(),
+        vec![
+            Violation::new(
+                "element",
+                ViolationCode::ElementMismatched,
+                "element mismatched",
+                &mut IonPath::default(),
+            ),
+            Violation::new(
+                "element",
+                ViolationCode::ElementNotDistinct,
+                "element not distinct",
+                &mut IonPath::default(),
+            ),
+        ],
+        ),
+    Violation::with_violations(
+        "type_constraint",
+        ViolationCode::TypeMismatched,
+        "type mismatched",
+        &mut IonPath::default(),
+        vec![
+            Violation::new(
+                "element",
+                ViolationCode::ElementNotDistinct,
+                "element not distinct",
+                &mut IonPath::default(),
+            ),
+            Violation::new(
+                "element",
+                ViolationCode::ElementMismatched,
+                "element mismatched",
+                &mut IonPath::default(),
+            ),
+        ],
+        ),
+    )
+    )]
     fn violation_equivalence(violation1: Violation, violation2: Violation) {
         assert_eq!(
             violation1.flattened_violations(),
