@@ -237,11 +237,17 @@ mod violation_tests {
                     &mut IonPath::default(),
                     vec![
                         Violation::new(
-                        "container_length",
-                        ViolationCode::InvalidLength,
-                        "invalid length",
-                        &mut IonPath::default(),
-                    )
+                            "container_length",
+                            ViolationCode::InvalidLength,
+                            "invalid length",
+                            &mut IonPath::default(),
+                        ),
+                        Violation::new(
+                            "codepoint_length",
+                            ViolationCode::InvalidLength,
+                            "invalid length",
+                            &mut IonPath::default(),
+                        )
                     ]
                 )
             ],
@@ -259,10 +265,16 @@ mod violation_tests {
                     &mut IonPath::default(),
                     vec![
                         Violation::new(
-                        "container_length",
-                        ViolationCode::InvalidLength,
-                        "invalid length",
-                        &mut IonPath::default(),
+                            "codepoint_length",
+                            ViolationCode::InvalidLength,
+                            "invalid length",
+                            &mut IonPath::default(),
+                        ),
+                        Violation::new(
+                            "container_length",
+                            ViolationCode::InvalidLength,
+                            "invalid length",
+                            &mut IonPath::default(),
                         )
                     ]
                 )
