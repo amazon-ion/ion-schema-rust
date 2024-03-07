@@ -1,18 +1,20 @@
 use crate::ion_path::IonPath;
-use std::collections::HashSet;
 use std::fmt;
 use std::fmt::Formatter;
-use std::hash::{Hash, Hasher};
 use thiserror::Error;
 
 /// Represents [Violation] found during validation with detailed error message, error code and the constraint for which the validation failed
-#[derive(Debug, Clone, Eq, Error)]
+/// Equivalence of `Violation` is not supported due to its tree structure of having children `Violation`s.
+/// Please use macro `assert_equivalent_violations!(violation1, violation2)` for comparing if two violations are equal.
+/// This macro uses `flattened_violations` and does not depend on the order of the children `Violation`s.
+/// For non-equivalent violations use macro `assert_non_equivalent_violations!(violation1, violation2)`.
+#[derive(Debug, Clone, Error)]
 pub struct Violation {
     constraint: String,  // represents the constraint that created this violation
     code: ViolationCode, // represents an error code that indicates the type of the violation
     message: String,     // represents the detailed error message for this violation
     ion_path: IonPath,   // represents the path to Ion value for which violation occurred
-    violations: HashSet<Violation>,
+    violations: Vec<Violation>,
 }
 
 impl Violation {
@@ -27,7 +29,7 @@ impl Violation {
             code,
             message: message.as_ref().to_owned(),
             ion_path: ion_path.to_owned(),
-            violations: HashSet::new(),
+            violations: Vec::new(),
         }
     }
 
@@ -43,7 +45,7 @@ impl Violation {
             code,
             message: message.as_ref().to_owned(),
             ion_path: ion_path.to_owned(),
-            violations: HashSet::from_iter(violations),
+            violations,
         }
     }
 
@@ -60,19 +62,19 @@ impl Violation {
     }
 
     /// Provides flattened list of leaf violations which represent the root cause of the top-level violation.
-    pub fn flattened_violations(&self) -> HashSet<&Violation> {
-        let mut flattened_violations = HashSet::new();
+    pub fn flattened_violations(&self) -> Vec<&Violation> {
+        let mut flattened_violations = Vec::new();
         self.flatten_violations(&mut flattened_violations);
         flattened_violations
     }
 
-    fn flatten_violations<'a>(&'a self, flattened: &mut HashSet<&'a Violation>) {
+    fn flatten_violations<'a>(&'a self, flattened: &mut Vec<&'a Violation>) {
         if self.violations.is_empty() {
-            flattened.insert(self);
+            flattened.push(self);
         }
         for violation in &self.violations {
             if violation.violations.is_empty() {
-                flattened.insert(violation);
+                flattened.push(violation);
             } else {
                 violation.flatten_violations(flattened)
             }
@@ -88,33 +90,6 @@ impl Violation {
 impl fmt::Display for Violation {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "A validation error occurred: {}", self.message)
-    }
-}
-
-impl PartialEq for Violation {
-    fn eq(&self, other: &Self) -> bool {
-        self.constraint == other.constraint
-            && self.code == other.code
-            && self.message == other.message
-            && self.ion_path == other.ion_path
-            // check if violations field is empty then no need to check for flattened violation, 
-            // as that would result in the violation itself.
-            && ((!self.violations.is_empty()
-                && !other.violations.is_empty()
-                && self.flattened_violations() == other.flattened_violations())
-                || (self.violations.is_empty() && other.violations.is_empty()))
-    }
-}
-
-impl Hash for Violation {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.code.hash(state);
-        self.constraint.hash(state);
-        self.message.hash(state);
-        self.ion_path.hash(state);
-        for violation in self.violations.iter() {
-            violation.hash(state);
-        }
     }
 }
 
@@ -174,6 +149,74 @@ impl fmt::Display for ViolationCode {
             }
         )
     }
+}
+
+#[macro_export]
+macro_rules! assert_equivalent_violations {
+    ($left:expr, $right:expr $(,)?) => {
+        let mut left_strings: Vec<String> = $left
+                .flattened_violations()
+                .into_iter()
+                .map(|x| format!("{:?}", x))
+                .collect();
+        left_strings.sort();
+        let mut right_strings: Vec<String> = $right
+                .flattened_violations()
+                .into_iter()
+                .map(|x| format!("{:?}", x))
+                .collect();
+        right_strings.sort();
+        assert_eq!(left_strings, right_strings);
+    };
+    ($left:expr, $right:expr, $($arg:tt)+) => {
+        let mut left_strings: Vec<String> = $left
+                .flattened_violations()
+                .into_iter()
+                .map(|x| format!("{:?}", x))
+                .collect();
+        left_strings.sort();
+        let mut right_strings: Vec<String> = $right
+                .flattened_violations()
+                .into_iter()
+                .map(|x| format!("{:?}", x))
+                .collect();
+        right_strings.sort();
+        assert_eq!(left_strings, right_strings, $($arg)+);
+    };
+}
+
+#[macro_export]
+macro_rules! assert_non_equivalent_violations {
+    ($left:expr, $right:expr $(,)?) => {
+        let mut left_strings: Vec<String> = $left
+                .flattened_violations()
+                .into_iter()
+                .map(|x| format!("{:?}", x))
+                .collect();
+        left_strings.sort();
+        let mut right_strings: Vec<String> = $right
+                .flattened_violations()
+                .into_iter()
+                .map(|x| format!("{:?}", x))
+                .collect();
+        right_strings.sort();
+        assert_ne!(left_strings, right_strings);
+    };
+    ($left:expr, $right:expr, $($arg:tt)+) => {
+        let mut left_strings: Vec<String> = $left
+                .flattened_violations()
+                .into_iter()
+                .map(|x| format!("{:?}", x))
+                .collect();
+        left_strings.sort();
+        let mut right_strings: Vec<String> = $right
+                .flattened_violations()
+                .into_iter()
+                .map(|x| format!("{:?}", x))
+                .collect();
+        right_strings.sort();
+        assert_ne!(left_strings, right_strings, $($arg)+);
+    };
 }
 
 #[cfg(test)]
@@ -341,11 +384,7 @@ mod violation_tests {
     )
     )]
     fn violation_equivalence(violation1: Violation, violation2: Violation) {
-        assert_eq!(
-            violation1.flattened_violations(),
-            violation2.flattened_violations()
-        );
-        assert_eq!(violation1, violation2);
+        assert_equivalent_violations!(violation1, violation2);
     }
 
     #[rstest(violation1, violation2,
@@ -441,6 +480,6 @@ mod violation_tests {
         )
     ))]
     fn non_equivalent_violations(violation1: Violation, violation2: Violation) {
-        assert_ne!(violation1, violation2);
+        assert_non_equivalent_violations!(violation1, violation2);
     }
 }
