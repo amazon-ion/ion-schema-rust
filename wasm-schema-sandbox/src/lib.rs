@@ -6,6 +6,7 @@ use ion_schema::result::IonSchemaResult;
 use ion_schema::schema::Schema;
 use ion_schema::system::SchemaSystem;
 use ion_schema::types::TypeDefinition;
+use ion_schema::violation::Violation;
 use ion_schema::IonSchemaElement;
 use js_sys::Array;
 use serde::{Deserialize, Serialize};
@@ -193,7 +194,7 @@ pub fn validate(
 
     log!("validation complete!");
 
-    let violations = match &result {
+    let violations: Vec<&Violation> = match &result {
         Ok(_) => vec![],
         Err(violation) => violation.flattened_violations(),
     };
