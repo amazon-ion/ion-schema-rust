@@ -361,14 +361,15 @@ mod isl_tests {
     use crate::authority::FileSystemDocumentAuthority;
     use crate::ion_extension::ElementExtensions;
     use crate::isl::isl_constraint::v_1_0::*;
+    use crate::isl::isl_type::v_1_0::load_isl_type as load_isl_type_def;
     use crate::isl::isl_type::v_1_0::*;
+    use crate::isl::isl_type::v_2_0::load_isl_type as load_isl_type_def_v2_0;
     use crate::isl::isl_type::IslType;
     use crate::isl::isl_type_reference::v_1_0::*;
     use crate::isl::ranges::*;
     use crate::isl::util::Ieee754InterchangeFormat;
     use crate::isl::util::TimestampPrecision;
     use crate::isl::util::ValidValue;
-    use crate::isl::IslVersion;
     use crate::isl::*;
     use crate::result::IonSchemaResult;
     use crate::system::SchemaSystem;
@@ -381,39 +382,19 @@ mod isl_tests {
     use std::path::Path;
     use test_generator::test_resources;
 
-    // helper function to create NamedIslType for isl tests using ISL 1.0
-    fn load_named_type(text: &str) -> IslType {
-        IslType::from_owned_element(
-            IslVersion::V1_0,
-            &Element::read_one(text.as_bytes()).expect("parsing failed unexpectedly"),
-            &mut vec![],
-        )
-        .unwrap()
-    }
-
     // helper function to create AnonymousIslType for isl tests using ISL 1.0
-    fn load_anonymous_type(text: &str) -> IslType {
-        IslType::from_owned_element(
-            IslVersion::V1_0,
-            &Element::read_one(text.as_bytes()).expect("parsing failed unexpectedly"),
-            &mut vec![],
-        )
-        .unwrap()
+    fn load_isl_type(text: &str) -> IslType {
+        load_isl_type_def(text.as_bytes()).unwrap()
     }
 
     // helper function to create AnonymousIslType for isl tests using ISL 2.0
-    fn load_anonymous_type_v2_0(text: &str) -> IslType {
-        IslType::from_owned_element(
-            IslVersion::V2_0,
-            &Element::read_one(text.as_bytes()).expect("parsing failed unexpectedly"),
-            &mut vec![],
-        )
-        .unwrap()
+    fn load_isl_type_v2_0(text: &str) -> IslType {
+        load_isl_type_def_v2_0(text.as_bytes()).unwrap()
     }
 
     #[test]
     fn test_open_content_for_type_def() -> IonSchemaResult<()> {
-        let type_def = load_named_type(
+        let type_def = load_isl_type(
             r#" 
                 // type definition with open content
                 type:: { 
@@ -437,181 +418,181 @@ mod isl_tests {
     #[rstest(
     isl_type1,isl_type2,
     case::type_constraint_with_anonymous_type(
-        load_anonymous_type(r#" // For a schema with single anonymous type
+        load_isl_type(r#" // For a schema with single anonymous type
                 {type: any}
             "#),
         anonymous_type([type_constraint(named_type_ref("any"))])
     ),
     case::type_constraint_with_nullable_annotation(
-        load_anonymous_type(r#" // For a schema with `nullable` annotation`
+        load_isl_type(r#" // For a schema with `nullable` annotation`
                 {type: nullable::int}
             "#),
         anonymous_type([type_constraint(nullable_built_in_type_ref(IonType::Int))])
     ),
     case::type_constraint_with_null_or_annotation(
-        load_anonymous_type_v2_0(r#" // For a schema with `$null_or` annotation`
+        load_isl_type_v2_0(r#" // For a schema with `$null_or` annotation`
                     {type: $null_or::int}
                 "#),
         isl_type::v_2_0::anonymous_type([isl_constraint::v_2_0::type_constraint(isl_type_reference::v_2_0::null_or_named_type_ref("int"))])
     ),
     case::type_constraint_with_named_type(
-        load_named_type(r#" // For a schema with named type
+        load_isl_type(r#" // For a schema with named type
                 type:: { name: my_int, type: int }
             "#),
         named_type("my_int", [type_constraint(named_type_ref("int"))])
     ),
     case::type_constraint_with_named_nullable_type(
-        load_named_type(r#" // For a schema with named type
+        load_isl_type(r#" // For a schema with named type
                 type:: { name: my_nullable_int, type: $int }
             "#),
         named_type("my_nullable_int", [type_constraint(named_type_ref("$int"))])
     ),
     case::type_constraint_with_self_reference_type(
-        load_named_type(r#" // For a schema with self reference type
+        load_isl_type(r#" // For a schema with self reference type
                 type:: { name: my_int, type: my_int }
             "#),
         named_type("my_int", [type_constraint(named_type_ref("my_int"))])
     ),
     case::type_constraint_with_nested_self_reference_type(
-        load_named_type(r#" // For a schema with nested self reference type
+        load_isl_type(r#" // For a schema with nested self reference type
                 type:: { name: my_int, type: { type: my_int } }
             "#),
         named_type("my_int", [type_constraint(anonymous_type_ref([type_constraint(named_type_ref("my_int"))]))])
     ),
     case::type_constraint_with_nested_type(
-        load_named_type(r#" // For a schema with nested types
+        load_isl_type(r#" // For a schema with nested types
                 type:: { name: my_int, type: { type: int } }
             "#),
         named_type("my_int", [type_constraint(anonymous_type_ref([type_constraint(named_type_ref("int"))]))])
     ),
     case::type_constraint_with_nested_multiple_types(
-        load_named_type(r#" // For a schema with nested multiple types
+        load_isl_type(r#" // For a schema with nested multiple types
                 type:: { name: my_int, type: { type: int }, type: { type: my_int } }
             "#),
         named_type("my_int", [type_constraint(anonymous_type_ref([type_constraint(named_type_ref("int"))])), type_constraint(anonymous_type_ref([type_constraint(named_type_ref("my_int"))]))])
     ),
     case::all_of_constraint(
-        load_anonymous_type(r#" // For a schema with all_of type as below:
+        load_isl_type(r#" // For a schema with all_of type as below:
                 { all_of: [{ type: int }] }
             "#),
         anonymous_type([all_of([anonymous_type_ref([type_constraint(named_type_ref("int"))])])])
     ),
     case::any_of_constraint(
-        load_anonymous_type(r#" // For a schema with any_of constraint as below:
+        load_isl_type(r#" // For a schema with any_of constraint as below:
                     { any_of: [{ type: int }, { type: decimal }] }
                 "#),
         anonymous_type([any_of([anonymous_type_ref([type_constraint(named_type_ref("int"))]), anonymous_type_ref([type_constraint(named_type_ref("decimal"))])])])
     ),
     case::one_of_constraint(
-        load_anonymous_type(r#" // For a schema with one_of constraint as below:
+        load_isl_type(r#" // For a schema with one_of constraint as below:
                     { one_of: [{ type: int }, { type: decimal }] }
                 "#),
         anonymous_type([one_of([anonymous_type_ref([type_constraint(named_type_ref("int"))]), anonymous_type_ref([type_constraint(named_type_ref("decimal"))])])])
     ),
     case::not_constraint(
-        load_anonymous_type(r#" // For a schema with not constraint as below:
+        load_isl_type(r#" // For a schema with not constraint as below:
                     { not: { type: int } }
                 "#),
         anonymous_type([not(anonymous_type_ref([type_constraint(named_type_ref("int"))]))])
     ),
     case::ordered_elements_constraint(
-        load_anonymous_type(r#" // For a schema with ordered_elements constraint as below:
+        load_isl_type(r#" // For a schema with ordered_elements constraint as below:
                     { ordered_elements: [  symbol, { type: int },  ] }
                 "#),
         anonymous_type([ordered_elements([variably_occurring_type_ref(named_type_ref("symbol"), UsizeRange::new_single_value(1)), variably_occurring_type_ref(anonymous_type_ref([type_constraint(named_type_ref("int"))]), UsizeRange::new_single_value(1))])])
     ),
     case::fields_constraint(
-        load_anonymous_type(r#" // For a schema with fields constraint as below:
+        load_isl_type(r#" // For a schema with fields constraint as below:
                     { fields: { name: string, id: int} }
                 "#),
         anonymous_type([fields(vec![("name".to_owned(), variably_occurring_type_ref(named_type_ref("string"), UsizeRange::zero_or_one())), ("id".to_owned(), variably_occurring_type_ref(named_type_ref("int"), UsizeRange::zero_or_one()))].into_iter())]),
     ),
     case::field_names_constraint(
-        load_anonymous_type_v2_0(r#" // For a schema with field_names constraint as below:
+        load_isl_type_v2_0(r#" // For a schema with field_names constraint as below:
                         { field_names: distinct::symbol }
                     "#),
         isl_type::v_2_0::anonymous_type([isl_constraint::v_2_0::field_names(isl_type_reference::v_2_0::named_type_ref("symbol"), true)]),
     ),
     case::contains_constraint(
-        load_anonymous_type(r#" // For a schema with contains constraint as below:
+        load_isl_type(r#" // For a schema with contains constraint as below:
                     { contains: [true, 1, "hello"] }
                 "#),
         anonymous_type([contains([true.into(), 1.into(), "hello".to_owned().into()])])
     ),
     case::container_length_constraint(
-        load_anonymous_type(r#" // For a schema with container_length constraint as below:
+        load_isl_type(r#" // For a schema with container_length constraint as below:
                     { container_length: 3 }
                 "#),
         anonymous_type([container_length(3.into())])
     ),
     case::byte_length_constraint(
-        load_anonymous_type(r#" // For a schema with byte_length constraint as below:
+        load_isl_type(r#" // For a schema with byte_length constraint as below:
                     { byte_length: 3 }
                 "#),
         anonymous_type([byte_length(3.into())])
     ),
     case::codepoint_length_constraint(
-        load_anonymous_type(r#" // For a schema with codepoint_length constraint as below:
+        load_isl_type(r#" // For a schema with codepoint_length constraint as below:
                     { codepoint_length: 3 }
                 "#),
         anonymous_type([codepoint_length(3.into())])
     ),
     case::element_constraint(
-        load_anonymous_type(r#" // For a schema with element constraint as below:
+        load_isl_type(r#" // For a schema with element constraint as below:
                     { element: int }
                 "#),
         anonymous_type([element(named_type_ref("int"))])
     ),
     case::distinct_element_constraint(
-        load_anonymous_type_v2_0(r#" // For a schema with distinct element constraint as below:
+        load_isl_type_v2_0(r#" // For a schema with distinct element constraint as below:
                         { element: distinct::int }
                     "#),
     isl_type::v_2_0::anonymous_type([isl_constraint::v_2_0::element(named_type_ref("int"), true)])
     ),
     case::annotations_constraint(
-        load_anonymous_type(r#" // For a schema with annotations constraint as below:
+        load_isl_type(r#" // For a schema with annotations constraint as below:
                         { annotations: closed::[red, blue, green] }
                     "#),
         anonymous_type([annotations(vec!["closed"], vec![Symbol::from("red").into(), Symbol::from("blue").into(), Symbol::from("green").into()])])
     ),
     case::standard_syantx_annotations_constraint(
-        load_anonymous_type_v2_0(r#" // For a schema with annotations constraint as below:
+        load_isl_type_v2_0(r#" // For a schema with annotations constraint as below:
                             { annotations: { container_length: 1 } }
                         "#),
     isl_type::v_2_0::anonymous_type([isl_constraint::v_2_0::annotations(isl_type_reference::v_2_0::anonymous_type_ref([isl_constraint::v_2_0::container_length(1.into())]))])
     ),
     case::precision_constraint(
-        load_anonymous_type(r#" // For a schema with precision constraint as below:
+        load_isl_type(r#" // For a schema with precision constraint as below:
                         { precision: 2 }
                     "#),
         anonymous_type([precision(2.into())])
     ),
     case::scale_constraint(
-        load_anonymous_type(r#" // For a schema with scale constraint as below:
+        load_isl_type(r#" // For a schema with scale constraint as below:
                         { scale: 2 }
                     "#),
         anonymous_type([scale(2.into())])
     ),
     case::exponent_constraint(
-        load_anonymous_type_v2_0(r#" // For a schema with exponent constraint as below:
+        load_isl_type_v2_0(r#" // For a schema with exponent constraint as below:
                         { exponent: 2 }
                     "#),
         isl_type::v_2_0::anonymous_type([isl_constraint::v_2_0::exponent(2.into())])
     ),
     case::timestamp_precision_constraint(
-        load_anonymous_type(r#" // For a schema with timestamp_precision constraint as below:
+        load_isl_type(r#" // For a schema with timestamp_precision constraint as below:
                             { timestamp_precision: year }
                         "#),
         anonymous_type([timestamp_precision(TimestampPrecisionRange::new_single_value(TimestampPrecision::Year))])
     ),
     case::valid_values_constraint(
-        load_anonymous_type(r#" // For a schema with valid_values constraint as below:
+        load_isl_type(r#" // For a schema with valid_values constraint as below:
                         { valid_values: [2, 3.5, 5e7, "hello", hi] }
                     "#),
         anonymous_type([valid_values(vec![2.into(), Decimal::new(35, -1).into(), 5e7.into(), "hello".to_owned().into(), Symbol::from("hi").into()]).unwrap()])
     ),
     case::valid_values_with_range_constraint(
-        load_anonymous_type(r#" // For a schema with valid_values constraint as below:
+        load_isl_type(r#" // For a schema with valid_values constraint as below:
                         { valid_values: range::[1, 5.5] }
                     "#),
         anonymous_type(
@@ -626,13 +607,13 @@ mod isl_tests {
             )
         ),
     case::utf8_byte_length_constraint(
-        load_anonymous_type(r#" // For a schema with utf8_byte_length constraint as below:
+        load_isl_type(r#" // For a schema with utf8_byte_length constraint as below:
                         { utf8_byte_length: 3 }
                     "#),
         anonymous_type([utf8_byte_length(3.into())])
     ),
     case::regex_constraint(
-        load_anonymous_type(r#" // For a schema with regex constraint as below:
+        load_isl_type(r#" // For a schema with regex constraint as below:
                             { regex: "[abc]" }
                         "#),
         anonymous_type(
@@ -646,7 +627,7 @@ mod isl_tests {
         )
     ),
     case::timestamp_offset_constraint(
-        load_anonymous_type(r#" // For a schema with timestamp_offset constraint as below:
+        load_isl_type(r#" // For a schema with timestamp_offset constraint as below:
                             { timestamp_offset: ["+00:00"] }
                         "#),
         anonymous_type(
@@ -654,7 +635,7 @@ mod isl_tests {
         )
     ),
     case::ieee754_float_constraint(
-        load_anonymous_type_v2_0(r#" // For a schema with ieee754_float constraint as below:
+        load_isl_type_v2_0(r#" // For a schema with ieee754_float constraint as below:
                             { ieee754_float: binary16 }
                         "#),
         isl_type::v_2_0::anonymous_type([isl_constraint::v_2_0::ieee754_float(Ieee754InterchangeFormat::Binary16)])

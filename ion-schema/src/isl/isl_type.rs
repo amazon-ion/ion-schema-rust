@@ -10,6 +10,9 @@ use ion_rs::{IonType, IonWriter};
 pub mod v_1_0 {
     use crate::isl::isl_constraint::{IslConstraint, IslConstraintValue};
     use crate::isl::isl_type::IslType;
+    use crate::isl::IslVersion;
+    use crate::result::IonSchemaResult;
+    use ion_rs::element::Element;
 
     /// Creates a named [IslType] using the [IslConstraint] defined within it
     pub fn named_type<A: Into<String>, B: Into<Vec<IslConstraint>>>(
@@ -29,12 +32,25 @@ pub mod v_1_0 {
             .collect();
         IslType::new(None, constraints, None)
     }
+
+    /// Creates an [IslType] using the bytes that represent an ISL type definition.
+    /// Returns an error if the given bytes representation is syntactically incorrect as per [Ion Schema specification's grammar].
+    ///
+    /// _Note: This method allows loading both named and anonymous type definition._
+    ///
+    /// [Ion Schema specification's grammar]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#grammar
+    pub fn load_isl_type(bytes: &[u8]) -> IonSchemaResult<IslType> {
+        IslType::from_owned_element(IslVersion::V1_0, &Element::read_one(bytes)?, &mut vec![])
+    }
 }
 
 /// Provides public facing APIs for constructing ISL types programmatically for ISL 2.0
 pub mod v_2_0 {
     use crate::isl::isl_constraint::IslConstraint;
     use crate::isl::isl_type::{v_1_0, IslType};
+    use crate::isl::IslVersion;
+    use crate::result::IonSchemaResult;
+    use ion_rs::element::Element;
 
     /// Creates a named [IslType] using the [IslConstraint] defined within it
     pub fn named_type<A: Into<String>, B: Into<Vec<IslConstraint>>>(
@@ -47,6 +63,16 @@ pub mod v_2_0 {
     /// Creates an anonymous [IslType] using the [IslConstraint] defined within it
     pub fn anonymous_type<A: Into<Vec<IslConstraint>>>(constraints: A) -> IslType {
         v_1_0::anonymous_type(constraints)
+    }
+
+    /// Loads an [IslType] using the bytes that represent an ISL type definition.
+    /// Returns an error if the given bytes representation is syntactically incorrect as per [Ion Schema specification's grammar].
+    ///
+    /// _Note: This method allows loading both named and anonymous definition._
+    ///
+    /// [Ion Schema specification's grammar]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#grammar
+    pub fn load_isl_type(bytes: &[u8]) -> IonSchemaResult<IslType> {
+        IslType::from_owned_element(IslVersion::V2_0, &Element::read_one(bytes)?, &mut vec![])
     }
 }
 
