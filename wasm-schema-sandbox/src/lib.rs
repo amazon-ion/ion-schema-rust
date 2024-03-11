@@ -196,7 +196,7 @@ pub fn validate(
 
     let violations: Vec<&Violation> = match &result {
         Ok(_) => vec![],
-        Err(violation) => violation.flattened_violations().into_iter().collect(),
+        Err(violation) => violation.flattened_violations(),
     };
 
     log!("Creating validation result....");
