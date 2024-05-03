@@ -95,6 +95,7 @@ impl fmt::Display for Violation {
 
 /// Represents violation code that indicates the type of the violation
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum ViolationCode {
     AllTypesNotMatched,
     AnnotationMismatched,
