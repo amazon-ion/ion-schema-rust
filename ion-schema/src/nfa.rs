@@ -6,7 +6,6 @@ use crate::IonSchemaElement;
 use ion_rs::Element;
 use std::collections::{HashMap, HashSet};
 use std::iter::Peekable;
-use std::slice::Iter;
 use std::sync::Arc;
 
 /// Represents an id for a state in NFA
@@ -156,8 +155,11 @@ impl NfaEvaluation {
     }
 
     /// Validates provided ordered elements against referenced [Nfa]
-    pub fn validate_ordered_elements(&mut self, elements: &[Element], type_store: &TypeStore) {
-        let mut elements_iter = elements.iter().peekable();
+    pub fn validate_ordered_elements<'a, T: Iterator<Item = &'a Element>>(
+        &mut self,
+        mut elements_iter: Peekable<T>,
+        type_store: &TypeStore,
+    ) {
         // given elements are actually events for the `Nfa` referenced in this `NfaEvaluation`.
         // iterate through all elements and update state-visit count(`NfaRun`) for all possible transitions for given element(event).
         while let Some(element) = elements_iter.next() {
@@ -180,12 +182,12 @@ impl NfaEvaluation {
 
     /// Evaluates given transitions using referenced [Nfa]
     /// For each evaluation of a transition it adds next possible states into `next_states`
-    fn evaluate_transitions(
+    fn evaluate_transitions<'a, T: Iterator<Item = &'a Element>>(
         &self,
         nfa_run: &NfaRun,
         transitions: HashSet<Transition>,
         current_element: &Element,
-        elements: &mut Peekable<Iter<Element>>,
+        elements: &mut Peekable<T>,
         type_store: &TypeStore,
         nfa_runs: &mut HashSet<NfaRun>,
     ) {
@@ -233,12 +235,12 @@ impl NfaEvaluation {
 
     // This is a helper method that is used by `evaluate_transitions()` to resolve destination states that are optional
     // for optional destination states, add transitions to next states skipping the optional state
-    fn evaluate_transition_to_optional_state(
+    fn evaluate_transition_to_optional_state<'a, T: Iterator<Item = &'a Element>>(
         &self,
         visits: usize,
         transition: &Transition,
         element: &Element,
-        elements: &mut Peekable<Iter<Element>>,
+        elements: &mut Peekable<T>,
         type_store: &TypeStore,
         next_states: &mut HashSet<NfaRun>,
     ) {
@@ -267,12 +269,12 @@ impl NfaEvaluation {
     // this method iterates through elements to satisfy minimum required occurrences for given transition
     // It will return false if an invalid Ion value is found which doesn't satisfy minimum occurrence requirement for given transition
     // Otherwise it will return true
-    fn evaluate_transition_to_self(
+    fn evaluate_transition_to_self<'a, T: Iterator<Item = &'a Element>>(
         &self,
         visits: usize,
         transition: &Transition,
         element: &Element,
-        elements: &mut Peekable<Iter<Element>>,
+        elements: &mut Peekable<T>,
         type_store: &TypeStore,
         next_states: &mut HashSet<NfaRun>,
     ) -> bool {

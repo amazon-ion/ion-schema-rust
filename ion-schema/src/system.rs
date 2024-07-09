@@ -20,6 +20,7 @@
 //! ```
 
 use crate::authority::DocumentAuthority;
+use crate::ion_schema_element::IonSchemaElementType;
 use crate::isl::isl_import::{IslImport, IslImportType};
 use crate::isl::isl_type::IslType;
 use crate::isl::{IslSchema, IslVersion};
@@ -437,16 +438,13 @@ impl PendingTypes {
 
 /// Represents an array of BuiltIn derived ISL types
 /// for more information: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#type-system
-static DERIVED_ISL_TYPES: [&str; 10] = [
+static DERIVED_ISL_TYPES: [&str; 9] = [
     "type::{ name: lob, one_of: [ blob, clob ] }",
     "type::{ name: number, one_of: [ decimal, float, int ] }",
     "type::{ name: text, one_of: [ string, symbol ] }",
     "type::{ name: $lob, one_of: [ $blob, $clob ] }",
     "type::{ name: $number, one_of: [ $decimal, $float, $int ] }",
     "type::{ name: $text, one_of: [ $string, $symbol ] }",
-    // this is just a place holder for document type,
-    // IonSchemaElement::Document(_) type is used to verify the correctness on the validation side
-    "type::{ name: document }",
     "type::{ name: $any, one_of: [ $blob, $bool, $clob, $decimal,
                                     $float, $int, $string, $symbol, $timestamp,
                                     $list, $sexp, $struct, $null, document ] }",
@@ -490,8 +488,8 @@ impl TypeStore {
         let isl_version = IslVersion::V1_0;
         // add all ion types to the type store
         // TODO: this array can be turned into an iterator implementation in ion-rust for IonType
-        use IonType::*;
-        let built_in_atomic_types: [IonType; 12] = [
+        use IonSchemaElementType::*;
+        let built_in_atomic_types: [IonSchemaElementType; 12] = [
             Int, Float, Decimal, Timestamp, String, Symbol, Bool, Blob, Clob, SExp, List, Struct,
         ];
         // add all the atomic ion types that doesn't allow nulls [type_ids: 0 - 11]
@@ -512,6 +510,12 @@ impl TypeStore {
 
         // add $null to the built-in types [type_id: 24]
         self.add_builtin_type(&BuiltInTypeDefinition::Atomic(Null, Nullability::Nullable));
+
+        // add document type
+        self.add_builtin_type(&BuiltInTypeDefinition::Atomic(
+            Document,
+            Nullability::NotNullable,
+        ));
 
         // get the derived built in types map and related text value for given type_name [type_ids: 25 - 33]
         let pending_types = &mut PendingTypes::default();

@@ -1,15 +1,13 @@
 // TODO: remove the following line once we have a basic implementation ready
 #![allow(dead_code, unused_variables)]
 
-use crate::ion_path::IonPath;
 use crate::isl::isl_constraint::IslConstraintValue;
 use crate::isl::isl_type::IslType;
 use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
-use crate::violation::{Violation, ViolationCode};
-use ion_rs::Symbol;
-use ion_rs::{Element, IonResult, IonType, Struct, StructWriter, ValueWriter, WriteAsIon};
+use ion_rs::{
+    Element, IonResult, Struct, StructWriter, Symbol, ValueWriter, WriteAsIon,
+};
 use regex::Regex;
-use std::fmt::{Display, Formatter};
 use std::sync::OnceLock;
 
 /// A `try`-like macro to work around the [`Option`]/[`Result`] nested APIs.
@@ -31,6 +29,7 @@ mod constraint;
 mod import;
 pub(crate) mod ion_extension;
 mod ion_path;
+mod ion_schema_element;
 pub mod isl;
 mod nfa;
 pub mod result;
@@ -40,10 +39,7 @@ mod type_reference;
 pub mod types;
 pub mod violation;
 
-/// Re-export of the ion-rs dependency that is part of our public API.
-pub mod external {
-    pub use ion_rs;
-}
+pub use ion_schema_element::*;
 
 static ISL_VERSION_MARKER_REGEX: OnceLock<Regex> = OnceLock::new();
 static RESERVED_WORD_REGEX: OnceLock<Regex> = OnceLock::new();
@@ -93,125 +89,6 @@ const ISL_2_0_KEYWORDS: [&str; 28] = [
     "valid_values",
 ];
 
-/// Provide an Ion schema Element which includes all Elements and a document type
-///
-/// ## Example:
-/// In general `TypeRef` `validate()` takes in IonSchemaElement as the value to be validated.
-/// In order to create an `IonSchemaElement`:
-///
-/// ```
-/// use ion_rs::Element;
-/// use ion_schema::IonSchemaElement;
-///
-/// // create an IonSchemaElement from an Element
-/// let owned_element: Element = 4.into();
-/// let ion_schema_element: IonSchemaElement = (&owned_element).into();
-///
-/// // create an IonSchemaElement for document type based on vector of owned elements
-/// let document: IonSchemaElement = IonSchemaElement::Document(vec![owned_element]);
-/// ```
-#[derive(Debug, Clone, PartialEq)]
-pub enum IonSchemaElement {
-    SingleElement(Element),
-    Document(Vec<Element>),
-}
-
-impl IonSchemaElement {
-    pub fn as_element(&self) -> Option<&Element> {
-        match self {
-            IonSchemaElement::SingleElement(element) => Some(element),
-            IonSchemaElement::Document(_) => None,
-        }
-    }
-
-    pub fn as_document(&self) -> Option<&Vec<Element>> {
-        match self {
-            IonSchemaElement::SingleElement(_) => None,
-            IonSchemaElement::Document(document) => Some(document),
-        }
-    }
-
-    fn expect_element_of_type(
-        &self,
-        types: &[IonType],
-        constraint_name: &str,
-        ion_path: &mut IonPath,
-    ) -> Result<&Element, Violation> {
-        match self {
-            IonSchemaElement::SingleElement(element) => {
-                if !types.contains(&element.ion_type()) || element.is_null() {
-                    // If it's an Element but the type isn't one of `types`,
-                    // return a Violation with the constraint name.
-                    return Err(Violation::new(
-                        constraint_name,
-                        ViolationCode::TypeMismatched,
-                        format!("expected {:?} but found {}", types, element.ion_type()),
-                        ion_path,
-                    ));
-                }
-                // If it's an Element of an expected type, return a ref to it.
-                Ok(element)
-            }
-            IonSchemaElement::Document(_) => {
-                // If it's a Document, return a Violation with the constraint name
-                Err(Violation::new(
-                    constraint_name,
-                    ViolationCode::TypeMismatched,
-                    format!("expected {types:?} but found document"),
-                    ion_path,
-                ))
-            }
-        }
-    }
-}
-
-impl Display for IonSchemaElement {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        match self {
-            IonSchemaElement::SingleElement(element) => {
-                write!(f, "{element}")
-            }
-            IonSchemaElement::Document(document) => {
-                write!(f, "/* Ion document */ ")?;
-                for value in document {
-                    write!(f, "{value} ")?;
-                }
-                write!(f, "/* end */")
-            }
-        }
-    }
-}
-
-impl From<&Element> for IonSchemaElement {
-    fn from(value: &Element) -> Self {
-        if value.annotations().contains("document") {
-            let sequence = match value.ion_type() {
-                IonType::String => load(value.as_string().unwrap()),
-                IonType::List | IonType::SExp => {
-                    let ion_elements: Vec<Element> = value
-                        .as_sequence()
-                        .unwrap()
-                        .elements()
-                        .map(|oe| oe.to_owned())
-                        .collect();
-                    ion_elements
-                }
-                _ => {
-                    panic!("invalid document")
-                }
-            };
-            return IonSchemaElement::Document(sequence);
-        }
-        IonSchemaElement::SingleElement(value.to_owned())
-    }
-}
-
-impl From<&Vec<Element>> for IonSchemaElement {
-    fn from(value: &Vec<Element>) -> Self {
-        IonSchemaElement::Document(value.to_owned())
-    }
-}
-
 // helper function to be used by schema tests
 fn load(text: &str) -> Vec<Element> {
     Element::read_all(text.as_bytes())
@@ -220,6 +97,7 @@ fn load(text: &str) -> Vec<Element> {
         .collect()
 }
 
+// TODO: Move this to a more sensible location
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct UserReservedFields {
     schema_header_fields: Vec<String>,
