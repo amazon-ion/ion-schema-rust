@@ -71,7 +71,7 @@ impl Schema {
 
     /// Returns the requested type, if present in this schema or a a built in type or imported in the schema;
     /// otherwise returns None.
-    pub fn get_type<A: AsRef<str>>(&self, name: A) -> Option<TypeDefinition> {
+    pub fn get_local_or_imported_type<A: AsRef<str>>(&self, name: A) -> Option<TypeDefinition> {
         let type_id = self.types.get_type_id_by_name(name.as_ref())?;
         Some(TypeDefinition::new(*type_id, Arc::clone(&self.types)))
     }

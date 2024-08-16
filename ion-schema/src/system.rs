@@ -546,9 +546,7 @@ impl TypeStore {
     /// Provides the [`TypeId`] associated with given name if it exists in the [`TypeStore`] as an imported type;
     /// Otherwise returns None
     pub(crate) fn get_imported_type_id_by_name(&self, name: &str) -> Option<&TypeId> {
-        self.imported_type_ids_by_name
-            .get(name)
-            .or_else(|| self.builtin_type_ids_by_name.get(name))
+        self.imported_type_ids_by_name.get(name)
     }
 
     /// Provides the [`Type`] associated with given name if it exists in the [`TypeStore`]  
@@ -1439,7 +1437,10 @@ mod schema_system_tests {
             .unwrap()
             .get_built_in_or_defined_type("my_number");
         assert!(isl_defined_type.is_some());
-        let isl_type = schema.as_ref().unwrap().get_type("my_decimal");
+        let isl_type = schema
+            .as_ref()
+            .unwrap()
+            .get_local_or_imported_type("my_decimal");
         assert!(isl_type.is_some());
     }
 

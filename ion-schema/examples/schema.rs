@@ -83,7 +83,10 @@ fn validate(command_args: &ArgMatches) -> IonSchemaResult<()> {
     let schema = schema_system.load_schema(schema_id);
 
     // get the type provided by user from the schema file
-    let type_ref = schema.unwrap().get_type(schema_type).unwrap();
+    let type_ref = schema
+        .unwrap()
+        .get_local_or_imported_type(schema_type)
+        .unwrap();
 
     // create a text writer to make the output
     let mut output = vec![];
