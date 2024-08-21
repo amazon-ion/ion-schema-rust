@@ -53,12 +53,26 @@ impl Schema {
         SchemaTypeIterator::new(Arc::clone(&self.types), self.types.get_imports())
     }
 
+    /// Returns the requested type, if imported in this schema;
+    /// otherwise returns None.
+    pub fn get_imported_type<A: AsRef<str>>(&self, name: A) -> Option<TypeDefinition> {
+        let type_id = self.types.get_imported_type_id_by_name(name.as_ref())?;
+        Some(TypeDefinition::new(*type_id, Arc::clone(&self.types)))
+    }
+
     /// Returns the requested type, if present in this schema or a a built in type;
     /// otherwise returns None.
-    pub fn get_type<A: AsRef<str>>(&self, name: A) -> Option<TypeDefinition> {
+    pub fn get_built_in_or_defined_type<A: AsRef<str>>(&self, name: A) -> Option<TypeDefinition> {
         let type_id = self
             .types
             .get_built_in_type_id_or_defined_type_id_by_name(name.as_ref())?;
+        Some(TypeDefinition::new(*type_id, Arc::clone(&self.types)))
+    }
+
+    /// Returns the requested type, if present in this schema or a a built in type or imported in the schema;
+    /// otherwise returns None.
+    pub fn get_type<A: AsRef<str>>(&self, name: A) -> Option<TypeDefinition> {
+        let type_id = self.types.get_type_id_by_name(name.as_ref())?;
         Some(TypeDefinition::new(*type_id, Arc::clone(&self.types)))
     }
 
@@ -133,186 +147,186 @@ mod schema_tests {
     }
 
     #[rstest(
-    owned_elements, total_types,
-    case::type_constraint_with_named_type(
-        load(r#" // For a schema with named type as below:
+        owned_elements, total_types,
+        case::type_constraint_with_named_type(
+            load(r#" // For a schema with named type as below:
             type:: { name: my_type, type: any }
         "#).into_iter(),
-        1 // this includes the named type my_int
-    ),
-    case::type_constraint_with_self_reference_type(
-        load(r#" // For a schema with self reference type as below:
+            1 // this includes the named type my_int
+        ),
+        case::type_constraint_with_self_reference_type(
+            load(r#" // For a schema with self reference type as below:
             type:: { name: my_int, type: my_int }
         "#).into_iter(),
-        1 // this includes only my_int type
-    ),
-    case::type_constraint_with_nested_self_reference_type(
-        load(r#" // For a schema with nested self reference type as below:
+            1 // this includes only my_int type
+        ),
+        case::type_constraint_with_nested_self_reference_type(
+            load(r#" // For a schema with nested self reference type as below:
             type:: { name: my_int, type: { type: my_int } }
         "#).into_iter(),
-        1 // this includes my_int type
-    ),
-    case::type_constraint_with_nested_type(
-        load(r#" // For a schema with nested types as below:
+            1 // this includes my_int type
+        ),
+        case::type_constraint_with_nested_type(
+            load(r#" // For a schema with nested types as below:
             type:: { name: my_int, type: { type: int } }
         "#).into_iter(),
-        1 // this includes my_int type
-    ),
-    case::type_constraint_with_nested_multiple_types(
-        load(r#" // For a schema with nested multiple types as below:
+            1 // this includes my_int type
+        ),
+        case::type_constraint_with_nested_multiple_types(
+            load(r#" // For a schema with nested multiple types as below:
             type:: { name: my_int, type: { type: int }, type: { type: my_int } }
         "#).into_iter(),
-        1 //  this includes my_int type
-    ),
-    case::type_constraint_with_multiple_types(
-        load(r#" // For a schema with multiple type as below:
+            1 //  this includes my_int type
+        ),
+        case::type_constraint_with_multiple_types(
+            load(r#" // For a schema with multiple type as below:
              type:: { name: my_int, type: int }
              type:: { name: my_bool, type: bool }
         "#).into_iter(),
-        2
-    ),
-    case::all_of_constraint(
-        load(r#" // For a schema with all_of type as below:
+            2
+        ),
+        case::all_of_constraint(
+            load(r#" // For a schema with all_of type as below:
             type:: { name: all_of_type, all_of: [{ type: int }] }
         "#).into_iter(),
-        1 // this includes named type all_of_type
-    ),
-    case::any_of_constraint(
-        load(r#" // For a schema with any_of constraint as below:
+            1 // this includes named type all_of_type
+        ),
+        case::any_of_constraint(
+            load(r#" // For a schema with any_of constraint as below:
                 type:: { name: any_of_type, any_of: [{ type: int }, { type: decimal }] }
             "#).into_iter(),
-        1 // this includes named type any_of_type
-    ),
-    case::one_of_constraint(
-        load(r#" // For a schema with one_of constraint as below:
+            1 // this includes named type any_of_type
+        ),
+        case::one_of_constraint(
+            load(r#" // For a schema with one_of constraint as below:
                 type:: { name: one_of_type, one_of: [{ type: int }, { type: decimal }] }
             "#).into_iter(),
-        1 // this includes named type one_of_type
-    ),
-    case::not_constraint(
-        load(r#" // For a schema with not constraint as below:
+            1 // this includes named type one_of_type
+        ),
+        case::not_constraint(
+            load(r#" // For a schema with not constraint as below:
                 type:: { name: not_type, not: { type: int } }
             "#).into_iter(),
-        1 // this includes named type not_type
-    ),
-    case::ordred_elements_constraint(
-        load(r#" // For a schema with ordered_elements constraint as below:
+            1 // this includes named type not_type
+        ),
+        case::ordred_elements_constraint(
+            load(r#" // For a schema with ordered_elements constraint as below:
                 type:: { name: ordred_elements_type, ordered_elements: [ symbol, { type: int, occurs: optional }, ] }
             "#).into_iter(),
-        1 // this includes named type ordered_elements_type
-    ),
-    case::fields_constraint(
-        load(r#" // For a schema with fields constraint as below:
+            1 // this includes named type ordered_elements_type
+        ),
+        case::fields_constraint(
+            load(r#" // For a schema with fields constraint as below:
                 type:: { name: fields_type, fields: { name: string, id: int} }
             "#).into_iter(),
-        1 // this includes named type fields_type
-    ),
-    case::field_names_constraint(
-        load(r#" // For a schema with field_names constraint as below:
+            1 // this includes named type fields_type
+        ),
+        case::field_names_constraint(
+            load(r#" // For a schema with field_names constraint as below:
                     $ion_schema_2_0
                     type:: { name: field_names_type, field_names: distinct::symbol } 
             "#).into_iter(),
-        1 // this includes named type field_names_type
-    ),
-    case::contains_constraint(
-        load(r#" // For a schema with contains constraint as below:
+            1 // this includes named type field_names_type
+        ),
+        case::contains_constraint(
+            load(r#" // For a schema with contains constraint as below:
                 type:: { name: contains_type, contains: [true, 1, "hello"] }
             "#).into_iter(),
-        1 // this includes named type contains_type
-    ),
-    case::container_length_constraint(
-        load(r#" // For a schema with container_length constraint as below:
+            1 // this includes named type contains_type
+        ),
+        case::container_length_constraint(
+            load(r#" // For a schema with container_length constraint as below:
                     type:: { name: container_length_type, container_length: 3 }
                 "#).into_iter(),
-        1 // this includes named type container_length_type
-    ),
-    case::byte_length_constraint(
-        load(r#" // For a schema with byte_length constraint as below:
+            1 // this includes named type container_length_type
+        ),
+        case::byte_length_constraint(
+            load(r#" // For a schema with byte_length constraint as below:
                     type:: { name: byte_length_type, byte_length: 3 }
                 "#).into_iter(),
-        1 // this includes named type byte_length_type
-    ),
-    case::codepoint_length_constraint(
-        load(r#" // For a schema with codepoint_length constraint as below:
+            1 // this includes named type byte_length_type
+        ),
+        case::codepoint_length_constraint(
+            load(r#" // For a schema with codepoint_length constraint as below:
                         type:: { name: codepoint_length_type, codepoint_length: 3 }
                     "#).into_iter(),
-        1 // this includes named type codepoint_length_type
-    ),
-    case::element_constraint(
-        load(r#" // For a schema with element constraint as below:
+            1 // this includes named type codepoint_length_type
+        ),
+        case::element_constraint(
+            load(r#" // For a schema with element constraint as below:
                     type:: { name: element_type, element: int }
                  "#).into_iter(),
-        1 // this includes named type element_type
-    ),
-    case::distinct_element_constraint(
-        load(r#" // For a schema with distinct element constraint as below:
+            1 // this includes named type element_type
+        ),
+        case::distinct_element_constraint(
+            load(r#" // For a schema with distinct element constraint as below:
                         $ion_schema_2_0
                         type:: { name: distinct_element_type, element: distinct::int }
                      "#).into_iter(),
-        1 // this includes named type distinct_element_type
-    ),
-    case::annotations_constraint(
-        load(r#" // For a schema with annotations constraint as below:
+            1 // this includes named type distinct_element_type
+        ),
+        case::annotations_constraint(
+            load(r#" // For a schema with annotations constraint as below:
                     type:: { name: annotations_type, annotations: closed::[red, blue, green] }
                  "#).into_iter(),
-        1 // this includes named type annotations_type
-    ),
-    case::precision_constraint(
-        load(r#" // For a schema with precision constraint as below:
+            1 // this includes named type annotations_type
+        ),
+        case::precision_constraint(
+            load(r#" // For a schema with precision constraint as below:
                         type:: { name: precision_type, precision: 2 }
                      "#).into_iter(),
-        1 // this includes named type precision_type
-    ),
-    case::scale_constraint(
-        load(r#" // For a schema with scale constraint as below:
+            1 // this includes named type precision_type
+        ),
+        case::scale_constraint(
+            load(r#" // For a schema with scale constraint as below:
                     type:: { name: scale_type, scale: 2 }
                  "#).into_iter(),
-        1 // this includes named type scale_type
-    ),
-    case::exponent_constraint(
-        load(r#" // For a schema with exponent constraint as below:
+            1 // this includes named type scale_type
+        ),
+        case::exponent_constraint(
+            load(r#" // For a schema with exponent constraint as below:
                     $ion_schema_2_0
                     type:: { name: exponent_type, exponent: -2 }
                  "#).into_iter(),
-        1 // this includes named type exponent_type
-    ),
-    case::timestamp_precision_constraint(
-        load(r#" // For a schema with timestamp_precision constraint as below:
+            1 // this includes named type exponent_type
+        ),
+        case::timestamp_precision_constraint(
+            load(r#" // For a schema with timestamp_precision constraint as below:
                     type:: { name: timestamp_precision_type, timestamp_precision: month }
                  "#).into_iter(),
-        1 // this includes named type timestamp_precision_type
-    ),
-    case::valid_values_constraint(
-        load(r#" // For a schema with valid_values constraint as below:
+            1 // this includes named type timestamp_precision_type
+        ),
+        case::valid_values_constraint(
+            load(r#" // For a schema with valid_values constraint as below:
                     type:: { name: valid_values_type, valid_values: range::[1, 3] }
                  "#).into_iter(),
-        1 // this includes named type valid_values_type
-    ),
-    case::utf8_byte_length_constraint(
-        load(r#" // For a schema with utf8_byte_length constraint as below:
+            1 // this includes named type valid_values_type
+        ),
+        case::utf8_byte_length_constraint(
+            load(r#" // For a schema with utf8_byte_length constraint as below:
                         type:: { name: utf8_byte_length_type, utf8_byte_length: 3 }
                     "#).into_iter(),
-        1 // this includes named type utf8_byte_length_type
-    ),
-    case::regex_constraint(
-        load(r#" // For a schema with regex constraint as below:
+            1 // this includes named type utf8_byte_length_type
+        ),
+        case::regex_constraint(
+            load(r#" // For a schema with regex constraint as below:
                     type:: { name: regex_type, regex: "[abc]" }
                  "#).into_iter(),
-        1 // this includes named type regex_type
-    ),
-    case::timestamp_offset_constraint(
-        load(r#" // For a schema with timestamp_offset constraint as below:
+            1 // this includes named type regex_type
+        ),
+        case::timestamp_offset_constraint(
+            load(r#" // For a schema with timestamp_offset constraint as below:
                         type:: { name: timestamp_offset_type, timestamp_offset: ["+07:00", "+08:00", "+08:45", "+09:00"] }
                      "#).into_iter(),
-        1 // this includes named type regex_type
-    ),
-    case::ieee754_float_constraint(
-        load(r#" // For a schema with ieee754_float constraint as below:
+            1 // this includes named type regex_type
+        ),
+        case::ieee754_float_constraint(
+            load(r#" // For a schema with ieee754_float constraint as below:
                         $ion_schema_2_0
                         type:: { name: ieee754_float_type, ieee754_float: binary16 }
                      "#).into_iter(),
-        1 // this includes named type ieee754_float_type
-    ),
+            1 // this includes named type ieee754_float_type
+        ),
     )]
     fn owned_elements_to_schema<I: Iterator<Item = Element>>(
         owned_elements: I,
@@ -338,17 +352,17 @@ mod schema_tests {
     #[rstest(
         valid_values, invalid_values, schema, type_name,
         case::built_in_type(
-        load(r#"
+            load(r#"
                 5
                 0
                 -2
             "#),
-        load(r#"
+            load(r#"
                 false
                 "hello"
                 5.4
             "#),
-        load_schema_from_text(r#" // No schema defined, uses built-in types"#),
+            load_schema_from_text(r#" // No schema defined, uses built-in types"#),
         "int"
         ),
         case::type_constraint(
@@ -365,7 +379,7 @@ mod schema_tests {
             load_schema_from_text(r#" // For a schema with named type as below: 
                 type:: { name: my_int, type: int }
             "#),
-            "my_int"
+        "my_int"
         ),
         case::nullable_annotation_int_type_constraint(
             load(r#"
@@ -384,7 +398,7 @@ mod schema_tests {
             load_schema_from_text(r#" // For a schema with named type and `nullable` annotation as below: 
                     type:: { name: my_int, type: nullable::int }
                 "#),
-            "my_int"
+        "my_int"
         ),
         case::null_or_annotation_int_type_constraint(
             load(r#"
@@ -403,7 +417,7 @@ mod schema_tests {
                         $ion_schema_2_0
                         type:: { name: my_int, type: $null_or::int }
                     "#),
-            "my_int"
+        "my_int"
         ),
         case::nullable_annotation_float_type_constraint(
             load(r#"
@@ -422,7 +436,7 @@ mod schema_tests {
             load_schema_from_text(r#" // For a schema with named type and `nullable` annotation as below: 
                     type:: { name: my_float, type: nullable::float }
                 "#),
-            "my_float"
+        "my_float"
         ),
         case::nullable_annotation_string_type_constraint(
             load(r#"
@@ -441,7 +455,7 @@ mod schema_tests {
             load_schema_from_text(r#" // For a schema with named type and `nullable` annotation as below: 
                     type:: { name: my_string, type: nullable::string }
                 "#),
-            "my_string"
+        "my_string"
         ),
         case::nullable_annotation_symbol_type_constraint(
             load(r#"
@@ -460,7 +474,7 @@ mod schema_tests {
             load_schema_from_text(r#" // For a schema with named type and `nullable` annotation as below: 
                         type:: { name: my_symbol, type: nullable::symbol }
                     "#),
-            "my_symbol"
+        "my_symbol"
         ),
         case::nullable_annotation_decimal_type_constraint(
             load(r#"
@@ -479,7 +493,7 @@ mod schema_tests {
             load_schema_from_text(r#" // For a schema with named type and `nullable` annotation as below: 
                     type:: { name: my_decimal, type: nullable::decimal }
                 "#),
-            "my_decimal"
+        "my_decimal"
         ),
         case::nullable_annotation_timestamp_type_constraint(
             load(r#"
@@ -498,7 +512,7 @@ mod schema_tests {
             load_schema_from_text(r#" // For a schema with named type and `nullable` annotation as below: 
                     type:: { name: my_timestamp, type: nullable::timestamp }
                 "#),
-            "my_timestamp"
+        "my_timestamp"
         ),
         case::nullable_annotation_blob_type_constraint(
             load(r#"
@@ -517,7 +531,7 @@ mod schema_tests {
             load_schema_from_text(r#" // For a schema with named type and `nullable` annotation as below: 
                     type:: { name: my_blob, type: nullable::blob }
                 "#),
-            "my_blob"
+        "my_blob"
         ),
         case::nullable_annotation_clob_type_constraint(
             load(r#"
@@ -536,7 +550,7 @@ mod schema_tests {
             load_schema_from_text(r#" // For a schema with named type and `nullable` annotation as below: 
                     type:: { name: my_clob, type: nullable::clob }
                 "#),
-            "my_clob"
+        "my_clob"
         ),
         case::nullable_annotation_text_type_constraint(
             load(r#"
@@ -556,7 +570,7 @@ mod schema_tests {
             load_schema_from_text(r#" // For a schema with named type and `nullable` annotation as below: 
                     type:: { name: my_text, type: nullable::text }
                 "#),
-            "my_text"
+        "my_text"
         ),
         case::nullable_annotation_lob_type_constraint(
             load(r#"
@@ -576,7 +590,7 @@ mod schema_tests {
             load_schema_from_text(r#" // For a schema with named type and `nullable` annotation as below: 
                     type:: { name: my_lob, type: nullable::lob }
                 "#),
-            "my_lob"
+        "my_lob"
         ),
         case::nullable_annotation_number_type_constraint(
             load(r#"
@@ -598,7 +612,7 @@ mod schema_tests {
             load_schema_from_text(r#" // For a schema with named type and `nullable` annotation as below: 
                     type:: { name: my_number, type: nullable::number }
                 "#),
-            "my_number"
+        "my_number"
         ),
         case::nullable_atomic_type_constraint(
             load(r#"
@@ -615,7 +629,7 @@ mod schema_tests {
             load_schema_from_text(r#" // For a schema with named type as below: 
                 type:: { name: my_nullable_int, type: $int }
             "#),
-            "my_nullable_int"
+        "my_nullable_int"
         ),
         case::nullable_derived_type_constraint(
             load(r#"
@@ -635,7 +649,7 @@ mod schema_tests {
             load_schema_from_text(r#" // For a schema with named type as below: 
                     type:: { name: my_nullable_text, type: $text }
                 "#),
-            "my_nullable_text"
+        "my_nullable_text"
         ),
         case::not_constraint(
             load(r#"
@@ -652,7 +666,7 @@ mod schema_tests {
             load_schema_from_text(r#" // For a schema with not constraint as below: 
                 type:: { name: not_type, not: { type: int } }
             "#),
-            "not_type"
+        "not_type"
         ),
         case::one_of_constraint(
             load(r#"
@@ -670,9 +684,9 @@ mod schema_tests {
             load_schema_from_text(r#" // For a schema with one_of constraint as below: 
                 type:: { name: one_of_type, one_of: [int, decimal] }
             "#),
-            "one_of_type"
+        "one_of_type"
         ),
-        // TODO: add a test case for all_of constraint
+    // TODO: add a test case for all_of constraint
         case::any_of_constraint(
             load(r#"
                 5
@@ -687,17 +701,17 @@ mod schema_tests {
             load_schema_from_text(r#" // For a schema with any_of constraint as below: 
                 type:: { name: any_of_type, any_of: [int, decimal, bool] }
             "#),
-            "any_of_type"
+        "any_of_type"
         ),
         case::ordered_elements_constraint(
-               load(r#"
+            load(r#"
                     [true, 5, 6, 7, "hey"]
                     [false, 5, 6, 7]
                     [false, 7, 8, "hello"]
                     [true, 7, "hi"]
                     [true, 8]
-               "#), 
-               load(r#"
+               "#),
+            load(r#"
                     [true]
                     [5, true, "hey"]
                     [null.bool, 5]
@@ -708,13 +722,13 @@ mod schema_tests {
                     6e10
                     null.list
                "#),
-               load_schema_from_text(r#" // For a schema with ordered_elements constraint as below: 
+            load_schema_from_text(r#" // For a schema with ordered_elements constraint as below:
                     type:: { name: ordered_elements_type, ordered_elements: [bool, { type: int, occurs: range::[1, 3] }, { type: string, occurs: optional } ] }
                "#),
-               "ordered_elements_type"
+        "ordered_elements_type"
         ),
         case::ordered_elements_constraint_for_overlapping_types(
-                load(r#"
+            load(r#"
                      [1, 2, 3]
                      [1, 2, foo]
                      [1.0, foo]
@@ -722,18 +736,18 @@ mod schema_tests {
                      [1, 2]
                      [1, foo]
                 "#),
-                load(r#"
+            load(r#"
                      [1]
                      [foo]
                      [true, 1, foo]
                 "#),
-                load_schema_from_text(r#" // For a schema with ordered_elements constraint as below:
+            load_schema_from_text(r#" // For a schema with ordered_elements constraint as below:
                         type:: { name: ordered_elements_type, ordered_elements:[{ type: int, occurs: optional }, { type: number, occurs: required }, { type: any, occurs: required }] }
                 "#),
-                "ordered_elements_type"
+        "ordered_elements_type"
         ),
         case::fields_constraint(
-                load(r#"
+            load(r#"
                      { name: "Ion", id: 1 }
                      { id: 1 }
                      { name: "Ion" }
@@ -741,18 +755,18 @@ mod schema_tests {
                      { } // This is valid because all fields are optional
                      { greetings: "hello" } // This is valid because open content is allowed by default
                 "#),
-                load(r#"
+            load(r#"
                     null.struct
                     null
                     { name: "Ion", id: 1, id: 2 }
                 "#),
-                load_schema_from_text(r#" // For a schema with fields constraint as below:
+            load_schema_from_text(r#" // For a schema with fields constraint as below:
                         type:: { name: fields_type,  fields: { name: { type: string, occurs: range::[0,2] }, id: int } }
                 "#),
-                "fields_type"
+        "fields_type"
         ),
         case::fields_constraint_with_closed_content(
-                load(r#"
+            load(r#"
                          { name: "Ion", id: 1 }
                          { id: 1 }
                          { name: "Ion" }
@@ -760,61 +774,61 @@ mod schema_tests {
                          { } // This is valid because all fields are optional
                          { greetings: "hello" } // This is valid because open content is allowed by default
                     "#),
-                load(r#"
+            load(r#"
                         null.struct
                         null
                         { name: "Ion", id: 1, id: 2 }
                     "#),
-                load_schema_from_text(r#" // For a schema with fields constraint as below:
+            load_schema_from_text(r#" // For a schema with fields constraint as below:
                             type:: { name: fields_type,  fields: { name: { type: string, occurs: range::[0,2] }, id: int } }
                     "#),
-                "fields_type"
+        "fields_type"
         ),
         case::fields_constraint_with_closed_annotation(
-                load(r#"
+            load(r#"
                      { name: "Ion", id: 1 }
                      { id: 1 }
                      { name: "Ion" }
                      { name: "Ion", id: 1, name: "Schema" }
                      { }
                 "#),
-                load(r#"
+            load(r#"
                     null.struct
                     null
                     { name: "Ion", id: 1, id: 2 }
                     { greetings: "hello" }
                 "#),
-                load_schema_from_text(r#" // For a schema with fields constraint with `closed` annotation as below:
+            load_schema_from_text(r#" // For a schema with fields constraint with `closed` annotation as below:
                         $ion_schema_2_0
                         type:: { name: fields_type, fields: closed::{ name: { type: string, occurs: range::[0,2] }, id: int } }
                 "#),
-                "fields_type"
+        "fields_type"
         ),
         case::field_names_constraint(
-                load(r#"
+            load(r#"
                      { name: "Ion", id: 1 }
                      { id: 1 }
                      { name: "Ion" }
                      { }
                 "#),
-                load(r#"
+            load(r#"
                     null.struct
                     null
                     { name: "Ion", id: 1, name: "Schema" }
                     { name: "Ion", id: 1, id: 2 }
                 "#),
-                load_schema_from_text(r#" // For a schema with field_names constraint as below:
+            load_schema_from_text(r#" // For a schema with field_names constraint as below:
                         $ion_schema_2_0
                         type:: { name: field_names_type, field_names: distinct::symbol }
                 "#),
-                "field_names_type"
+        "field_names_type"
         ),
         case::contains_constraint(
-                load(r#"
+            load(r#"
                     [[5], '3', {a: 7}, true, 2.0, "4", (6), 1, extra_value]
                     ([5]  '3'  {a: 7}  true  2.0  "4"  (6)  1 extra_value)
                 "#),
-                load(r#"
+            load(r#"
                     null
                     null.null
                     null.int
@@ -823,13 +837,13 @@ mod schema_tests {
                     null.struct
                     [true, 1, 2.0, '3', "4", [5], (6)]
                 "#),
-                load_schema_from_text(r#" // For a schema with contains constraint as below:
+            load_schema_from_text(r#" // For a schema with contains constraint as below:
                         type::{ name: contains_type, contains: [true, 1, 2.0, '3', "4", [5], (6), {a: 7} ] }
                 "#),
-                "contains_type"
+        "contains_type"
         ),
         case::container_length_with_range_constraint(
-                load(r#"
+            load(r#"
                         [1]
                         [1, 2]
                         [1, 2, 3]
@@ -840,7 +854,7 @@ mod schema_tests {
                         { a: 7, b: 8 }
                         { a: 7, b: 8, c: 9 }
                     "#),
-                load(r#"
+            load(r#"
                         null
                         null.bool
                         null.null
@@ -854,19 +868,19 @@ mod schema_tests {
                         (1 2 3 4)
                         { a: 1, b:2, c:3, d:4}
                     "#),
-                load_schema_from_text(r#" // For a schema with contianer_length constraint as below:
+            load_schema_from_text(r#" // For a schema with contianer_length constraint as below:
                             type::{ name: container_length_type, container_length: range::[1,3] }
                     "#),
-                "container_length_type"
+        "container_length_type"
         ),
         case::container_length_exact_constraint(
-                load(r#"
+            load(r#"
                             [null, null, null]
                             [1, 2, 3]
                             (4 5 6)
                             { a: 7, b: 8, c: 9 }
                         "#),
-                load(r#"
+            load(r#"
                             null
                             null.bool
                             null.null
@@ -883,17 +897,17 @@ mod schema_tests {
                             (1 2 3 4)
                             { a: 1, b:2, c:3, d:4}
                         "#),
-                load_schema_from_text(r#" // For a schema with contianer_length constraint as below:
+            load_schema_from_text(r#" // For a schema with contianer_length constraint as below:
                                 type::{ name: container_length_type, container_length: 3 }
                         "#),
-                "container_length_type"
+        "container_length_type"
         ),
         case::byte_length_constraint(
-                load(r#"
+            load(r#"
                             {{"12345"}}
                             {{ aGVsbG8= }}
                         "#),
-                load(r#"
+            load(r#"
                             null
                             null.bool
                             null.null
@@ -903,19 +917,19 @@ mod schema_tests {
                             {{"1234"}}
                             {{"123456"}}
                         "#),
-                load_schema_from_text(r#" // For a schema with byte_length constraint as below:
+            load_schema_from_text(r#" // For a schema with byte_length constraint as below:
                                 type::{ name: byte_length_type, byte_length: 5 }
                         "#),
-                "byte_length_type"
+        "byte_length_type"
         ),
         case::codepoint_length_constraint(
-                load(r#"
+            load(r#"
                             '12345'
                             "12345"
                             "1234😎"
                             "हैलो!"
                         "#),
-                load(r#"
+            load(r#"
                             null
                             null.bool
                             null.null
@@ -926,13 +940,13 @@ mod schema_tests {
                             '1234'
                             "123456"
                         "#),
-                load_schema_from_text(r#" // For a schema with codepoint_length constraint as below:
+            load_schema_from_text(r#" // For a schema with codepoint_length constraint as below:
                                 type::{ name: codepoint_length_type, codepoint_length: 5 }
                         "#),
-                "codepoint_length_type"
+        "codepoint_length_type"
         ),
         case::element_constraint(
-                load(r#"
+            load(r#"
                           []
                           [1]
                           [1, 2, 3]
@@ -941,7 +955,7 @@ mod schema_tests {
                           (1 2 3)
                           { a: 1, b: 2, c: 3 }
                         "#),
-                load(r#"
+            load(r#"
                           null.list
                           [1.]
                           [1e0]
@@ -950,13 +964,13 @@ mod schema_tests {
                           { a: 1, b: 2, c: true }
                           { a: 1, b: 2, c: null.int }
                         "#),
-                load_schema_from_text(r#" // For a schema with element constraint as below:
+            load_schema_from_text(r#" // For a schema with element constraint as below:
                                 type::{ name: element_type, element: int }
                         "#),
-                "element_type"
+        "element_type"
         ),
         case::distinct_element_constraint(
-                load(r#"
+            load(r#"
                           []
                           [1]
                           [1, 2, 3]
@@ -965,7 +979,7 @@ mod schema_tests {
                           (1 2 3)
                           { a: 1, b: 2, c: 3 }
                         "#),
-                load(r#"
+            load(r#"
                           null.list
                           [1.]
                           [1e0]
@@ -980,20 +994,20 @@ mod schema_tests {
                           { a: c::1, b: c::1 }
                           { a: 1, b: 2, c: null.int }
                         "#),
-                load_schema_from_text(r#" // For a schema with distinct element constraint as below:
+            load_schema_from_text(r#" // For a schema with distinct element constraint as below:
                                 $ion_schema_2_0
                                 type::{ name: distinct_element_type, element: distinct::int }
                         "#),
-                "distinct_element_type"
+        "distinct_element_type"
         ),
         case::element_with_self_ref_type_constraint(
-                load(r#"
+            load(r#"
                           5
                           "hello"
                           [1, 5]
                           ["hi", "hello"]
                         "#),
-                load(r#"
+            load(r#"
                           5.5
                           null
                           null.list
@@ -1001,33 +1015,33 @@ mod schema_tests {
                           null.string
                           (1 2 3)
                         "#),
-                load_schema_from_text(r#" // For a schema with element constraint with self referencing typeas below:
+            load_schema_from_text(r#" // For a schema with element constraint with self referencing typeas below:
                                 type::{ name: my_type, one_of: [ int, string, { type: list, element: my_type } ]  }
                         "#),
-                "my_type"
+        "my_type"
         ),
         case::fields_with_self_ref_type_constraint(
-                load(r#"
+            load(r#"
                           5
                           "hello"
                           { foo: "hi" }
                           { foo: 5 }
                           { foo: { foo: 5 } }
                         "#),
-                load(r#"
+            load(r#"
                           5.5
                           null
                           null.struct
                           { foo: bar } 
                           { foo: 5.5 }
                         "#),
-                load_schema_from_text(r#" // For a schema with fields constraint with self referencing typeas below:
+            load_schema_from_text(r#" // For a schema with fields constraint with self referencing typeas below:
                                 type::{ name: my_type, one_of: [ int, string, { type: struct, fields: { foo: my_type} } ]  }
                         "#),
-                "my_type"
+        "my_type"
         ),
         case::annotations_constraint(
-                load(r#"
+            load(r#"
                           b::d::5
                           a::b::d::5
                           b::c::d::5
@@ -1039,16 +1053,16 @@ mod schema_tests {
                           b::d::3.5
                           b::d::"hello"
                         "#),
-                load(r#"
+            load(r#"
                           b::5
                           d::5
                           d::b::5
                           5
                         "#),
-                load_schema_from_text(r#" // For a schema with annotations constraint as below:
+            load_schema_from_text(r#" // For a schema with annotations constraint as below:
                                 type::{ name: annotations_type, annotations: ordered::[a, required::b, c, required::d] }
                         "#),
-                "annotations_type"
+        "annotations_type"
         ),
         case::precision_constraint(
             load(r#"
@@ -1069,7 +1083,7 @@ mod schema_tests {
             load_schema_from_text(r#" // For a schema with precision constraint as below:
                                 type::{ name: precision_type, precision: 2 }
                         "#),
-            "precision_type"
+        "precision_type"
         ),
         case::scale_constraint(
             load(r#"
@@ -1090,7 +1104,7 @@ mod schema_tests {
             load_schema_from_text(r#" // For a schema with scale constraint as below:
                                 type::{ name: scale_type, scale: range::[min, 4] }
                         "#),
-            "scale_type"
+        "scale_type"
         ),
         case::exponent_constraint(
             load(r#"
@@ -1112,7 +1126,7 @@ mod schema_tests {
                             $ion_schema_2_0
                             type::{ name: exponent_type, exponent: range::[-4, 4] }
                     "#),
-            "exponent_type"
+        "exponent_type"
         ),
         case::timestamp_precision_constraint(
             load(r#"
@@ -1131,7 +1145,7 @@ mod schema_tests {
             load_schema_from_text(r#" // For a schema with timestamp precision constraint as below:
                                 type::{ name: timestamp_precision_type, timestamp_precision: range::[month, second] }
                         "#),
-            "timestamp_precision_type"
+        "timestamp_precision_type"
         ),
         case::utf8_byte_length_constraint(
             load(r#"
@@ -1157,7 +1171,7 @@ mod schema_tests {
             load_schema_from_text(r#" // For a schema with byte_length constraint as below:
                                 type::{ name: utf8_byte_length_type, utf8_byte_length: 5 }
                         "#),
-            "utf8_byte_length_type"
+        "utf8_byte_length_type"
         ),
         case::valid_values_constraint(
             load(r#"
@@ -1177,7 +1191,7 @@ mod schema_tests {
             load_schema_from_text(r#" // For a schema with valid values constraint as below:
                                 type::{ name: valid_values_type, valid_values: [2, 3, 5.5, "hello"] }
                         "#),
-            "valid_values_type"
+        "valid_values_type"
         ),
         case::valid_values_with_range_constraint(
             load(r#"
@@ -1200,7 +1214,7 @@ mod schema_tests {
             load_schema_from_text(r#" // For a schema with valid values constraint as below:
                             type::{ name: valid_values_type, valid_values: range::[1, 5.5] }
                     "#),
-            "valid_values_type"
+        "valid_values_type"
         ),
         case::regex_constraint(
             load(r#"
@@ -1217,7 +1231,7 @@ mod schema_tests {
             load_schema_from_text(r#" // For a schema with regex constraint as below:
                             type::{ name: regex_type, regex: "ab|cd|ef" }
                     "#),
-            "regex_type"
+        "regex_type"
         ),
         case::regex_v2_0_constraint(
             load(r#"
@@ -1242,7 +1256,7 @@ mod schema_tests {
                             $ion_schema_2_0
                             type::{ name: regex_type, regex: "\\W" }
                     "#),
-            "regex_type"
+        "regex_type"
         ),
         case::timestamp_offset_constraint(
             load(r#"
@@ -1261,7 +1275,7 @@ mod schema_tests {
             load_schema_from_text(r#" // For a schema with timestamp_offset constraint as below:
                             type::{ name: timestamp_offset_type, timestamp_offset: ["-00:00", "+00:00", "+01:00", "-01:01"] }
                     "#),
-            "timestamp_offset_type"
+        "timestamp_offset_type"
         ),
         case::ieee754_float_constraint(
             load(r#"
@@ -1286,7 +1300,7 @@ mod schema_tests {
                             $ion_schema_2_0
                             type::{ name: ieee754_float_type, ieee754_float: binary16 }
                     "#),
-            "ieee754_float_type"
+        "ieee754_float_type"
         ),
         case::annotations_constraint_with_standard_syntax(
             load(r#"
@@ -1304,7 +1318,7 @@ mod schema_tests {
                             $ion_schema_2_0
                             type::{ name: standard_annotations_type, annotations: { element: { regex: "^[a-z]$" }, container_length: 1 } }
                     "#),
-            "standard_annotations_type"
+        "standard_annotations_type"
         )
     )]
     fn type_validation(
@@ -1313,7 +1327,7 @@ mod schema_tests {
         schema: Arc<Schema>,
         type_name: &str,
     ) {
-        let type_ref: TypeDefinition = schema.get_type(type_name).unwrap();
+        let type_ref: TypeDefinition = schema.get_built_in_or_defined_type(type_name).unwrap();
         // check for validation without any violations
         for valid_value in valid_values.iter() {
             // there is only a single type in each schema defined above hence validate with that type

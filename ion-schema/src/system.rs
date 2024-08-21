@@ -543,6 +543,12 @@ impl TypeStore {
         self.imported_type_ids_by_name.values().cloned().collect()
     }
 
+    /// Provides the [`TypeId`] associated with given name if it exists in the [`TypeStore`] as an imported type;
+    /// Otherwise returns None
+    pub(crate) fn get_imported_type_id_by_name(&self, name: &str) -> Option<&TypeId> {
+        self.imported_type_ids_by_name.get(name)
+    }
+
     /// Provides the [`Type`] associated with given name if it exists in the [`TypeStore`]  
     /// Otherwise returns None
     pub(crate) fn get_type_by_name(&self, name: &str) -> Option<&TypeDefinitionKind> {
@@ -576,6 +582,15 @@ impl TypeStore {
         self.ids_by_name
             .get(name)
             .or_else(|| self.imported_type_ids_by_name.get(name))
+    }
+
+    /// Provides the [`TypeId`] associated with given name if it exists in the [`TypeStore`] as a type
+    /// defined within schema (This includes built-in types); Otherwise returns None
+    pub(crate) fn get_type_id_by_name(&self, name: &str) -> Option<&TypeId> {
+        self.ids_by_name
+            .get(name)
+            .or_else(|| self.imported_type_ids_by_name.get(name))
+            .or_else(|| self.builtin_type_ids_by_name.get(name))
     }
 
     /// Provides the [`Type`] associated with given name if it exists in the [`TypeStore`] as a type
@@ -793,7 +808,7 @@ impl Resolver {
                     _ => {
                         return invalid_schema_error(format!(
                             "Unsupported Ion Schema Language version: {value}"
-                        ))
+                        ));
                     }
                 };
                 found_isl_version_marker = true;
@@ -1117,7 +1132,7 @@ impl Resolver {
             return match authority.elements(id) {
                 Ok(schema_content) => self.isl_schema_from_elements(schema_content.into_iter(), id),
                 Err(IonSchemaError::IoError { source: e }) if e.kind() == ErrorKind::NotFound => {
-                    continue
+                    continue;
                 }
                 Err(error) => Err(error),
             };
@@ -1413,6 +1428,17 @@ mod schema_system_tests {
         // verify if the schema loads without any errors
         let schema = schema_system.load_schema("sample_number.isl");
         assert!(schema.is_ok());
+
+        // Verify that the schema has the imported types and defined types
+        let isl_imported_type = schema.as_ref().unwrap().get_imported_type("my_decimal");
+        assert!(isl_imported_type.is_some());
+        let isl_defined_type = schema
+            .as_ref()
+            .unwrap()
+            .get_built_in_or_defined_type("my_number");
+        assert!(isl_defined_type.is_some());
+        let isl_type = schema.as_ref().unwrap().get_type("my_decimal");
+        assert!(isl_type.is_some());
     }
 
     #[test]
@@ -1707,12 +1733,12 @@ mod schema_system_tests {
                     schema_header::{
                       imports: [ { id: "sample_builtin_nullable_types.isl", type: my_text } ],
                     }
-                    
+
                     type::{
                       name: my_type,
                       type: my_text
                     }
-                    
+
                     schema_footer::{
                     }
                 "#,
