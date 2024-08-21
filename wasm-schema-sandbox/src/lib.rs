@@ -150,7 +150,7 @@ pub fn validate(
     log!("loaded schema successfully!");
 
     // Retrieve a particular type from this schema
-    let type_ref_result: Option<TypeDefinition> = schema.get_local_or_imported_type(schema_type);
+    let type_ref_result: Option<TypeDefinition> = schema.get_type(schema_type);
 
     let type_ref = match &type_ref_result {
         Some(type_ref) => type_ref,

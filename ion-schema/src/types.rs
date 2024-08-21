@@ -90,7 +90,7 @@ impl TypeDefinition {
     ///     let schema = schema_system.load_schema("sample.isl")?;
     ///
     ///     // unwrap() here because we know that the `my_int` type exists in sample.isl
-    ///     let type_ref = schema.get_local_or_imported_type("my_int").unwrap();
+    ///     let type_ref = schema.get_type("my_int").unwrap();
     ///
     ///     assert!(type_ref.validate(&owned_element).is_ok()); // 4 is valid for `my_int`
     ///     assert!(type_ref.validate(&document).is_err()); // document type is invalid for `my_int` type

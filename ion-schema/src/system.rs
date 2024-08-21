@@ -1437,10 +1437,7 @@ mod schema_system_tests {
             .unwrap()
             .get_built_in_or_defined_type("my_number");
         assert!(isl_defined_type.is_some());
-        let isl_type = schema
-            .as_ref()
-            .unwrap()
-            .get_local_or_imported_type("my_decimal");
+        let isl_type = schema.as_ref().unwrap().get_type("my_decimal");
         assert!(isl_type.is_some());
     }
 

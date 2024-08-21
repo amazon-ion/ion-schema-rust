@@ -66,7 +66,7 @@
 //! assert!(schema.is_ok());
 //!
 //! // verify if the generated schema contains the correct type
-//! assert!(schema.unwrap().get_local_or_imported_type("my_type_name").is_some())
+//! assert!(schema.unwrap().get_type("my_type_name").is_some())
 //! ```
 //!
 //!  ## Example of serializing a programmatically constructed schema into a schema file:

@@ -321,7 +321,7 @@ fn generate_preamble(root_dir_path: &Path) -> TokenStream {
         /// Asserts that a value is or is not valid for a given ISL type.
         fn __assert_value_validity_for_type(value_ion: &str, schema_id: &str, type_id: &str, expect_valid: bool) -> Result<(), String> {
             let schema = __new_schema_system().load_schema(schema_id).unwrap();
-            let isl_type = schema.get_local_or_imported_type(type_id).unwrap();
+            let isl_type = schema.get_type(type_id).unwrap();
             let value: ion_rs::element::Element = ion_rs::element::Element::read_one(value_ion.as_bytes()).unwrap();
             let prepared_value: ion_schema::IonSchemaElement = if value.annotations().contains("document") && value.ion_type() == ion_rs::IonType::SExp {
                 let element_vec = value.as_sequence()
