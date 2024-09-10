@@ -501,12 +501,18 @@ mod isl_tests {
                 "#),
         anonymous_type([ordered_elements([variably_occurring_type_ref(named_type_ref("symbol"), UsizeRange::new_single_value(1)), variably_occurring_type_ref(anonymous_type_ref([type_constraint(named_type_ref("int"))]), UsizeRange::new_single_value(1))])])
     ),
-    case::fields_constraint(
-        load_isl_type(r#" // For a schema with fields constraint as below:
+    case::closed_fields_constraint(
+        load_isl_type_v2_0(r#" // For a schema with fields constraint as below:
+                    { fields: closed::{ name: string, id: int} }
+                "#),
+        anonymous_type([isl_constraint::v_2_0::fields(vec![("name".to_owned(), variably_occurring_type_ref(named_type_ref("string"), UsizeRange::zero_or_one())), ("id".to_owned(), variably_occurring_type_ref(named_type_ref("int"), UsizeRange::zero_or_one()))].into_iter(), true)]),
+    ),
+        case::fields_constraint(
+            load_isl_type(r#" // For a schema with fields constraint as below:
                     { fields: { name: string, id: int} }
                 "#),
-        anonymous_type([fields(vec![("name".to_owned(), variably_occurring_type_ref(named_type_ref("string"), UsizeRange::zero_or_one())), ("id".to_owned(), variably_occurring_type_ref(named_type_ref("int"), UsizeRange::zero_or_one()))].into_iter())]),
-    ),
+            anonymous_type([fields(vec![("name".to_owned(), variably_occurring_type_ref(named_type_ref("string"), UsizeRange::zero_or_one())), ("id".to_owned(), variably_occurring_type_ref(named_type_ref("int"), UsizeRange::zero_or_one()))].into_iter())]),
+        ),
     case::field_names_constraint(
         load_isl_type_v2_0(r#" // For a schema with field_names constraint as below:
                         { field_names: distinct::symbol }
