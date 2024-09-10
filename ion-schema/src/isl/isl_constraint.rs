@@ -273,13 +273,13 @@ pub mod v_2_0 {
 
     /// Creates a `fields` constraint using the field names and [IslVariablyOccurringTypeRef]s referenced inside it
     /// and specify if the `fields` are closed or not (i.e. indicates whether only fields that are explicitly specified should be allowed or not).
-    pub fn fields<I>(fields: I, content_closed: bool) -> IslConstraint
+    pub fn fields<I>(fields: I, is_closed: bool) -> IslConstraint
     where
         I: Iterator<Item = (String, IslVariablyOccurringTypeRef)>,
     {
         IslConstraint::new(
             IslVersion::V2_0,
-            IslConstraintValue::Fields(fields.collect(), content_closed),
+            IslConstraintValue::Fields(fields.collect(), is_closed),
         )
     }
 
