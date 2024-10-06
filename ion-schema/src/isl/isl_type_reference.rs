@@ -3,7 +3,6 @@ use crate::isl::isl_import::{IslImport, IslImportType};
 use crate::isl::isl_type::IslType;
 use crate::isl::ranges::{Limit, UsizeRange};
 use crate::isl::IslVersion;
-use crate::isl::WriteToIsl;
 use crate::isl_require;
 use crate::result::{
     invalid_schema_error, invalid_schema_error_raw, unresolvable_schema_error, IonSchemaResult,
@@ -11,8 +10,8 @@ use crate::result::{
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::type_reference::{TypeReference, VariablyOccurringTypeRef};
 use crate::types::TypeDefinitionImpl;
-use ion_rs::element::{Element, Value};
-use ion_rs::{IonType, IonWriter};
+use ion_rs::IonType;
+use ion_rs::{Element, IonResult, StructWriter, Value, ValueWriter, WriteAsIon};
 
 /// Provides public facing APIs for constructing ISL type references programmatically for ISL 1.0
 pub mod v_1_0 {
@@ -91,18 +90,13 @@ pub enum NullabilityModifier {
     Nothing, // Represents that no modifiers were provided with the type reference
 }
 
-impl WriteToIsl for NullabilityModifier {
-    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
+impl NullabilityModifier {
+    fn as_annotations(&self) -> &'static [&'static str] {
         match self {
-            NullabilityModifier::Nullable => {
-                writer.set_annotations(["nullable"]);
-            }
-            NullabilityModifier::NullOr => {
-                writer.set_annotations(["$null_or"]);
-            }
-            NullabilityModifier::Nothing => {}
+            NullabilityModifier::Nullable => &["nullable"],
+            NullabilityModifier::NullOr => &["$null_or"],
+            NullabilityModifier::Nothing => &[],
         }
-        Ok(())
     }
 }
 
@@ -335,29 +329,19 @@ impl IslTypeRef {
     }
 }
 
-impl WriteToIsl for IslTypeRef {
-    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
+impl WriteAsIon for IslTypeRef {
+    fn write_as_ion<V: ValueWriter>(&self, writer: V) -> IonResult<()> {
         match self {
-            IslTypeRef::Named(name, nullability_modifier) => {
-                nullability_modifier.write_to(writer)?;
-                writer.write_symbol(name)?;
-            }
-            IslTypeRef::TypeImport(type_import, nullability_modifier) => {
-                nullability_modifier.write_to(writer)?;
-                writer.step_in(IonType::Struct)?;
-                type_import.write_to(writer)?;
-                writer.step_out()?;
-            }
-            IslTypeRef::Anonymous(type_def, nullability_modifier) => {
-                nullability_modifier.write_to(writer)?;
-                writer.step_in(IonType::Struct)?;
-                for constraint in type_def.constraints() {
-                    constraint.constraint_value.write_to(writer)?;
-                }
-                writer.step_out()?;
-            }
+            IslTypeRef::Named(name, nullability_modifier) => writer
+                .with_annotations(nullability_modifier.as_annotations())?
+                .write_symbol(name.as_str()),
+            IslTypeRef::TypeImport(type_import, nullability_modifier) => writer
+                .with_annotations(nullability_modifier.as_annotations())?
+                .write(type_import),
+            IslTypeRef::Anonymous(type_def, nullability_modifier) => writer
+                .with_annotations(nullability_modifier.as_annotations())?
+                .write(type_def),
         }
-        Ok(())
     }
 }
 
@@ -475,32 +459,27 @@ impl IslVariablyOccurringTypeRef {
     }
 }
 
-impl WriteToIsl for IslVariablyOccurringTypeRef {
-    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
+impl WriteAsIon for IslVariablyOccurringTypeRef {
+    fn write_as_ion<V: ValueWriter>(&self, writer: V) -> IonResult<()> {
         match &self.type_ref {
-            IslTypeRef::Named(name, nullability_modifier) => {
-                nullability_modifier.write_to(writer)?;
-                writer.write_symbol(name)?;
-            }
-            IslTypeRef::TypeImport(type_import, nullability_modifier) => {
-                nullability_modifier.write_to(writer)?;
-                writer.step_in(IonType::Struct)?;
-                type_import.write_to(writer)?;
-                writer.set_field_name("occurs");
-                self.occurs.write_to(writer)?;
-                writer.step_out()?;
-            }
+            IslTypeRef::Named(name, nullability_modifier) => writer
+                .with_annotations(nullability_modifier.as_annotations())?
+                .write_symbol(name.as_str()),
+            IslTypeRef::TypeImport(type_import, nullability_modifier) => writer
+                .with_annotations(nullability_modifier.as_annotations())?
+                .write(type_import),
             IslTypeRef::Anonymous(type_def, nullability_modifier) => {
-                nullability_modifier.write_to(writer)?;
-                writer.step_in(IonType::Struct)?;
+                let mut struct_writer = writer
+                    .with_annotations(nullability_modifier.as_annotations())?
+                    .struct_writer()?;
+
                 for constraint in type_def.constraints() {
-                    constraint.constraint_value.write_to(writer)?;
+                    let constraint_value = constraint.constraint();
+                    struct_writer.write(constraint_value.field_name(), constraint_value)?;
                 }
-                writer.set_field_name("occurs");
-                self.occurs.write_to(writer)?;
-                writer.step_out()?;
+                struct_writer.write("occurs", &self.occurs)?;
+                struct_writer.close()
             }
         }
-        Ok(())
     }
 }

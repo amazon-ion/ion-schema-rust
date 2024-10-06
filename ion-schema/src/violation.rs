@@ -89,7 +89,11 @@ impl Violation {
 // TODO: Implement Violation with proper indentation for the nested tree of violations
 impl fmt::Display for Violation {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "A validation error occurred: {}", self.message)
+        write!(f, "A validation error occurred: {}", self.message)?;
+        for v in &self.violations {
+            write!(f, "  {v}")?;
+        }
+        Ok(())
     }
 }
 

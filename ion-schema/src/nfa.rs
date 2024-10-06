@@ -3,7 +3,7 @@ use crate::system::TypeStore;
 use crate::type_reference::TypeReference;
 use crate::types::TypeValidator;
 use crate::IonSchemaElement;
-use ion_rs::element::Element;
+use ion_rs::Element;
 use std::collections::{HashMap, HashSet};
 use std::iter::Peekable;
 use std::slice::Iter;

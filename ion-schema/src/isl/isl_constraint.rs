@@ -6,13 +6,11 @@ use crate::isl::util::{
     Annotation, Ieee754InterchangeFormat, TimestampOffset, TimestampPrecision, ValidValue,
 };
 use crate::isl::IslVersion;
-use crate::isl::WriteToIsl;
 use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
 use crate::{isl, isl_require};
-use ion_rs::element::writer::ElementWriter;
-use ion_rs::element::{Element, Value};
-use ion_rs::types::IntAccess;
-use ion_rs::{IonType, IonWriter, Symbol};
+use ion_rs::{Element, Value};
+use ion_rs::{IonResult, SequenceWriter, StructWriter, ValueWriter, WriteAsIon};
+use ion_rs::{IonType, Symbol};
 use std::collections::HashMap;
 use std::convert::TryInto;
 
@@ -27,7 +25,7 @@ pub mod v_1_0 {
     use crate::isl::util::{Annotation, TimestampOffset, ValidValue};
     use crate::isl::IslVersion;
     use crate::result::IonSchemaResult;
-    use ion_rs::element::Element;
+    use ion_rs::Element;
 
     /// Creates a `type` constraint using the [IslTypeRef] referenced inside it
     // type is rust keyword hence this method is named type_constraint unlike other ISL constraint methods
@@ -219,7 +217,7 @@ pub mod v_2_0 {
     use crate::isl::util::{Annotation, Ieee754InterchangeFormat, TimestampOffset, ValidValue};
     use crate::isl::IslVersion;
     use crate::result::{invalid_schema_error, IonSchemaResult};
-    use ion_rs::element::Element;
+    use ion_rs::Element;
 
     /// Creates a `type` constraint using the [IslTypeRef] referenced inside it
     // type is rust keyword hence this method is named type_constraint unlike other ISL constraint methods
@@ -729,6 +727,7 @@ impl IslConstraintValue {
                         "ordered_elements constraint was a null instead of a list",
                     );
                 }
+                isl_require!(value.annotations().is_empty() => "ordered_elements list may not be annotated")?;
                 if value.ion_type() != IonType::List {
                     return invalid_schema_error(format!(
                         "ordered_elements constraint was a {:?} instead of a list",
@@ -960,148 +959,92 @@ impl IslConstraintValue {
 
         Ok(fields_map)
     }
+
+    pub(crate) fn field_name(&self) -> &str {
+        match self {
+            IslConstraintValue::AllOf(_) => "all_of",
+            IslConstraintValue::Annotations(_) => "annotations",
+            IslConstraintValue::AnyOf(_) => "any_of",
+            IslConstraintValue::ByteLength(_) => "byte_length",
+            IslConstraintValue::CodepointLength(_) => "codepoint_length",
+            IslConstraintValue::Contains(_) => "contains",
+            IslConstraintValue::ContentClosed => "content",
+            IslConstraintValue::ContainerLength(_) => "container_length",
+            IslConstraintValue::Element(_, _) => "element",
+            IslConstraintValue::Exponent(_) => "exponent",
+            IslConstraintValue::Fields(_, _) => "fields",
+            IslConstraintValue::FieldNames(_, _) => "field_names",
+            IslConstraintValue::Ieee754Float(_) => "ieee754_float",
+            IslConstraintValue::Not(_) => "not",
+            IslConstraintValue::OneOf(_) => "one_of",
+            IslConstraintValue::OrderedElements(_) => "ordered_elements",
+            IslConstraintValue::Precision(_) => "precision",
+            IslConstraintValue::Regex(_) => "regex",
+            IslConstraintValue::Scale(_) => "scale",
+            IslConstraintValue::TimestampOffset(_) => "timestamp_offset",
+            IslConstraintValue::TimestampPrecision(_) => "timestamp_precision",
+            IslConstraintValue::Type(_) => "type",
+            IslConstraintValue::Unknown(field_name, _) => field_name.as_str(),
+            IslConstraintValue::Utf8ByteLength(_) => "utf8_byte_length",
+            IslConstraintValue::ValidValues(_) => "valid_values",
+        }
+    }
 }
 
-impl WriteToIsl for IslConstraintValue {
-    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
+impl WriteAsIon for IslConstraintValue {
+    fn write_as_ion<V: ValueWriter>(&self, writer: V) -> IonResult<()> {
         match self {
-            IslConstraintValue::AllOf(type_refs) => {
-                writer.set_field_name("all_of");
-                writer.step_in(IonType::List)?;
-                for type_ref in type_refs {
-                    type_ref.write_to(writer)?;
-                }
-                writer.step_out()?;
-            }
-            IslConstraintValue::Annotations(annotations) => {
-                annotations.write_to(writer)?;
-            }
-            IslConstraintValue::AnyOf(type_refs) => {
-                writer.set_field_name("any_of");
-                writer.step_in(IonType::List)?;
-                for type_ref in type_refs {
-                    type_ref.write_to(writer)?;
-                }
-                writer.step_out()?;
-            }
-            IslConstraintValue::ByteLength(range) => {
-                writer.set_field_name("byte_length");
-                range.write_to(writer)?;
-            }
-            IslConstraintValue::CodepointLength(range) => {
-                writer.set_field_name("codepoint_length");
-                range.write_to(writer)?;
-            }
+            IslConstraintValue::AllOf(type_refs) => writer.write(type_refs),
+            IslConstraintValue::Annotations(annotations) => writer.write(annotations),
+            IslConstraintValue::AnyOf(type_refs) => writer.write(type_refs),
+            IslConstraintValue::ByteLength(range) => writer.write(range),
+            IslConstraintValue::CodepointLength(range) => writer.write(range),
             IslConstraintValue::Contains(elements) => {
-                writer.set_field_name("contains");
-                writer.step_in(IonType::List)?;
+                let mut list_writer = writer.list_writer()?;
                 for element in elements {
-                    writer.write_element(element)?;
+                    list_writer.write(element)?;
                 }
-                writer.step_out()?;
+                list_writer.close()
             }
-            IslConstraintValue::ContentClosed => {
-                writer.set_field_name("content");
-                writer.write_symbol("closed")?;
-            }
-            IslConstraintValue::ContainerLength(range) => {
-                writer.set_field_name("container_length");
-                range.write_to(writer)?;
-            }
+            IslConstraintValue::ContentClosed => writer.write_symbol("closed"),
+            IslConstraintValue::ContainerLength(range) => writer.write(range),
             IslConstraintValue::Element(type_ref, is_distinct) => {
-                writer.set_field_name("element");
                 if *is_distinct {
-                    writer.set_annotations(["distinct"]);
+                    writer.with_annotations(["distinct"])?.write(type_ref)
+                } else {
+                    writer.write(type_ref)
                 }
-                type_ref.write_to(writer)?;
             }
-            IslConstraintValue::Exponent(range) => {
-                writer.set_field_name("exponent");
-                range.write_to(writer)?;
-            }
+            IslConstraintValue::Exponent(range) => writer.write(range),
             IslConstraintValue::Fields(fields, content_closed) => {
-                writer.set_field_name("fields");
-                if *content_closed {
-                    writer.set_annotations(["closed"]);
-                }
-                writer.step_in(IonType::Struct)?;
+                let annotations: &[&'static str] = if *content_closed { &["closed"] } else { &[] };
+                let mut struct_writer = writer.with_annotations(annotations)?.struct_writer()?;
                 for (field_name, type_ref) in fields.iter() {
-                    writer.set_field_name(field_name);
-                    type_ref.write_to(writer)?;
+                    struct_writer.write(field_name.as_str(), type_ref)?;
                 }
-                writer.step_out()?;
+                struct_writer.close()
             }
             IslConstraintValue::FieldNames(type_ref, is_distinct) => {
-                writer.set_field_name("field_names");
                 if *is_distinct {
-                    writer.set_annotations(["distinct"]);
+                    writer.with_annotations(["distinct"])?.write(type_ref)
+                } else {
+                    writer.write(type_ref)
                 }
-                type_ref.write_to(writer)?;
             }
-            IslConstraintValue::Ieee754Float(format) => {
-                writer.set_field_name("ieee754_float");
-                format.write_to(writer)?;
-            }
-            IslConstraintValue::Not(type_ref) => {
-                writer.set_field_name("not");
-                type_ref.write_to(writer)?;
-            }
-            IslConstraintValue::OneOf(type_refs) => {
-                writer.set_field_name("one_of");
-                writer.step_in(IonType::List)?;
-                for type_ref in type_refs {
-                    type_ref.write_to(writer)?;
-                }
-                writer.step_out()?;
-            }
-            IslConstraintValue::OrderedElements(type_refs) => {
-                writer.set_field_name("ordered_elements");
-                writer.step_in(IonType::List)?;
-                for type_ref in type_refs {
-                    type_ref.write_to(writer)?;
-                }
-                writer.step_out()?;
-            }
-            IslConstraintValue::Precision(range) => {
-                writer.set_field_name("precision");
-                range.write_to(writer)?;
-            }
-            IslConstraintValue::Regex(regex) => {
-                regex.write_to(writer)?;
-            }
-            IslConstraintValue::Scale(range) => {
-                writer.set_field_name("scale");
-                range.write_to(writer)?;
-            }
-            IslConstraintValue::TimestampOffset(timestamp_offset) => {
-                timestamp_offset.write_to(writer)?;
-            }
-            IslConstraintValue::TimestampPrecision(range) => {
-                writer.set_field_name("timestamp_precision");
-                range.write_to(writer)?;
-            }
-            IslConstraintValue::Type(type_ref) => {
-                writer.set_field_name("type");
-                type_ref.write_to(writer)?;
-            }
-            IslConstraintValue::Unknown(field_name, value) => {
-                writer.set_field_name(field_name);
-                writer.write_element(value)?;
-            }
-            IslConstraintValue::Utf8ByteLength(range) => {
-                writer.set_field_name("utf8_byte_length");
-                range.write_to(writer)?;
-            }
-            IslConstraintValue::ValidValues(valid_values) => {
-                writer.set_field_name("valid_values");
-                writer.step_in(IonType::List)?;
-                for valid_value in &valid_values.valid_values {
-                    valid_value.write_to(writer)?;
-                }
-                writer.step_out()?;
-            }
+            IslConstraintValue::Ieee754Float(format) => writer.write(format),
+            IslConstraintValue::Not(type_ref) => writer.write(type_ref),
+            IslConstraintValue::OneOf(type_refs) => writer.write(type_refs),
+            IslConstraintValue::OrderedElements(type_refs) => writer.write(type_refs),
+            IslConstraintValue::Precision(range) => writer.write(range),
+            IslConstraintValue::Regex(regex) => writer.write(regex),
+            IslConstraintValue::Scale(range) => writer.write(range),
+            IslConstraintValue::TimestampOffset(timestamp_offset) => writer.write(timestamp_offset),
+            IslConstraintValue::TimestampPrecision(range) => writer.write(range),
+            IslConstraintValue::Type(type_ref) => writer.write(type_ref),
+            IslConstraintValue::Unknown(field_name, value) => writer.write(value),
+            IslConstraintValue::Utf8ByteLength(range) => writer.write(range),
+            IslConstraintValue::ValidValues(valid_values) => writer.write(valid_values),
         }
-        Ok(())
     }
 }
 
@@ -1114,18 +1057,12 @@ pub enum IslAnnotationsConstraint {
     StandardAnnotations(IslTypeRef),
 }
 
-impl WriteToIsl for IslAnnotationsConstraint {
-    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
-        writer.set_field_name("annotations");
+impl WriteAsIon for IslAnnotationsConstraint {
+    fn write_as_ion<V: ValueWriter>(&self, writer: V) -> IonResult<()> {
         match self {
-            IslAnnotationsConstraint::SimpleAnnotations(simple_annotations) => {
-                simple_annotations.write_to(writer)?;
-            }
-            IslAnnotationsConstraint::StandardAnnotations(standard_annotations) => {
-                standard_annotations.write_to(writer)?;
-            }
+            IslAnnotationsConstraint::SimpleAnnotations(ann) => writer.write(ann),
+            IslAnnotationsConstraint::StandardAnnotations(ann) => writer.write(ann),
         }
-        Ok(())
     }
 }
 
@@ -1247,8 +1184,8 @@ impl IslSimpleAnnotationsConstraint {
     }
 }
 
-impl WriteToIsl for IslSimpleAnnotationsConstraint {
-    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
+impl WriteAsIon for IslSimpleAnnotationsConstraint {
+    fn write_as_ion<V: ValueWriter>(&self, writer: V) -> IonResult<()> {
         let mut annotation_modifiers = vec![];
         if self.is_ordered {
             annotation_modifiers.push("ordered");
@@ -1259,13 +1196,9 @@ impl WriteToIsl for IslSimpleAnnotationsConstraint {
         if self.is_required {
             annotation_modifiers.push("required");
         }
-        writer.set_annotations(annotation_modifiers);
-        writer.step_in(IonType::List)?;
-        for annotation in &self.annotations {
-            annotation.write_to(writer)?;
-        }
-        writer.step_out()?;
-        Ok(())
+        writer
+            .with_annotations(annotation_modifiers)?
+            .write(&self.annotations)
     }
 }
 
@@ -1304,6 +1237,16 @@ impl IslValidValuesConstraint {
     }
 }
 
+impl WriteAsIon for IslValidValuesConstraint {
+    fn write_as_ion<V: ValueWriter>(&self, writer: V) -> IonResult<()> {
+        let mut list_writer = writer.list_writer()?;
+        for vv in self.values() {
+            list_writer.write(vv)?;
+        }
+        list_writer.close()
+    }
+}
+
 /// Represents the [regex] constraint
 ///
 /// [regex]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#regex
@@ -1336,9 +1279,8 @@ impl IslRegexConstraint {
     }
 }
 
-impl WriteToIsl for IslRegexConstraint {
-    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
-        writer.set_field_name("regex");
+impl WriteAsIon for IslRegexConstraint {
+    fn write_as_ion<V: ValueWriter>(&self, writer: V) -> IonResult<()> {
         let mut regex_modifiers = vec![];
         if self.case_insensitive {
             regex_modifiers.push("i");
@@ -1346,9 +1288,9 @@ impl WriteToIsl for IslRegexConstraint {
         if self.multi_line {
             regex_modifiers.push("m");
         }
-        writer.set_annotations(regex_modifiers);
-        writer.write_string(&self.expression)?;
-        Ok(())
+        writer
+            .with_annotations(regex_modifiers)?
+            .write_string(&self.expression)
     }
 }
 
@@ -1370,14 +1312,12 @@ impl IslTimestampOffsetConstraint {
     }
 }
 
-impl WriteToIsl for IslTimestampOffsetConstraint {
-    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
-        writer.set_field_name("timestamp_offset");
-        writer.step_in(IonType::List)?;
+impl WriteAsIon for IslTimestampOffsetConstraint {
+    fn write_as_ion<V: ValueWriter>(&self, writer: V) -> IonResult<()> {
+        let mut list_writer = writer.list_writer()?;
         for timestamp_offset in &self.valid_offsets {
-            timestamp_offset.write_to(writer)?;
+            list_writer.write(timestamp_offset)?;
         }
-        writer.step_out()?;
-        Ok(())
+        list_writer.close()
     }
 }

@@ -17,13 +17,13 @@
 
 use crate::isl::ranges::base::RangeValidation;
 use crate::isl::util::TimestampPrecision;
+use crate::IonSchemaResult;
 use crate::{invalid_schema_error, invalid_schema_error_raw, isl_require};
-use crate::{IonSchemaResult, WriteToIsl};
-use ion_rs::element::writer::ElementWriter;
-use ion_rs::element::Element;
 use ion_rs::Decimal;
-use ion_rs::{IonType, IonWriter, Timestamp};
+use ion_rs::{Element, IonResult, ValueWriter, WriteAsIon};
+use ion_rs::{IonType, Timestamp};
 use num_traits::{CheckedAdd, One};
+use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
 
 /// An end (upper or lower) of a [`Range`].
@@ -38,40 +38,59 @@ pub enum Limit<T> {
     ///
     /// `Unbounded` is represented in Ion Schema Language as `min` or `max`, depending on the
     /// position in which it occurs.
-    Unbounded,
+    Min,
+    Max,
     /// Indicates that the end of the range includes the given value.
     Inclusive(T),
     /// Indicates that the end of the range excludes the given value.
     Exclusive(T),
 }
 
-impl<T: PartialOrd> Limit<T> {
-    /// Checks if a value is above this [`Limit`], assuming that this [`Limit`] is being used as the lower end of a [`Range`].
-    fn is_above<V: Into<T> + Clone>(&self, other: &V) -> bool {
-        let other = &other.clone().into();
+impl<T: PartialOrd> PartialEq<T> for Limit<T> {
+    fn eq(&self, other: &T) -> bool {
         match self {
-            Limit::Unbounded => true,
-            Limit::Exclusive(this) => this > other,
-            Limit::Inclusive(this) => this >= other,
-        }
-    }
-
-    /// Checks if a value is below this [`Limit`], assuming that this [`Limit`] is being used as the upper end of a [`Range`].
-    fn is_below<V: Into<T> + Clone>(&self, other: &V) -> bool {
-        let other = &other.clone().into();
-        match self {
-            Limit::Unbounded => true,
-            Limit::Exclusive(this) => this < other,
-            Limit::Inclusive(this) => this <= other,
+            Limit::Inclusive(x) => x == other,
+            _ => false,
         }
     }
 }
-impl<T: Display> Limit<T> {
-    fn fmt_for_display(&self, f: &mut Formatter<'_>, unbounded_text: &str) -> std::fmt::Result {
+
+impl<T: PartialOrd> PartialOrd<T> for Limit<T> {
+    fn partial_cmp(&self, other: &T) -> Option<Ordering> {
         match self {
-            Limit::Unbounded => f.write_str(unbounded_text),
+            Limit::Min => Some(Ordering::Less),
+            Limit::Max => Some(Ordering::Greater),
+            Limit::Inclusive(x) => x.partial_cmp(other),
+            Limit::Exclusive(x) => {
+                // Exclusive limits can never be equal—only lesser or greater
+                match x.partial_cmp(other) {
+                    Some(Ordering::Equal) => None,
+                    order => order,
+                }
+            }
+        }
+    }
+}
+
+impl<T: Display> Display for Limit<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Limit::Min => "min".fmt(f),
+            Limit::Max => "max".fmt(f),
             Limit::Inclusive(value) => value.fmt(f),
             Limit::Exclusive(value) => write!(f, "exclusive::{value}"),
+        }
+    }
+}
+
+impl<T: WriteAsIon> WriteAsIon for Limit<T> {
+    fn write_as_ion<V: ValueWriter>(&self, writer: V) -> IonResult<()> {
+        match self {
+            // TODO: change Unbounded to Min and Max
+            Limit::Min => writer.write_symbol("min"),
+            Limit::Max => writer.write_symbol("max"),
+            Limit::Inclusive(t) => writer.write(t),
+            Limit::Exclusive(t) => writer.with_annotations(["exclusive"])?.write(t),
         }
     }
 }
@@ -98,14 +117,16 @@ impl UsizeRange {
         // implies that the lower limit cannot be Exclusive(usize::MAX) and the upper limit cannot
         // be Exclusive(0)
         let lower = match self.lower() {
-            Limit::Unbounded => 0,
+            Limit::Min => 0,
             Limit::Inclusive(x) => *x,
             Limit::Exclusive(x) => x + 1,
+            Limit::Max => unreachable!(),
         };
         let upper = match self.upper() {
-            Limit::Unbounded => usize::MAX,
+            Limit::Max => usize::MAX,
             Limit::Inclusive(x) => *x,
             Limit::Exclusive(x) => x - 1,
+            Limit::Min => unreachable!(),
         };
         (lower, upper)
     }
@@ -147,76 +168,6 @@ impl RangeValidation<TimestampPrecision> for TimestampPrecisionRange {
                 adjusted_lower >= end_value
             }
             _ => false,
-        }
-    }
-}
-
-// usize does not implement Into<Element>
-// TODO: Remove after https://github.com/amazon-ion/ion-rust/issues/573 is released
-impl WriteToIsl for UsizeRange {
-    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
-        match &self.lower() {
-            Limit::Inclusive(value) if self.lower() == self.upper() => {
-                writer.write_int(&value.to_owned().into())?;
-                Ok(())
-            }
-            _ => {
-                writer.set_annotations(["range"]);
-                writer.step_in(IonType::List)?;
-                match &self.lower() {
-                    Limit::Unbounded => writer.write_symbol("min")?,
-                    Limit::Inclusive(value) => writer.write_int(&(*value).into())?,
-                    Limit::Exclusive(value) => {
-                        writer.set_annotations(["exclusive"]);
-                        writer.write_int(&(*value).into())?;
-                    }
-                }
-                match &self.upper() {
-                    Limit::Unbounded => writer.write_symbol("max")?,
-                    Limit::Inclusive(value) => writer.write_int(&(*value).into())?,
-                    Limit::Exclusive(value) => {
-                        writer.set_annotations(["exclusive"]);
-                        writer.write_int(&(*value).into())?;
-                    }
-                }
-                writer.step_out()?;
-                Ok(())
-            }
-        }
-    }
-}
-
-// u64 does not implement Into<Element>
-// TODO: Remove after https://github.com/amazon-ion/ion-rust/issues/573 is released
-impl WriteToIsl for U64Range {
-    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
-        match &self.lower() {
-            Limit::Inclusive(value) if self.lower() == self.upper() => {
-                writer.write_int(&(*value).into())?;
-                Ok(())
-            }
-            _ => {
-                writer.set_annotations(["range"]);
-                writer.step_in(IonType::List)?;
-                match &self.lower() {
-                    Limit::Unbounded => writer.write_symbol("min")?,
-                    Limit::Inclusive(value) => writer.write_int(&(*value).into())?,
-                    Limit::Exclusive(value) => {
-                        writer.set_annotations(["exclusive"]);
-                        writer.write_int(&(*value).into())?;
-                    }
-                }
-                match &self.upper() {
-                    Limit::Unbounded => writer.write_symbol("max")?,
-                    Limit::Inclusive(value) => writer.write_int(&(*value).into())?,
-                    Limit::Exclusive(value) => {
-                        writer.set_annotations(["exclusive"]);
-                        writer.write_int(&(*value).into())?;
-                    }
-                }
-                writer.step_out()?;
-                Ok(())
-            }
         }
     }
 }
@@ -283,8 +234,10 @@ mod base {
         /// Creates a new range.
         /// At least one limit must be bounded, and the range must be non-empty.
         pub fn new(start: Limit<T>, end: Limit<T>) -> IonSchemaResult<Self> {
-            isl_require!(start != Limit::Unbounded || end != Limit::Unbounded  => "range may not contain both 'min' and 'max'")?;
-            isl_require!(!Self::is_empty(&start, &end) => "")?;
+            isl_require!(start != Limit::Min || end != Limit::Max  => "range may not contain both 'min' and 'max'")?;
+            isl_require!(start != Limit::Max => "range may not be empty (start of range may not be 'max')")?;
+            isl_require!(end != Limit::Min => "range may not be empty (end of range cannot be 'min')")?;
+            isl_require!(!Self::is_empty(&start, &end) => "range may not be empty")?;
             Ok(Self {
                 lower: start,
                 upper: end,
@@ -313,7 +266,8 @@ mod base {
 
         /// Checks whether the given value is contained within this range.
         pub fn contains<V: Into<T> + Clone>(&self, value: &V) -> bool {
-            self.lower.is_below(value) && self.upper.is_above(value)
+            let other = value.clone().into();
+            self.lower <= other && self.upper >= other
         }
 
         /// Reads a [`Range`] from an [`Element`] of Ion Schema Language.
@@ -327,10 +281,8 @@ mod base {
                 let seq = element.as_sequence().unwrap();
                 isl_require!(seq.len() == 2 => "range must have a lower and upper bound; found: {element}")?;
 
-                let lower_limit =
-                    Self::read_range_bound(element, seq.get(0).unwrap(), "min", &value_fn)?;
-                let upper_limit =
-                    Self::read_range_bound(element, seq.get(1).unwrap(), "max", &value_fn)?;
+                let lower_limit = Self::read_range_bound(element, seq.get(0).unwrap(), &value_fn)?;
+                let upper_limit = Self::read_range_bound(element, seq.get(1).unwrap(), &value_fn)?;
 
                 Self::new(lower_limit, upper_limit)
             } else {
@@ -346,27 +298,33 @@ mod base {
         fn read_range_bound<F: Fn(&Element) -> Option<T>>(
             element: &Element,
             boundary_element: &Element,
-            unbounded_text: &str,
             value_fn: F,
         ) -> IonSchemaResult<Limit<T>> {
-            let limit = if boundary_element.as_symbol()
-                == Some(&ion_rs::Symbol::from(unbounded_text))
-            {
-                isl_require!(boundary_element.annotations().is_empty() => "'{unbounded_text}' may not have annotations: {element}")?;
-                Limit::Unbounded
-            } else {
-                let upper_value: T = value_fn(boundary_element).ok_or_else(|| {
-                    invalid_schema_error_raw(format!("invalid value for range boundary: {element}"))
-                })?;
-                if boundary_element.annotations().contains("exclusive") {
-                    isl_require!(boundary_element.annotations().len() == 1 => "invalid annotation(s) on range boundary {element}")?;
-                    Limit::Exclusive(upper_value)
-                } else {
-                    isl_require!(boundary_element.annotations().is_empty() => "invalid annotation(s) on range boundary {element}")?;
-                    Limit::Inclusive(upper_value)
+            let is_exclusive = boundary_element.annotations().contains("exclusive");
+            isl_require!(boundary_element.annotations().len() == if is_exclusive {1} else {0} => "invalid annotation(s) on range boundary {element}")?;
+
+            match boundary_element.as_symbol().map(|s| s.text()) {
+                Some(Some("min")) => {
+                    isl_require!(!is_exclusive => "'min' may not be exclusive")?;
+                    Ok(Limit::Min)
                 }
-            };
-            Ok(limit)
+                Some(Some("max")) => {
+                    isl_require!(!is_exclusive => "'max' may not be exclusive")?;
+                    Ok(Limit::Max)
+                }
+                _ => {
+                    let limit_value: T = value_fn(boundary_element).ok_or_else(|| {
+                        invalid_schema_error_raw(format!(
+                            "invalid value for range boundary: {element}"
+                        ))
+                    })?;
+                    if is_exclusive {
+                        Ok(Limit::Exclusive(limit_value))
+                    } else {
+                        Ok(Limit::Inclusive(limit_value))
+                    }
+                }
+            }
         }
     }
 
@@ -379,50 +337,22 @@ mod base {
         }
     }
 
-    impl<T: Into<Element> + Clone + PartialEq> WriteToIsl for &Range<T> {
-        fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
-            match &self.lower {
-                Limit::Inclusive(value) if self.lower == self.upper => {
-                    writer.write_element(&value.clone().into())?;
-                    Ok(())
-                }
-                _ => {
-                    writer.set_annotations(["range"]);
-                    writer.step_in(IonType::List)?;
-                    match &self.lower {
-                        Limit::Unbounded => writer.write_symbol("min")?,
-                        Limit::Inclusive(value) => writer.write_element(&value.clone().into())?,
-                        Limit::Exclusive(value) => {
-                            writer.set_annotations(["exclusive"]);
-                            writer.write_element(&value.clone().into())?;
-                        }
-                    }
-                    match &self.upper {
-                        Limit::Unbounded => writer.write_symbol("max")?,
-                        Limit::Inclusive(value) => writer.write_element(&value.clone().into())?,
-                        Limit::Exclusive(value) => {
-                            writer.set_annotations(["exclusive"]);
-                            writer.write_element(&value.clone().into())?;
-                        }
-                    }
-                    writer.step_out()?;
-                    Ok(())
-                }
-            }
-        }
-    }
-
     impl<T: PartialEq + Display> Display for Range<T> {
         fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
             match &self.lower {
                 Limit::Inclusive(value) if self.lower == self.upper => value.fmt(f),
-                _ => {
-                    f.write_str("range::[")?;
-                    self.lower.fmt_for_display(f, "min")?;
-                    f.write_str(",")?;
-                    self.upper.fmt_for_display(f, "max")?;
-                    f.write_str("]")
-                }
+                _ => f.write_fmt(format_args!("range::[{},{}]", self.lower, self.upper)),
+            }
+        }
+    }
+
+    impl<T: WriteAsIon + PartialEq> WriteAsIon for Range<T> {
+        fn write_as_ion<V: ValueWriter>(&self, writer: V) -> IonResult<()> {
+            match &self.lower {
+                Limit::Inclusive(value) if self.lower == self.upper => writer.write(value),
+                _ => writer
+                    .with_annotations(["range"])?
+                    .write([&self.lower, &self.upper]),
             }
         }
     }
@@ -436,8 +366,7 @@ mod tests {
     use crate::isl::ranges::base::Range;
     use crate::isl::ranges::{I64Range, Limit};
     use crate::IonSchemaResult;
-    use ion_rs::element::Element;
-    use ion_rs::types::IntAccess;
+    use ion_rs::Element;
     use rstest::*;
 
     #[rstest(
@@ -458,7 +387,7 @@ mod tests {
     }
 
     #[rstest(
-        case::range_with_both_limits_unbounded(Range::new(Limit::Unbounded, Limit::Unbounded)),
+        case::range_with_both_limits_unbounded(Range::new(Limit::Min, Limit::Max)),
         case::range_with_lower_bound_greater_than_upper_bound(Range::new(
             Limit::Inclusive(3),
             Limit::Inclusive(1)
@@ -479,12 +408,12 @@ mod tests {
 
     #[rstest(
         case::lower_is_unbounded(
-            Range::new(Limit::Unbounded, Limit::Inclusive(5)),
+            Range::new(Limit::Min, Limit::Inclusive(5)),
             vec![-128, 0, 5],
             vec![6, 127],
         ),
         case::upper_is_unbounded(
-            Range::new(Limit::Inclusive(5), Limit::Unbounded),
+            Range::new(Limit::Inclusive(5), Limit::Max),
             vec![5, 6, 127],
             vec![-128, 0, 4],
         ),
@@ -504,20 +433,27 @@ mod tests {
         #[case] valid_values: Vec<i64>,
         #[case] invalid_values: Vec<i64>,
     ) {
+        let range = range.unwrap();
         for valid_value in valid_values {
-            let range_contains_result = range.as_ref().unwrap().contains(&valid_value);
-            assert!(range_contains_result)
+            let range_contains_result = range.contains(&valid_value);
+            assert!(
+                range_contains_result,
+                "Value {valid_value} was not in {range}"
+            )
         }
         for invalid_value in invalid_values {
-            let range_contains_result = range.as_ref().unwrap().contains(&invalid_value);
-            assert!(!range_contains_result)
+            let range_contains_result = range.contains(&invalid_value);
+            assert!(
+                !range_contains_result,
+                "Value {invalid_value} was unexpectedly in {range}"
+            )
         }
     }
 
     #[rstest(
         case::a_very_simple_case("range::[0,1]", Range::new(Limit::Inclusive(0), Limit::Inclusive(1)).unwrap()),
-        case::lower_is_unbounded("range::[min,1]", Range::new(Limit::Unbounded, Limit::Inclusive(1)).unwrap()),
-        case::upper_is_unbounded("range::[1,max]", Range::new(Limit::Inclusive(1), Limit::Unbounded).unwrap()),
+        case::lower_is_unbounded("range::[min,1]", Range::new(Limit::Min, Limit::Inclusive(1)).unwrap()),
+        case::upper_is_unbounded("range::[1,max]", Range::new(Limit::Inclusive(1), Limit::Max).unwrap()),
         case::lower_equals_upper("1", Range::new_single_value(1)),
         case::lower_is_exclusive("range::[exclusive::0,2]", Range::new(Limit::Exclusive(0), Limit::Inclusive(2)).unwrap()),
         case::upper_is_exclusive("range::[0,exclusive::2]", Range::new(Limit::Inclusive(0), Limit::Exclusive(2)).unwrap()),

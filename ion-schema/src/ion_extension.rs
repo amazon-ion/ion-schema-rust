@@ -1,6 +1,5 @@
-use ion_rs::element::{Element, Value};
-use ion_rs::external::bigdecimal::BigDecimal;
-use ion_rs::{Decimal, Int};
+use ion_rs::Decimal;
+use ion_rs::{Element, Value};
 use num_traits::ToPrimitive;
 
 /// Trait for adding extensions to [`Element`] that are useful for implementing Ion Schema.
@@ -19,25 +18,21 @@ pub(crate) trait ElementExtensions {
 impl ElementExtensions for Element {
     fn as_usize(&self) -> Option<usize> {
         match self.value() {
-            Value::Int(Int::I64(i)) => i.to_usize(),
-            Value::Int(Int::BigInt(i)) => i.to_usize(),
+            Value::Int(i) => i.as_i128()?.to_usize(),
             _ => None,
         }
     }
     fn as_u64(&self) -> Option<u64> {
         match self.value() {
-            Value::Int(Int::I64(i)) => i.to_u64(),
-            Value::Int(Int::BigInt(i)) => i.to_u64(),
+            Value::Int(i) => i.as_i128()?.to_u64(),
             _ => None,
         }
     }
     fn any_number_as_decimal(&self) -> Option<Decimal> {
         match self.value() {
-            // TODO: Consolidate Int match arms once https://github.com/amazon-ion/ion-rust/issues/582 is resolved
-            Value::Int(Int::I64(i)) => Some(Decimal::from(*i)),
-            Value::Int(Int::BigInt(i)) => Some(Decimal::from(BigDecimal::from(i.clone()))),
+            Value::Int(i) => Some((*i).into()),
             Value::Float(f) => (*f).try_into().ok(),
-            Value::Decimal(d) => Some(d.clone()),
+            Value::Decimal(d) => Some(*d),
             _ => None,
         }
     }

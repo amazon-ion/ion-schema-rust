@@ -4,7 +4,7 @@
 //! It is an enum with the variants, Ok(T), representing success and containing a value,and Err(E), representing an [`IonSchemaError`].
 
 use crate::violation::Violation;
-use ion_rs::result::IonError;
+use ion_rs::IonError;
 use std::io;
 use thiserror::Error;
 

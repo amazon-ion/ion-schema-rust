@@ -7,7 +7,7 @@ use crate::result::{invalid_schema_error, IonSchemaResult, ValidationResult};
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::violation::{Violation, ViolationCode};
 use crate::IonSchemaElement;
-use ion_rs::element::Element;
+use ion_rs::Element;
 use ion_rs::IonType;
 use ion_rs::Symbol;
 use std::fmt::{Display, Formatter};
@@ -54,16 +54,16 @@ impl TypeDefinition {
 
     /// Provides the validation for the given value based on this schema type
     /// ```
-    /// use ion_rs::element::Element;
+    /// use ion_rs::Element;
     /// use ion_schema::IonSchemaElement;
     /// use ion_schema::authority::{FileSystemDocumentAuthority, DocumentAuthority};
     /// use ion_schema::system::SchemaSystem;
     /// use ion_schema::result::IonSchemaResult;
     /// use std::path::Path;
+    /// use ion_schema::authority::MapDocumentAuthority;
     ///
     /// fn main() -> IonSchemaResult<()> {
     ///     // create an IonSchemaElement from an Element
-    ///     use ion_schema::authority::MapDocumentAuthority;
     ///     let owned_element: Element = 4.into();
     ///     let document: Vec<Element> = vec![4.into(), "hello".to_string().into(), true.into()];
     ///
@@ -131,7 +131,7 @@ impl BuiltInTypeDefinition {
         let mut constraints = vec![];
 
         // parses an isl_type to a TypeDefinition
-        let type_name = isl_type.name();
+        let type_name = isl_type.name().map(|x| x.to_owned());
 
         // convert IslConstraint to Constraint
         for isl_constraint in isl_type.constraints() {
@@ -175,8 +175,8 @@ impl TypeValidator for BuiltInTypeDefinition {
         match &self {
             BuiltInTypeDefinition::Atomic(ion_type, is_nullable) => {
                 // atomic types doesn't include document type
-                match value {
-                    IonSchemaElement::SingleElement(element) => {
+                match value.as_element() {
+                    Some(element) => {
                         if *is_nullable == Nullability::NotNullable && element.is_null() {
                             return Err(Violation::new(
                                 "type_constraint",
@@ -200,7 +200,7 @@ impl TypeValidator for BuiltInTypeDefinition {
 
                         Ok(())
                     }
-                    IonSchemaElement::Document(document) => Err(Violation::new(
+                    _ => Err(Violation::new(
                         "type_constraint",
                         ViolationCode::TypeMismatched,
                         format!("expected type {ion_type:?}, found document"),
@@ -382,7 +382,7 @@ pub(crate) struct TypeDefinitionImpl {
     constraints: Vec<Constraint>,
     // `is_deferred_type_def` indicates if this is a deferred type def which will be resolved later
     // e.g.
-    // ```
+    // ```ion
     // type:: {
     //  name: foo,
     //  type: bar,
@@ -471,7 +471,7 @@ impl TypeDefinitionImpl {
         }
 
         // add this unresolved type to context for type_id
-        let type_id = pending_types.add_type(type_store, type_name.to_owned());
+        let type_id = pending_types.add_type(type_store, type_name.map(|x| x.to_owned()));
 
         // convert IslConstraint to Constraint
         let mut found_type_constraint = false;
@@ -495,7 +495,7 @@ impl TypeDefinitionImpl {
         if !found_type_constraint && isl_version == IslVersion::V1_0 {
             // set the isl type name for any error that is returned while parsing its constraints
             let isl_type_name = match type_name.to_owned() {
-                Some(name) => name,
+                Some(name) => name.to_owned(),
                 None => match isl_struct {
                     None => "".to_owned(),
                     Some(isl_type_struct) => format!("{isl_type_struct}"),
@@ -523,7 +523,7 @@ impl TypeDefinitionImpl {
         }
 
         let type_def = TypeDefinitionImpl::new(
-            type_name.to_owned(),
+            type_name.map(|x| x.to_owned()),
             constraints,
             isl_type.isl_type_struct.to_owned(),
         );

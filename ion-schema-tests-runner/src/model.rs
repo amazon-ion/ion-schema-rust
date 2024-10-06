@@ -1,4 +1,4 @@
-use ion_rs::element::{Element, List, Struct};
+use ion_rs::*;
 use std::ops::Deref;
 
 // Represents a single test case.
@@ -211,9 +211,9 @@ impl StructUtils for Struct {
                 field_name,
                 Element::from(self.clone())
             ))?;
-            Ok(ion_rs::element::List(list.clone()))
+            Ok(ion_rs::List(list.clone()))
         } else {
-            Ok(ion_rs::element::List(Element::sequence_builder().build()))
+            Ok(ion_rs::List(Element::sequence_builder().build()))
         }
     }
 }

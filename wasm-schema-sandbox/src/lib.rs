@@ -1,7 +1,7 @@
 use ion_schema::authority::{DocumentAuthority, MapDocumentAuthority};
 
-use ion_schema::external::ion_rs::element::Element;
 use ion_schema::external::ion_rs::IonResult;
+use ion_schema::external::ion_rs::{Element, Sequence};
 use ion_schema::result::IonSchemaResult;
 use ion_schema::schema::Schema;
 use ion_schema::system::SchemaSystem;
@@ -24,7 +24,7 @@ macro_rules! log {
     }
 }
 
-fn load_all(text: &str) -> IonResult<Vec<Element>> {
+fn load_all(text: &str) -> IonResult<Sequence> {
     Element::read_all(text.as_bytes())
 }
 
@@ -174,8 +174,10 @@ pub fn validate(
     let values_result = load_all(ion);
 
     let value = match values_result {
-        Ok(v) if is_document => IonSchemaElement::Document(v),
-        Ok(v) => IonSchemaElement::SingleElement(v[0].to_owned()),
+        Ok(v) if is_document => {
+            IonSchemaElement::Document(v.iter().map(|it| it.to_owned()).collect())
+        }
+        Ok(v) => IonSchemaElement::SingleElement(v.get(0).unwrap().to_owned()),
         Err(_) => {
             return SchemaValidationResult::new(
                 false,
@@ -214,7 +216,7 @@ pub fn validate(
     let result: SchemaValidationResult = SchemaValidationResult::new(
         result.is_ok(),
         violations_result,
-        format!("{value}"),
+        ion.to_string(),
         false,
         "".to_string(),
     );

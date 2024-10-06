@@ -48,8 +48,8 @@ impl TypeValidator for TypeReference {
         use crate::isl::isl_type_reference::NullabilityModifier::*;
         let type_def = type_store.get_type_by_id(self.type_id()).unwrap();
         match self.type_modifier {
-            Nullable => match value {
-                IonSchemaElement::SingleElement(element) => {
+            Nullable => {
+                if let Some(element) = value.as_element() {
                     if element.is_null()
                         && (element.ion_type() == IonType::Null
                             || type_def
@@ -58,8 +58,7 @@ impl TypeValidator for TypeReference {
                         return Ok(());
                     }
                 }
-                IonSchemaElement::Document(_) => {}
-            },
+            }
             NullOr => {
                 if let IonSchemaElement::SingleElement(element) = value {
                     if element.ion_type() == IonType::Null {

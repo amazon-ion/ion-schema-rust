@@ -30,8 +30,8 @@ use crate::result::{
 use crate::schema::Schema;
 use crate::types::{BuiltInTypeDefinition, Nullability, TypeDefinitionImpl, TypeDefinitionKind};
 use crate::{is_isl_version_marker, is_reserved_word, UserReservedFields};
-use ion_rs::element::{Annotations, Element};
 use ion_rs::IonType;
+use ion_rs::{Annotations, Element};
 use std::collections::{HashMap, HashSet};
 use std::io::ErrorKind;
 use std::sync::Arc;
@@ -1012,8 +1012,7 @@ impl Resolver {
         // get all isl type names that are defined within the schema
         // this will be used to resolve type references which might not have yet resolved while loading a type definition
         let isl_type_names: HashSet<&str> = HashSet::from_iter(
-            isl_types
-                .iter()
+            isl.types()
                 .filter(|t| t.name().is_some())
                 .map(|t| t.name().as_ref().unwrap().as_str()),
         );
@@ -2038,7 +2037,7 @@ mod schema_system_tests {
         let mut schema_system =
             SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
         let schema = schema_system.load_isl_schema("sample.isl")?;
-        let expected_open_content = Element::read_all(
+        let expected_open_content: Vec<_> = Element::read_all(
             r#"
                 open_content_1::{
                     unknown_constraint: "this is an open content struct"
@@ -2049,11 +2048,14 @@ mod schema_system_tests {
                 }
             "#
             .as_bytes(),
-        )?;
+        )?
+        .into_iter()
+        .collect();
 
         // verify the open content that is retrieved from the ISL model is same as the expected open content
-        assert_eq!(&schema.open_content().len(), &2);
-        assert_eq!(schema.open_content(), &expected_open_content);
+        let open_content: Vec<_> = schema.open_content().map(|x| x.to_owned()).collect();
+        assert_eq!(open_content.len(), 2);
+        assert_eq!(open_content, expected_open_content);
         Ok(())
     }
 
