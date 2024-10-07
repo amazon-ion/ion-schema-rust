@@ -734,11 +734,8 @@ impl Resolver {
 
         // get all isl type names from given isl types
         // this will be used to resolve type references which might not have yet resolved while loading a type definition
-        let isl_type_names: HashSet<&str> = HashSet::from_iter(
-            isl_types
-                .iter()
-                .filter_map(|t| t.name())
-        );
+        let isl_type_names: HashSet<&str> =
+            HashSet::from_iter(isl_types.iter().filter_map(|t| t.name()));
 
         for isl_type in &isl_types {
             // convert [IslType] into [TypeDefinitionKind]
@@ -1010,9 +1007,8 @@ impl Resolver {
 
         // get all isl type names that are defined within the schema
         // this will be used to resolve type references which might not have yet resolved while loading a type definition
-        let isl_type_names: HashSet<&str> = HashSet::from_iter(
-            isl.types().filter_map(|t| t.name())
-        );
+        let isl_type_names: HashSet<&str> =
+            HashSet::from_iter(isl.types().filter_map(|t| t.name()));
 
         // Resolve all ISL types and constraints
         for isl_type in isl_types {
