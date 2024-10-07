@@ -221,6 +221,13 @@ impl SchemaContent {
             None
         }
     }
+    fn as_isl_version(&self) -> Option<&IslVersion> {
+        if let SchemaContent::Version(value) = self {
+            Some(value)
+        } else {
+            None
+        }
+    }
     fn as_type(&self) -> Option<&IslType> {
         if let SchemaContent::Type(value) = self {
             Some(value)
@@ -235,33 +242,42 @@ impl SchemaContent {
             None
         }
     }
-    fn expect_header(&self) -> &SchemaHeader {
-        if let SchemaContent::Header(value) = self {
-            value
+    fn as_footer(&self) -> Option<&SchemaFooter> {
+        if let SchemaContent::Footer(value) = self {
+            Some(value)
         } else {
-            panic!("illegal state encountered; this should be unreachable. Expected to find a Header, but found: {:?}", self)
+            None
         }
+    }
+    fn expect_header(&self) -> &SchemaHeader {
+        let SchemaContent::Header(value) = self else {
+            unreachable!("expected to find a Header, but found: {:?}", self)
+        };
+        value
     }
     fn expect_isl_version(&self) -> &IslVersion {
-        if let SchemaContent::Version(value) = self {
-            value
-        } else {
-            panic!("illegal state encountered; this should be unreachable. Expected to find a Version, but found: {:?}", self)
-        }
+        let SchemaContent::Version(value) = self else {
+            unreachable!("expected to find an IslVersion, but found: {:?}", self)
+        };
+        value
     }
     fn expect_type(&self) -> &IslType {
-        if let SchemaContent::Type(value) = self {
-            value
-        } else {
-            panic!("illegal state encountered; this should be unreachable. Expected to find a Type, but found: {:?}", self)
-        }
+        let SchemaContent::Type(value) = self else {
+            unreachable!("expected to find a Type, but found: {:?}", self)
+        };
+        value
+    }
+    fn expect_open_content(&self) -> &Element {
+        let SchemaContent::OpenContent(value) = self else {
+            unreachable!("expected to find OpenContent, but found: {:?}", self)
+        };
+        value
     }
     fn expect_footer(&self) -> &SchemaFooter {
-        if let SchemaContent::Footer(value) = self {
-            value
-        } else {
-            panic!("illegal state encountered; this should be unreachable. Expected to find a Footer, but found: {:?}", self)
-        }
+        let SchemaContent::Footer(value) = self else {
+            unreachable!("expected to find a Footer, but found: {:?}", self)
+        };
+        value
     }
 }
 

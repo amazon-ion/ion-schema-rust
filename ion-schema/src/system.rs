@@ -737,8 +737,7 @@ impl Resolver {
         let isl_type_names: HashSet<&str> = HashSet::from_iter(
             isl_types
                 .iter()
-                .filter(|t| t.name().is_some())
-                .map(|t| t.name().as_ref().unwrap().as_str()),
+                .filter_map(|t| t.name())
         );
 
         for isl_type in &isl_types {
@@ -1012,9 +1011,7 @@ impl Resolver {
         // get all isl type names that are defined within the schema
         // this will be used to resolve type references which might not have yet resolved while loading a type definition
         let isl_type_names: HashSet<&str> = HashSet::from_iter(
-            isl.types()
-                .filter(|t| t.name().is_some())
-                .map(|t| t.name().as_ref().unwrap().as_str()),
+            isl.types().filter_map(|t| t.name())
         );
 
         // Resolve all ISL types and constraints

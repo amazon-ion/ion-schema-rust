@@ -18,7 +18,7 @@ pub(crate) trait ElementExtensions {
 impl ElementExtensions for Element {
     fn as_usize(&self) -> Option<usize> {
         match self.value() {
-            Value::Int(i) => i.as_i128()?.to_usize(),
+            Value::Int(i) => i.as_usize(),
             _ => None,
         }
     }

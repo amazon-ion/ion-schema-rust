@@ -86,7 +86,6 @@ impl<T: Display> Display for Limit<T> {
 impl<T: WriteAsIon> WriteAsIon for Limit<T> {
     fn write_as_ion<V: ValueWriter>(&self, writer: V) -> IonResult<()> {
         match self {
-            // TODO: change Unbounded to Min and Max
             Limit::Min => writer.write_symbol("min"),
             Limit::Max => writer.write_symbol("max"),
             Limit::Inclusive(t) => writer.write(t),
