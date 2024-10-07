@@ -1,19 +1,18 @@
 // TODO: remove the following line once we have a basic implementation ready
 #![allow(dead_code, unused_variables)]
 
-use crate::external::ion_rs::IonType;
 use crate::ion_path::IonPath;
 use crate::isl::isl_constraint::IslConstraintValue;
 use crate::isl::isl_type::IslType;
-use crate::isl::WriteToIsl;
 use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
 use crate::violation::{Violation, ViolationCode};
-use ion_rs::element::{Element, Struct};
-use ion_rs::{IonWriter, Symbol};
+use ion_rs::Symbol;
+use ion_rs::{Element, IonResult, IonType, Struct, StructWriter, ValueWriter, WriteAsIon};
 use regex::Regex;
 use std::fmt::{Display, Formatter};
 use std::sync::OnceLock;
-/// A [`try`]-like macro to workaround the [`Option`]/[`Result`] nested APIs.
+
+/// A `try`-like macro to work around the [`Option`]/[`Result`] nested APIs.
 /// These API require checking the type and then calling the appropriate getter function
 /// (which returns a None if you got it wrong). This macro turns the `None` into
 /// an `IonSchemaError` which cannot be currently done with `?`.
@@ -101,7 +100,7 @@ const ISL_2_0_KEYWORDS: [&str; 28] = [
 /// In order to create an `IonSchemaElement`:
 ///
 /// ```
-/// use ion_rs::element::Element;
+/// use ion_rs::Element;
 /// use ion_schema::IonSchemaElement;
 ///
 /// // create an IonSchemaElement from an Element
@@ -215,7 +214,10 @@ impl From<&Vec<Element>> for IonSchemaElement {
 
 // helper function to be used by schema tests
 fn load(text: &str) -> Vec<Element> {
-    Element::read_all(text.as_bytes()).expect("parsing failed unexpectedly")
+    Element::read_all(text.as_bytes())
+        .expect("parsing failed unexpectedly")
+        .into_iter()
+        .collect()
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -226,6 +228,12 @@ pub struct UserReservedFields {
 }
 
 impl UserReservedFields {
+    pub(crate) fn is_empty(&self) -> bool {
+        self.type_fields.is_empty()
+            && self.schema_header_fields.is_empty()
+            && self.schema_footer_fields.is_empty()
+    }
+
     /// Parse use reserved fields inside a [Struct]
     pub(crate) fn from_ion_elements(user_reserved_fields: &Struct) -> IonSchemaResult<Self> {
         if user_reserved_fields.fields().any(|(f, v)| {
@@ -359,38 +367,18 @@ impl UserReservedFields {
     }
 }
 
-impl WriteToIsl for UserReservedFields {
-    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
-        // this function assumes that we are already inside a schema header struct
-        // writes `user_reserved_fields` in the schema header
-        writer.set_field_name("user_reserved_fields");
-        writer.step_in(IonType::Struct)?;
-
-        // writes user reserved fields for `schema_header`
-        writer.set_field_name("schema_header");
-        writer.step_in(IonType::List)?;
-        for value in &self.schema_header_fields {
-            writer.write_symbol(value)?;
-        }
-        writer.step_out()?;
-
-        // writes user reserved fields for `type`
-        writer.set_field_name("type");
-        writer.step_in(IonType::List)?;
-        for value in &self.type_fields {
-            writer.write_symbol(value)?;
-        }
-        writer.step_out()?;
-
-        // writes user reserved fields for `schema_footer`
-        writer.set_field_name("schema_footer");
-        writer.step_in(IonType::List)?;
-        for value in &self.schema_footer_fields {
-            writer.write_symbol(value)?;
-        }
-        writer.step_out()?;
-
-        writer.step_out()?;
-        Ok(())
+impl WriteAsIon for UserReservedFields {
+    fn write_as_ion<V: ValueWriter>(&self, writer: V) -> IonResult<()> {
+        let mut struct_writer = writer.struct_writer()?;
+        struct_writer
+            .field_writer("schema_header")
+            .write(&self.schema_header_fields)?;
+        struct_writer
+            .field_writer("type")
+            .write(&self.type_fields)?;
+        struct_writer
+            .field_writer("schema_footer")
+            .write(&self.schema_footer_fields)?;
+        struct_writer.close()
     }
 }

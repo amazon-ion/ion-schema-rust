@@ -9,7 +9,7 @@ proc-macro = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ion-rs = "0.18.1"
+ion-rs = "1.0.0-rc.7"
 ion-schema = { path = "../ion-schema" }
 quote = "1.0.21"
 syn = "1.0.102"

@@ -1,7 +1,5 @@
-use crate::isl::WriteToIsl;
 use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
-use ion_rs::element::Element;
-use ion_rs::{IonType, IonWriter};
+use ion_rs::{Element, IonResult, StructWriter, Symbol, ValueWriter, WriteAsIon};
 
 /// Represents an [import] in an ISL schema.
 ///
@@ -58,23 +56,20 @@ impl IslImport {
     }
 }
 
-impl WriteToIsl for IslImport {
-    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
-        writer.step_in(IonType::Struct)?;
+impl WriteAsIon for IslImport {
+    fn write_as_ion<V: ValueWriter>(&self, writer: V) -> IonResult<()> {
         match self {
             IslImport::Schema(schema_import) => {
-                writer.set_field_name("id");
-                writer.write_string(schema_import)?;
+                let mut struct_writer = writer.struct_writer()?;
+                struct_writer
+                    .field_writer("id")
+                    .write_string(schema_import)?;
+                struct_writer.close()
             }
-            IslImport::Type(type_import) => {
-                type_import.write_to(writer)?;
-            }
-            IslImport::TypeAlias(type_alias_import) => {
-                type_alias_import.write_to(writer)?;
+            IslImport::Type(type_import) | IslImport::TypeAlias(type_import) => {
+                writer.write(type_import)
             }
         }
-        writer.step_out()?;
-        Ok(())
     }
 }
 
@@ -110,16 +105,17 @@ impl IslImportType {
     }
 }
 
-impl WriteToIsl for IslImportType {
-    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
-        writer.set_field_name("id");
-        writer.write_symbol(&self.id)?;
-        writer.set_field_name("type");
-        writer.write_symbol(&self.type_name)?;
+impl WriteAsIon for IslImportType {
+    fn write_as_ion<V: ValueWriter>(&self, writer: V) -> IonResult<()> {
+        let mut struct_writer = writer.struct_writer()?;
+
+        struct_writer.field_writer("id").write_string(&self.id)?;
+        struct_writer
+            .field_writer("type")
+            .write_symbol(self.type_name.as_str())?;
         if let Some(alias) = &self.alias {
-            writer.set_field_name("as");
-            writer.write_symbol(alias)?;
+            struct_writer.write("as", Symbol::from(alias))?;
         }
-        Ok(())
+        struct_writer.close()
     }
 }

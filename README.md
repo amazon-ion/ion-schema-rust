@@ -33,7 +33,7 @@ schema_footer::{
 
 ### Loading a schema and validating an Ion value
 ```rust
-use ion_rs::element::Element;
+use ion_rs::Element;
 use ion_schema::authority::{DocumentAuthority, FileSystemDocumentAuthority};
 use ion_schema::result::{IonSchemaResult, ValidationResult};
 use ion_schema::schema::Schema;

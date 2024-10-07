@@ -61,7 +61,7 @@
 //! ```
 
 use crate::result::{unresolvable_schema_error_raw, IonSchemaResult};
-use ion_rs::element::Element;
+use ion_rs::Element;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fs;
@@ -108,7 +108,7 @@ impl DocumentAuthority for FileSystemDocumentAuthority {
         // if absolute_path exists for the given id then load schema with file contents
         let ion_content = fs::read(absolute_path)?;
         let schema_content = Element::read_all(ion_content)?;
-        Ok(schema_content)
+        Ok(schema_content.into_iter().collect())
     }
 }
 
@@ -139,6 +139,6 @@ impl DocumentAuthority for MapDocumentAuthority {
             ))
         })?;
         let schema_content = Element::read_all(ion_content.as_bytes())?;
-        Ok(schema_content)
+        Ok(schema_content.into_iter().collect())
     }
 }

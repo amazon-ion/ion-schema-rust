@@ -1,12 +1,11 @@
 use crate::ion_extension::ElementExtensions;
 use crate::isl::ranges::{NumberRange, TimestampRange};
-use crate::isl::{IslVersion, WriteToIsl};
+use crate::isl::IslVersion;
 use crate::isl_require;
 use crate::result::{invalid_schema_error, IonSchemaError, IonSchemaResult};
-use ion_rs::element::writer::ElementWriter;
-use ion_rs::element::{Element, Value};
-use ion_rs::types::Precision;
-use ion_rs::{IonType, IonWriter, Timestamp};
+use ion_rs::TimestampPrecision as Precision;
+use ion_rs::{Element, IonResult, Value, ValueWriter, WriteAsIon};
+use ion_rs::{IonType, Timestamp};
 use num_traits::abs;
 use std::cmp::Ordering;
 use std::fmt;
@@ -57,17 +56,21 @@ impl Annotation {
     }
 }
 
-impl WriteToIsl for Annotation {
-    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
+impl WriteAsIon for Annotation {
+    fn write_as_ion<V: ValueWriter>(&self, writer: V) -> IonResult<()> {
         if self.isl_version == IslVersion::V1_0 {
             if self.is_required {
-                writer.set_annotations(["required"]);
+                writer
+                    .with_annotations(["required"])?
+                    .write_symbol(self.value.as_str())
             } else {
-                writer.set_annotations(["optional"]);
+                writer
+                    .with_annotations(["optional"])?
+                    .write_symbol(self.value.as_str())
             }
+        } else {
+            writer.write_symbol(self.value.as_str())
         }
-        writer.write_symbol(&self.value)?;
-        Ok(())
     }
 }
 
@@ -167,10 +170,9 @@ impl PartialOrd for TimestampPrecision {
     }
 }
 
-impl WriteToIsl for TimestampPrecision {
-    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
-        writer.write_symbol(self.string_value())?;
-        Ok(())
+impl WriteAsIon for TimestampPrecision {
+    fn write_as_ion<V: ValueWriter>(&self, writer: V) -> IonResult<()> {
+        writer.write_symbol(self.string_value().as_str())
     }
 }
 
@@ -213,7 +215,6 @@ impl ValidValue {
             let range = if has_timestamp {
                 ValidValue::TimestampRange(TimestampRange::from_ion_element(element, |e| {
                     e.as_timestamp()
-                        .cloned()
                         .filter(|t| isl_version != IslVersion::V1_0 || t.offset().is_some())
                 })?)
             } else {
@@ -240,15 +241,13 @@ impl Display for ValidValue {
     }
 }
 
-impl WriteToIsl for ValidValue {
-    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
+impl WriteAsIon for ValidValue {
+    fn write_as_ion<V: ValueWriter>(&self, writer: V) -> IonResult<()> {
         match self {
-            // TODO: replace with write_value once https://github.com/amazon-ion/ion-rust/pull/579 is released
-            ValidValue::Element(value) => writer.write_element(&value.to_owned().into())?,
-            ValidValue::NumberRange(r) => r.write_to(writer)?,
-            ValidValue::TimestampRange(r) => r.write_to(writer)?,
+            ValidValue::Element(value) => writer.write(value),
+            ValidValue::NumberRange(r) => writer.write(r),
+            ValidValue::TimestampRange(r) => writer.write(r),
         }
-        Ok(())
     }
 }
 
@@ -342,18 +341,17 @@ impl Display for TimestampOffset {
     }
 }
 
-impl WriteToIsl for TimestampOffset {
-    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
+impl WriteAsIon for TimestampOffset {
+    fn write_as_ion<V: ValueWriter>(&self, writer: V) -> IonResult<()> {
         match &self {
             TimestampOffset::Known(offset) => {
                 let sign = if offset < &0 { "-" } else { "+" };
                 let hours = abs(*offset) / 60;
                 let minutes = abs(*offset) - hours * 60;
-                writer.write_string(format!("{sign}{hours:02}:{minutes:02}"))?;
+                writer.write_string(format!("{sign}{hours:02}:{minutes:02}"))
             }
-            TimestampOffset::Unknown => writer.write_string("-00:00")?,
+            TimestampOffset::Unknown => writer.write_string("-00:00"),
         }
-        Ok(())
     }
 }
 
@@ -394,13 +392,12 @@ impl Display for Ieee754InterchangeFormat {
     }
 }
 
-impl WriteToIsl for Ieee754InterchangeFormat {
-    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
+impl WriteAsIon for Ieee754InterchangeFormat {
+    fn write_as_ion<V: ValueWriter>(&self, writer: V) -> IonResult<()> {
         writer.write_symbol(match self {
             Ieee754InterchangeFormat::Binary16 => "binary16",
             Ieee754InterchangeFormat::Binary32 => "binary32",
             Ieee754InterchangeFormat::Binary64 => "binary64",
-        })?;
-        Ok(())
+        })
     }
 }

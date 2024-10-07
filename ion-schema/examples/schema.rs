@@ -1,9 +1,8 @@
 #[macro_use]
 extern crate clap;
 use clap::{App, ArgMatches};
-use ion_rs::element::Element;
-use ion_rs::IonWriter;
-use ion_rs::{IonType, TextWriterBuilder};
+use ion_rs::WriteConfig;
+use ion_rs::{Element, SequenceWriter, StructWriter, TextFormat, ValueWriter, Writer};
 use ion_schema::authority::{DocumentAuthority, FileSystemDocumentAuthority};
 use ion_schema::result::IonSchemaResult;
 use ion_schema::system::SchemaSystem;
@@ -86,32 +85,37 @@ fn validate(command_args: &ArgMatches) -> IonSchemaResult<()> {
     let type_ref = schema.unwrap().get_type(schema_type).unwrap();
 
     // create a text writer to make the output
-    let mut output = vec![];
-    let mut writer = TextWriterBuilder::pretty().build(&mut output)?;
+    let output = vec![];
+    let write_config = WriteConfig::<ion_rs::v1_0::Text>::new(TextFormat::Pretty);
+    let mut writer = Writer::new(write_config, output)?;
 
     // validate owned_elements according to type_ref
     for owned_element in owned_elements {
         // create a validation report with validation result, value, schema and/or violation
-        writer.step_in(IonType::Struct)?;
+        let mut struct_writer = writer.struct_writer()?;
         let validation_result = type_ref.validate(&owned_element);
-        writer.set_field_name("result");
         match validation_result {
             Ok(_) => {
-                writer.write_string("Valid")?;
-                writer.set_field_name("value");
-                writer.write_string(format!("{owned_element}"))?;
-                writer.set_field_name("schema");
-                writer.write_string(schema_id)?;
+                struct_writer.field_writer("result").write_string("Valid")?;
+                struct_writer
+                    .field_writer("value")
+                    .write_string(format!("{owned_element}"))?;
+                struct_writer
+                    .field_writer("schema")
+                    .write_string(schema_id)?;
             }
             Err(_) => {
-                writer.write_string("Invalid")?;
-                writer.set_field_name("violation");
-                writer.write_string(format!("{:#?}", validation_result.unwrap_err()))?;
+                struct_writer
+                    .field_writer("result")
+                    .write_string("Invalid")?;
+                struct_writer
+                    .field_writer("violation")
+                    .write_string(format!("{:#?}", validation_result.unwrap_err()))?;
             }
         }
-        writer.step_out()?;
+        struct_writer.close()?;
     }
-    drop(writer);
+    let output = writer.close()?;
     println!("Validation report:");
     println!("{}", from_utf8(&output).unwrap());
     Ok(())

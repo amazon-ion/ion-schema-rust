@@ -128,13 +128,16 @@ mod schema_tests {
     use super::*;
     use crate::authority::MapDocumentAuthority;
     use crate::system::{Resolver, SchemaSystem};
-    use ion_rs::element::Element;
+    use ion_rs::Element;
     use rstest::*;
     use std::sync::Arc;
 
     // helper function to be used by schema tests
     fn load(text: &str) -> Vec<Element> {
-        Element::read_all(text.as_bytes()).expect("parsing failed unexpectedly")
+        Element::read_all(text.as_bytes())
+            .expect("parsing failed unexpectedly")
+            .into_iter()
+            .collect()
     }
 
     // helper function to be used by validation tests
@@ -1332,7 +1335,7 @@ mod schema_tests {
         for valid_value in valid_values.iter() {
             // there is only a single type in each schema defined above hence validate with that type
             let validation_result = type_ref.validate(valid_value);
-            assert!(validation_result.is_ok());
+            validation_result.unwrap();
         }
         // check for violations due to invalid values
         for invalid_value in invalid_values.iter() {

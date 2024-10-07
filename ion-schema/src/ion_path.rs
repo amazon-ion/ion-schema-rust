@@ -1,5 +1,5 @@
-use ion_rs::element::{Element, SExp, Sequence};
 use ion_rs::Symbol;
+use ion_rs::{Element, SExp, Sequence};
 use std::fmt;
 use std::fmt::{Debug, Formatter};
 

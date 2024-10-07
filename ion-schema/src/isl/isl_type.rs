@@ -1,10 +1,8 @@
 use crate::isl::isl_constraint::{IslConstraint, IslConstraintValue};
 use crate::isl::isl_import::IslImportType;
 use crate::isl::IslVersion;
-use crate::isl::WriteToIsl;
 use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
-use ion_rs::element::Element;
-use ion_rs::{IonType, IonWriter};
+use ion_rs::{Element, IonResult, StructWriter, ValueWriter, WriteAsIon};
 
 /// Provides public facing APIs for constructing ISL types programmatically for ISL 1.0
 pub mod v_1_0 {
@@ -12,7 +10,7 @@ pub mod v_1_0 {
     use crate::isl::isl_type::IslType;
     use crate::isl::IslVersion;
     use crate::result::IonSchemaResult;
-    use ion_rs::element::Element;
+    use ion_rs::Element;
 
     /// Creates a named [IslType] using the [IslConstraint] defined within it
     pub fn named_type<A: Into<String>, B: Into<Vec<IslConstraint>>>(
@@ -50,7 +48,7 @@ pub mod v_2_0 {
     use crate::isl::isl_type::{v_1_0, IslType};
     use crate::isl::IslVersion;
     use crate::result::IonSchemaResult;
-    use ion_rs::element::Element;
+    use ion_rs::Element;
 
     /// Creates a named [IslType] using the [IslConstraint] defined within it
     pub fn named_type<A: Into<String>, B: Into<Vec<IslConstraint>>>(
@@ -101,8 +99,8 @@ impl IslType {
         }
     }
 
-    pub fn name(&self) -> &Option<String> {
-        &self.name
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
     }
 
     pub fn constraints(&self) -> &[IslConstraint] {
@@ -217,23 +215,23 @@ impl IslType {
     }
 }
 
-impl WriteToIsl for IslType {
-    fn write_to<W: IonWriter>(&self, writer: &mut W) -> IonSchemaResult<()> {
-        writer.set_annotations(["type"]);
-        writer.step_in(IonType::Struct)?;
-        writer.set_field_name("name");
-        let _ = self
-            .name
-            .as_ref()
-            .map(|name| writer.write_symbol(name))
-            .ok_or(invalid_schema_error_raw(
-                "Top level type definitions must contain a `name` field",
-            ))?;
-        for constraint in self.constraints() {
-            constraint.constraint_value.write_to(writer)?;
+impl WriteAsIon for IslType {
+    fn write_as_ion<V: ValueWriter>(&self, writer: V) -> IonResult<()> {
+        let mut struct_writer = writer.with_annotations(["type"])?.struct_writer()?;
+
+        if let Some(name) = self.name.as_ref() {
+            struct_writer
+                .field_writer("name")
+                .write_symbol(name.as_str())?;
         }
-        writer.step_out()?;
-        Ok(())
+
+        for constraint in self.constraints() {
+            let constraint_name = constraint.constraint().field_name();
+            struct_writer
+                .field_writer(constraint_name)
+                .write(constraint.constraint())?;
+        }
+        struct_writer.close()
     }
 }
 
