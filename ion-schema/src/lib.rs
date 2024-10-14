@@ -4,9 +4,7 @@
 use crate::isl::isl_constraint::IslConstraintValue;
 use crate::isl::isl_type::IslType;
 use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
-use ion_rs::{
-    Element, IonResult, Struct, StructWriter, Symbol, ValueWriter, WriteAsIon,
-};
+use ion_rs::{Element, IonResult, Struct, StructWriter, Symbol, ValueWriter, WriteAsIon};
 use regex::Regex;
 use std::sync::OnceLock;
 
