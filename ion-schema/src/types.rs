@@ -1,5 +1,6 @@
 use crate::constraint::Constraint;
 use crate::ion_path::IonPath;
+use crate::ion_schema_element::IonSchemaElementType;
 use crate::isl::isl_constraint::IslConstraintValue;
 use crate::isl::isl_type::IslType;
 use crate::isl::IslVersion;
@@ -8,7 +9,6 @@ use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::violation::{Violation, ViolationCode};
 use crate::IonSchemaElement;
 use ion_rs::Element;
-use ion_rs::IonType;
 use ion_rs::Symbol;
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
@@ -61,11 +61,12 @@ impl TypeDefinition {
     /// use ion_schema::result::IonSchemaResult;
     /// use std::path::Path;
     /// use ion_schema::authority::MapDocumentAuthority;
+    /// use ion_schema::AsDocumentHint;
     ///
     /// fn main() -> IonSchemaResult<()> {
     ///     // create an IonSchemaElement from an Element
     ///     let owned_element: Element = 4.into();
-    ///     let document: Vec<Element> = vec![4.into(), "hello".to_string().into(), true.into()];
+    ///     let elements: Vec<Element> = vec![4.into(), "hello".to_string().into(), true.into()];
     ///
     ///     let map_authority = [
     ///         (
@@ -93,11 +94,11 @@ impl TypeDefinition {
     ///     let type_ref = schema.get_type("my_int").unwrap();
     ///
     ///     assert!(type_ref.validate(&owned_element).is_ok()); // 4 is valid for `my_int`
-    ///     assert!(type_ref.validate(&document).is_err()); // document type is invalid for `my_int` type
+    ///     assert!(type_ref.validate(elements.as_document()).is_err()); // document type is invalid for `my_int` type
     ///     Ok(())
     /// }
     /// ```
-    pub fn validate<I: Into<IonSchemaElement>>(&self, value: I) -> ValidationResult {
+    pub fn validate<'a, I: Into<IonSchemaElement<'a>>>(&self, value: I) -> ValidationResult {
         let type_def = self.type_store.get_type_by_id(self.id).unwrap();
 
         // convert given IonSchemaElement to an Element
@@ -110,7 +111,7 @@ impl TypeDefinition {
 /// Represents a [`BuiltInTypeDefinition`] which stores a resolved builtin ISl type using [`TypeStore`]
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum BuiltInTypeDefinition {
-    Atomic(IonType, Nullability),
+    Atomic(IonSchemaElementType, Nullability),
     Derived(TypeDefinitionImpl),
 }
 
@@ -174,58 +175,29 @@ impl TypeValidator for BuiltInTypeDefinition {
     ) -> ValidationResult {
         match &self {
             BuiltInTypeDefinition::Atomic(ion_type, is_nullable) => {
-                // atomic types doesn't include document type
-                match value.as_element() {
-                    Some(element) => {
-                        if *is_nullable == Nullability::NotNullable && element.is_null() {
-                            return Err(Violation::new(
-                                "type_constraint",
-                                ViolationCode::InvalidNull,
-                                format!("expected type {ion_type:?} doesn't allow null"),
-                                ion_path,
-                            ));
-                        }
-                        if element.ion_type() != *ion_type {
-                            return Err(Violation::new(
-                                "type_constraint",
-                                ViolationCode::TypeMismatched,
-                                format!(
-                                    "expected type {:?}, found {:?}",
-                                    ion_type,
-                                    element.ion_type()
-                                ),
-                                ion_path,
-                            ));
-                        }
-
-                        Ok(())
-                    }
-                    _ => Err(Violation::new(
+                if *is_nullable == Nullability::NotNullable && value.is_null() {
+                    return Err(Violation::new(
+                        "type_constraint",
+                        ViolationCode::InvalidNull,
+                        format!("expected type {ion_type:?} doesn't allow null"),
+                        ion_path,
+                    ));
+                }
+                if value.ion_schema_type() != *ion_type {
+                    return Err(Violation::new(
                         "type_constraint",
                         ViolationCode::TypeMismatched,
-                        format!("expected type {ion_type:?}, found document"),
+                        format!(
+                            "expected type {:?}, found {:?}",
+                            ion_type,
+                            value.ion_schema_type()
+                        ),
                         ion_path,
-                    )),
+                    ));
                 }
+                Ok(())
             }
             BuiltInTypeDefinition::Derived(other_type) => {
-                if other_type.name() == &Some("document".to_owned()) {
-                    // Verify whether the given derived type is document
-                    // And check if it is using enum variant IonSchemaIonElement::Document
-                    if Option::is_none(&value.as_document()) {
-                        return Err(Violation::new(
-                            "type_constraint",
-                            ViolationCode::TypeMismatched,
-                            format!(
-                                "expected type document found {:?}",
-                                value.as_element().unwrap().ion_type()
-                            ),
-                            ion_path,
-                        ));
-                    }
-                    return Ok(());
-                }
-                // if it is not a document type do validation using the type definition
                 other_type.validate(value, type_store, ion_path)
             }
         }

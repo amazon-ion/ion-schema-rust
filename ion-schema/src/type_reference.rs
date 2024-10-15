@@ -4,7 +4,7 @@ use crate::isl::ranges::UsizeRange;
 use crate::result::ValidationResult;
 use crate::system::{TypeId, TypeStore};
 use crate::types::TypeValidator;
-use crate::IonSchemaElement;
+use crate::{IonSchemaElement, IonSchemaElementType};
 use ion_rs::IonType;
 
 /// Provides reference to a type definition.
@@ -60,10 +60,8 @@ impl TypeValidator for TypeReference {
                 }
             }
             NullOr => {
-                if let IonSchemaElement::SingleElement(element) = value {
-                    if element.ion_type() == IonType::Null {
-                        return Ok(());
-                    }
+                if value.ion_schema_type() == IonSchemaElementType::Null {
+                    return Ok(());
                 }
             }
             Nothing => {}

@@ -1,13 +1,12 @@
 use ion_schema::authority::{DocumentAuthority, MapDocumentAuthority};
 
-use ion_schema::external::ion_rs::IonResult;
-use ion_schema::external::ion_rs::{Element, Sequence};
+use ion_rs::{Element, IonResult, Sequence};
 use ion_schema::result::IonSchemaResult;
 use ion_schema::schema::Schema;
 use ion_schema::system::SchemaSystem;
 use ion_schema::types::TypeDefinition;
 use ion_schema::violation::Violation;
-use ion_schema::IonSchemaElement;
+use ion_schema::AsDocumentHint;
 use js_sys::Array;
 use serde::{Deserialize, Serialize};
 use serde_wasm_bindgen::to_value;
@@ -171,13 +170,12 @@ pub fn validate(
     );
 
     // get Element from given ion text
-    let values_result = load_all(ion);
 
-    let value = match values_result {
-        Ok(v) if is_document => {
-            IonSchemaElement::Document(v.iter().map(|it| it.to_owned()).collect())
+    let value = match load_all(ion) {
+        Ok(v) => {
+            log!("loaded ion value successfully!");
+            v
         }
-        Ok(v) => IonSchemaElement::SingleElement(v.get(0).unwrap().to_owned()),
         Err(_) => {
             return SchemaValidationResult::new(
                 false,
@@ -189,10 +187,21 @@ pub fn validate(
         }
     };
 
-    log!("loaded ion value successfully!");
-
-    // Validate data based on `schema_type`
-    let result = type_ref.validate(value.to_owned());
+    let result = if is_document {
+        type_ref.validate(value.as_document())
+    } else {
+        if value.len() != 1 {
+            return SchemaValidationResult::new(
+                false,
+                Array::new(),
+                ion.to_string(),
+                true,
+                "More than one Ion value provided but validating as document is not selected"
+                    .to_string(),
+            );
+        }
+        type_ref.validate(value.get(0).unwrap())
+    };
 
     log!("validation complete!");
 
