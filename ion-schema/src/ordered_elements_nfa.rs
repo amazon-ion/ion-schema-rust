@@ -28,6 +28,51 @@
 //! of `(state_id, visit_count)` pairs. For something that accepts a theoretically infinite input
 //! sequence (as above), this could result in an infinite number of parallel states, but in practice
 //! the number of possible states is bounded by the length of the input.
+//!
+//! Our state machine has the following rules that specify the edges between states.
+//! * Every state (type ref in `ordered_elements`) must have an edge to the next state in the list
+//! * If a state has a max occurs >1, then it has an edge to itself
+//! * If a state `n` has a min occurs of 0, then any states with an edge to state `n` also have
+//!   an edge to state `n+1` (to be able to skip the optional state).
+//!
+//! For example, suppose we have the following `ordered_elements` constraint:
+//! ```ion
+//! {
+//!   ordered_elements: [
+//!     /*A*/ bool,
+//!     /*B*/ { occurs: optional, type: int },
+//!     /*C*/ float,
+//!     /*D*/ { occurs: range::[1, 2], type: string }
+//!     /*E*/ decimal,
+//!   ]
+//! }
+//! ```
+//! * `A` is required, so `Initial` only has a single edge to `A`.
+//! * `A` has an edge to `B`, but because `B` is optional, we could skip it and go straight from
+//!   `A` to `C`. `C` is required, so we cannot skip it and there are no edges from `A` to
+//!   `D` or anything else past `C`.
+//! * `B` has a single edge to `C`.
+//! * `C` has a single edge to `D`.
+//! * `D` has an edge to `E`, but because `D` has a max occurs that is >1, `D` also has an edge
+//!   back to itself.
+//! * `E` has a single edge to `Final`.
+//!
+//! Thus, the adjacency list ends up being:
+//! ```text
+//! Initial -> A
+//!       A -> B
+//!       A -> C
+//!       B -> C
+//!       C -> D
+//!       D -> D
+//!       D -> E
+//!       E -> Final
+//! ```
+//!
+//! A corollary of these rules is that set of edges out of state `i` must have destinations that
+//! are a contiguous range from either `i` or `i+1` to `j` where `j > i`. This ends up being useful
+//! because we can model the set of all edges from a particular state as a `Range` rather than a
+//! list of destinations.
 
 use crate::ion_path::{IonPath, IonPathElement};
 use crate::result::ValidationResult;
@@ -69,9 +114,8 @@ pub struct OrderedElementsNfa {
     states: Vec<State>,
     /// An adjacency list describing the directed edges between `states`.
     ///
-    /// Because the `ordered_elements` constraint does not have any sub-sequence grouping, all
-    /// outgoing edges must have consecutively numbered destinations—so we can model the edges as a
-    /// map of `from_id` (the index in the vec) to a `Range` of `StateId`.
+    /// Because all outgoing edges must have consecutively numbered destinations, we can model the
+    /// edges as a map of `from_id` (the index in the vec) to a `Range` of `StateId` destinations.
     edges: Vec<RangeInclusive<usize>>,
     /// Stores the [StateId] of the final state (packaged into a [StateVisitCount]) for convenience.
     /// When running the state machine, if the set of current states contains this `StateVisitCount`,
