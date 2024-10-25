@@ -12,7 +12,7 @@ use crate::isl::util::{
 };
 use crate::isl::IslVersion;
 use crate::isl_require;
-use crate::nfa::{FinalState, NfaBuilder, NfaEvaluation};
+use crate::ordered_elements_nfa::OrderedElementsNfa;
 use crate::result::{
     invalid_schema_error, invalid_schema_error_raw, IonSchemaResult, ValidationResult,
 };
@@ -32,7 +32,6 @@ use std::fmt::{Display, Formatter};
 use std::iter::Peekable;
 use std::ops::Neg;
 use std::str::Chars;
-use std::sync::Arc;
 
 /// Provides validation for schema Constraint
 pub trait ConstraintValidator {
@@ -779,114 +778,40 @@ impl ConstraintValidator for TypeConstraint {
 /// [ordered_elements]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#ordered_elements
 #[derive(Debug, Clone, PartialEq)]
 pub struct OrderedElementsConstraint {
-    type_references: Vec<VariablyOccurringTypeRef>,
+    nfa: OrderedElementsNfa,
 }
 
 impl OrderedElementsConstraint {
     pub fn new(type_references: Vec<VariablyOccurringTypeRef>) -> Self {
-        Self { type_references }
+        let states: Vec<_> = type_references
+            .into_iter()
+            // TODO: See if we can potentially add a more informative description.
+            .map(|ty| (ty, None))
+            .collect();
+        OrderedElementsConstraint {
+            nfa: OrderedElementsNfa::new(states),
+        }
     }
 
-    /// Tries to create an [OrderedElements] constraint from the given Element
     fn resolve_from_isl_constraint(
         isl_version: IslVersion,
         type_references: &[IslVariablyOccurringTypeRef],
         type_store: &mut TypeStore,
         pending_types: &mut PendingTypes,
     ) -> IonSchemaResult<Self> {
-        let resolved_types: Vec<VariablyOccurringTypeRef> = type_references
+        let resolved_types = type_references
             .iter()
-            .map(|t|
+            .map(|t| {
                 // resolve type references and create variably occurring type reference with occurs range
-                t.resolve_type_reference(isl_version, type_store, pending_types))
-            .collect::<IonSchemaResult<Vec<VariablyOccurringTypeRef>>>()?;
+                let var_type_ref = t.resolve_type_reference(isl_version, type_store, pending_types);
+                // TODO: See if we can potentially add a more informative description.
+                var_type_ref.map(|it| (it, None))
+            })
+            .collect::<IonSchemaResult<Vec<_>>>()?;
 
-        Ok(OrderedElementsConstraint::new(resolved_types))
-    }
-
-    // Builds an NFA state machine based on given type_ids. This is a limited form of NFA where state machine is linear and every transition either leads to itself or the next state.
-    //
-    // All the states has some transitions between them leading from one state to another or back to itself.
-    // All the states that have a minimum occurrence of 0 are optional states, meaning those states can lead to another state with 0 occurrence event transitions.
-    // There are two special cases of transition that need to be handled.
-    // For any state whose corresponding `type_id` has an `occurs` where:
-    //   * `max >= 2`, that state will have a transition back to itself, allowing for repetition.
-    //   * `min == 0`, that state will have a transition that advances to the next state automatically, making an occurrence of that `type_id` optional.
-    //
-    // Here is an example of how the built NFA would look like for an `ordered_elements` constraint:
-    // ```ion
-    // ordered_elements: [
-    //     { type: int, occurs: optional },
-    //     number,
-    //     any
-    // ]
-    // ```
-    // NFA:
-    //                              +--------- 0 -----------+
-    //                              |                       |
-    //                              |                       V
-    // I(INITIAL) ----> S1(INTERMEDIATE(0, 1)) -- 1 --> S2(INTERMEDIATE(1, 1)) -- 1 --> S3(INTERMEDIATE(1, 1)) ----> F(FINAL)
-    //
-    // Validation:
-    // Valid input value: `[1, 2, 3]`
-    // +------------------------------+
-    // | event  | State Visits        |
-    // +------------------------------+
-    // |   -    |  I: 1               |
-    // |   1    |  S1: 1, S2: 1       |
-    // |   2    |  S2: 1, S3: 1       |
-    // |   3    |  S3: 1              |
-    // |   END  |  F: 1               |
-    // +------------------------------+
-    //
-    // Invalid input value: `[1, 2]`
-    // +------------------------------+
-    // | event  | State Visits        |
-    // +------------------------------+
-    // |   -    |  I: 1               |
-    // |   1    |  S1: 1, S2: 1       |
-    // |   2    |  S2: 1, S3: 1       |
-    // |   END  |  S3: 1              |
-    // +------------------------------+
-    // As shown above visit count for `END` doesn't have final state in it which means the value resulted to be invalid.
-    //
-    fn build_nfa_from_type_references(
-        type_ids: &[VariablyOccurringTypeRef],
-        type_store: &TypeStore,
-    ) -> NfaEvaluation {
-        let mut nfa_builder = NfaBuilder::new();
-        let mut final_states = HashSet::new();
-        for (state_id, variably_occurring_type_reference) in type_ids.iter().enumerate() {
-            let type_reference = variably_occurring_type_reference.type_ref();
-            let (min, max) = variably_occurring_type_reference
-                .occurs_range()
-                .inclusive_endpoints();
-
-            // if the current state is required then that is the only final state till now
-            if min > 0 {
-                // remove all previous final states
-                final_states.clear();
-            }
-
-            // add current state as final state to NFA
-            final_states.insert(FinalState::new(state_id, min, max));
-
-            if state_id == 0 {
-                // add a transition to self for initial state
-                nfa_builder.with_transition(state_id, state_id, type_reference, min, max);
-                continue;
-            }
-
-            // add transition to next state
-            nfa_builder.with_transition(state_id - 1, state_id, type_reference, min, max);
-
-            if max > 1 {
-                // add a transition to self for states that have  max > 1
-                nfa_builder.with_transition(state_id, state_id, type_reference, min, max);
-            }
-        }
-
-        NfaEvaluation::new(Arc::new(nfa_builder.build(final_states)))
+        Ok(OrderedElementsConstraint {
+            nfa: OrderedElementsNfa::new(resolved_types),
+        })
     }
 }
 
@@ -899,8 +824,8 @@ impl ConstraintValidator for OrderedElementsConstraint {
     ) -> ValidationResult {
         let violations: Vec<Violation> = vec![];
 
-        let mut element_iter = match value.as_sequence_iter() {
-            Some(iter) => iter.peekable(),
+        let element_iter = match value.as_sequence_iter() {
+            Some(iter) => iter,
             None => {
                 return Err(Violation::with_violations(
                     "ordered_elements",
@@ -919,36 +844,7 @@ impl ConstraintValidator for OrderedElementsConstraint {
             }
         };
 
-        // build nfa for validation
-        let mut nfa_evaluation = OrderedElementsConstraint::build_nfa_from_type_references(
-            &self.type_references,
-            type_store,
-        );
-
-        if element_iter.peek().is_some() && nfa_evaluation.nfa.get_final_states().is_empty() {
-            return Err(Violation::with_violations(
-                "ordered_elements",
-                ViolationCode::TypeMismatched,
-                "one or more ordered elements didn't match",
-                ion_path,
-                violations,
-            ));
-        }
-
-        // use nfa_evaluation for validation
-        nfa_evaluation.validate_ordered_elements(element_iter, type_store);
-
-        if !nfa_evaluation.has_final_state(type_store) {
-            return Err(Violation::with_violations(
-                "ordered_elements",
-                ViolationCode::TypeMismatched,
-                "one or more ordered elements didn't match",
-                ion_path,
-                violations,
-            ));
-        }
-
-        Ok(())
+        self.nfa.matches(element_iter, type_store, ion_path)
     }
 }
 

@@ -86,12 +86,30 @@ impl Violation {
     }
 }
 
-// TODO: Implement Violation with proper indentation for the nested tree of violations
 impl fmt::Display for Violation {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "A validation error occurred: {}", self.message)?;
-        for v in &self.violations {
-            write!(f, "  {v}")?;
+        f.write_str(self.message.as_str())?;
+
+        let mut stack = vec![];
+        let mut violations_iter = self.violations.iter();
+        let mut violation = violations_iter.next();
+
+        while let Some(v) = violation {
+            f.write_fmt(format_args!(
+                "\n{}- {}",
+                "  ".repeat(stack.len() + 1),
+                v.message
+            ))?;
+
+            if !v.violations.is_empty() {
+                stack.push(violations_iter);
+                violations_iter = v.violations.iter();
+            }
+            violation = violations_iter.next();
+            while violation.is_none() && !stack.is_empty() {
+                violations_iter = stack.pop().unwrap();
+                violation = violations_iter.next();
+            }
         }
         Ok(())
     }

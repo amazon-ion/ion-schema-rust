@@ -29,7 +29,7 @@ pub(crate) mod ion_extension;
 mod ion_path;
 mod ion_schema_element;
 pub mod isl;
-mod nfa;
+mod ordered_elements_nfa;
 pub mod result;
 pub mod schema;
 pub mod system;
