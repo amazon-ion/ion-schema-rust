@@ -4,7 +4,8 @@
 //!
 //! > The NFA consumes a sequence of input events, one by one. In each step, whenever two or more
 //! > transitions are applicable, it "clones" itself into appropriately many copies, each one
-//! > following a different transition. If no transition is applicable, the current copy is in a
+//! > following a different transition. If exactly one transition is applicable, it follows that
+//! > transition without making any copies. If no transition is applicable, the current copy is in a
 //! > dead end, and it "dies". If, after consuming the complete input, any of the copies is in an
 //! > accept state, the input is accepted, else, it is rejected. [...]
 //! >
@@ -54,8 +55,9 @@ type StateId = usize;
 /// In the evaluation of the NFA, used for tracking which states are in the set of possible current states.
 type StateVisitCount = (StateId, usize);
 
-/// An `Event` is either some [Element] or the end-of-sequence (i.e. [Option::None]).
-type Event<'a> = Option<&'a Element>;
+/// Represents an event in the input sequence—it is either some [Element] or the end-of-sequence
+/// marker (i.e. [Option::None]).
+type ElementOrEndOfSequence<'a> = Option<&'a Element>;
 
 /// The compiled state machine for an `ordered_elements` constraint.
 ///
@@ -72,6 +74,8 @@ pub struct OrderedElementsNfa {
     /// map of `from_id` (the index in the vec) to a `Range` of `StateId`.
     edges: Vec<RangeInclusive<usize>>,
     /// Stores the [StateId] of the final state (packaged into a [StateVisitCount]) for convenience.
+    /// When running the state machine, if the set of current states contains this `StateVisitCount`,
+    /// we are done evaluating, and the input was accepted by the state machine.
     terminal_state: StateVisitCount,
 }
 
@@ -79,9 +83,12 @@ impl OrderedElementsNfa {
     /// Constructs an [OrderedElementsNfa] from a [Vec] of pairs of [VariablyOccurringTypeRef] and
     /// an optional string description.
     ///
-    /// If no description is provided, a default is used. If a description is provided, it should
-    /// be something that is recognizable to users, such as a row/col in the source ISL or a snippet
-    /// of the source ISL.
+    /// The description is a human friendly string that goes into the violation messages to describe
+    /// which entry in the `ordered_elements` constraint is producing the violation. If a
+    /// description is provided, it should be something that is recognizable to users, such as a
+    /// row/col in the source ISL or a snippet of the source ISL.
+    /// If no description is provided, the default is `<ELEMENT[i]>`, where `i` is the index in the
+    /// `ordered_element` constraint's list of variably occurring type references.
     pub fn new(intermediate_states: Vec<(VariablyOccurringTypeRef, Option<String>)>) -> Self {
         // "Initial" state is always first—no surprise there.
         let mut states = vec![State::Initial];
@@ -91,7 +98,8 @@ impl OrderedElementsNfa {
             .into_iter()
             .enumerate()
             .for_each(|(i, (var_type_ref, description))| {
-                let description = description.unwrap_or(format!("<ORDERED_ELEMENT[{}]>", i));
+                let description =
+                    description.unwrap_or_else(|| format!("<ORDERED_ELEMENT[{}]>", i));
                 let (min_visits, max_visits) = var_type_ref.occurs_range().inclusive_endpoints();
                 let state = IntermediateState {
                     type_ref: var_type_ref.type_ref(),
@@ -116,8 +124,7 @@ impl OrderedElementsNfa {
             // Add transitions forward up to (including) the first type with a min occurs that is greater than 0
             let mut j = i + 1;
             while j < max_id {
-                let state_j = states.get(j).unwrap();
-                if !state_j.can_exit(0) {
+                if !states[j].can_exit(0) {
                     break;
                 }
                 j += 1;
@@ -125,12 +132,7 @@ impl OrderedElementsNfa {
             edges.push(min_transition..=j)
         }
 
-        // We make `Final` have fake edges to `Initial`. `Initial` denies all entry and `Final`
-        // doesn't allow exiting, so it's not actually traversable, and besides, you can't enter
-        // `Final` unless you're at the end-of-sequence event, so there's no more input to handle
-        // that would make it even try any further transitions.
         states.push(State::Final(max_id));
-        edges.push(0..=0);
 
         // Terminal state is the Final state with a visit count of 1.
         let terminal_state: StateVisitCount = (max_id, 1usize);
@@ -157,22 +159,28 @@ impl OrderedElementsNfa {
 
         // Essentially, for-each input, but we want to capture the `Option::None` at the end of the iterator.
         loop {
-            let element: Event = iter.next();
+            let element: ElementOrEndOfSequence = iter.next();
             let mut invalid_transitions: HashSet<TraversalError> = HashSet::new();
 
             ion_path.push(IonPathElement::Index(input_index));
 
             // For each state in the set of current states...
             for &(from_state_id, num_visits) in &current_state_set {
-                let from_state = self.states.get(from_state_id).unwrap();
+                let from_state = &self.states[from_state_id];
 
-                // Need to clone the range because strangely &RangeInclusive doesn't
-                // implement Copy or IntoIterator.
-                let edges = self.edges.get(from_state_id).unwrap().clone();
+                let edges = if let Some(edges) = self.edges.get(from_state_id) {
+                    // Need to clone the range because strangely &RangeInclusive doesn't
+                    // implement Copy or IntoIterator.
+                    edges.clone()
+                } else {
+                    // The only state without edges is `Final`, which cannot be exited.
+                    invalid_transitions.insert(TraversalError::CannotExitState(from_state_id));
+                    break;
+                };
 
                 // For each edge out of the current state we are inspecting...
                 for to_state_id in edges {
-                    let to_state: &State = self.states.get(to_state_id).unwrap();
+                    let to_state: &State = &self.states[to_state_id];
 
                     let can_reenter = from_state.can_reenter(num_visits);
                     let can_exit = from_state.can_exit(num_visits);
@@ -223,7 +231,7 @@ impl OrderedElementsNfa {
     /// Build a [Violation] out of the set of [TraversalError]s.
     fn build_violation(
         &self,
-        event: Event,
+        event: ElementOrEndOfSequence,
         ion_path: &mut IonPath,
         invalid_transitions: HashSet<TraversalError>,
     ) -> Violation {
@@ -235,22 +243,19 @@ impl OrderedElementsNfa {
                 TraversalError::CannotExitState(s) => Violation::new(
                     "ordered_elements",
                     ViolationCode::ElementMismatched,
-                    format!("{}: min occurs not reached", self.states.get(s).unwrap()),
+                    format!("{}: min occurs not reached", &self.states[s]),
                     ion_path,
                 ),
                 TraversalError::CannotReEnterState(s) => Violation::new(
                     "ordered_elements",
                     ViolationCode::ElementMismatched,
-                    format!(
-                        "{}: max occurs already reached",
-                        self.states.get(s).unwrap()
-                    ),
+                    format!("{}: max occurs already reached", &self.states[s],),
                     ion_path,
                 ),
                 TraversalError::CannotEnterState(s, v) => Violation::with_violations(
                     "ordered_elements",
                     ViolationCode::ElementMismatched,
-                    format!("{}: does not match type", self.states.get(s).unwrap(),),
+                    format!("{}: does not match type", &self.states[s]),
                     ion_path,
                     vec![v],
                 ),
@@ -267,7 +272,7 @@ impl OrderedElementsNfa {
                 index,
                 event
                     .map(Element::to_string)
-                    .unwrap_or("<END_OF_INPUT>".to_string())
+                    .unwrap_or_else(|| "<END_OF_INPUT>".to_string())
             ),
             ion_path,
             reasons,

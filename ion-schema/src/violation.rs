@@ -94,16 +94,23 @@ impl fmt::Display for Violation {
         let mut violations_iter = self.violations.iter();
         let mut violation = violations_iter.next();
 
+        let one_indent = "  ";
+        // TODO: Consider extracting this into a static or thread local variable.
+        let mut indentation = vec![one_indent.to_string()];
+
         while let Some(v) = violation {
             f.write_fmt(format_args!(
                 "\n{}- {}",
-                "  ".repeat(stack.len() + 1),
+                indentation[stack.len()],
                 v.message
             ))?;
 
             if !v.violations.is_empty() {
                 stack.push(violations_iter);
                 violations_iter = v.violations.iter();
+                while indentation.len() < stack.len() {
+                    indentation.push(one_indent.repeat(stack.len()))
+                }
             }
             violation = violations_iter.next();
             while violation.is_none() && !stack.is_empty() {
