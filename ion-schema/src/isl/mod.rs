@@ -294,7 +294,7 @@ impl WriteAsIon for SchemaContent {
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
-struct SchemaHeader {
+pub struct SchemaHeader {
     /// Represents the user defined reserved fields
     user_reserved_fields: UserReservedFields,
     /// Represents all the IslImports inside the schema file.
@@ -327,7 +327,7 @@ impl WriteAsIon for SchemaHeader {
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
-struct SchemaFooter {
+pub struct SchemaFooter {
     /// User-defined (aka "open") content
     user_content: Vec<(String, Element)>,
 }
