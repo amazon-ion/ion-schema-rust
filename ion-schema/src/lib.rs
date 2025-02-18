@@ -37,7 +37,12 @@ mod type_reference;
 pub mod types;
 pub mod violation;
 
+mod ion_schema_version;
+mod violation_recorder;
+
 pub use ion_schema_element::*;
+pub use ion_schema_version::*;
+pub use violation_recorder::*;
 
 static ISL_VERSION_MARKER_REGEX: OnceLock<Regex> = OnceLock::new();
 static RESERVED_WORD_REGEX: OnceLock<Regex> = OnceLock::new();
