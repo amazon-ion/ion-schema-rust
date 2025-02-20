@@ -1,7 +1,7 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::constraint::Constraint;
+use crate::model::constraints::AnyConstraintRef;
 use crate::IonSchemaElement;
 use std::ops::ControlFlow;
 
@@ -61,7 +61,7 @@ pub trait ViolationRecorder<'a> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ViolationInfo<'a> {
     /// The constraint that was violated.
-    constraint: &'a Constraint,
+    constraint: AnyConstraintRef<'a>,
     /// The value that failed to satisfy the constraint.
     value: IonSchemaElement<'a>,
     /// A human-readable description of why the value violated the constraint.
@@ -72,7 +72,7 @@ pub struct ViolationInfo<'a> {
 
 impl<'a> ViolationInfo<'a> {
     pub(crate) fn new(
-        constraint: &'a Constraint,
+        constraint: AnyConstraintRef<'a>,
         value: IonSchemaElement<'a>,
         message: String,
     ) -> Self {
@@ -86,8 +86,8 @@ impl<'a> ViolationInfo<'a> {
     /// Returns a reference to the constraint that was violated.
     ///
     /// This can be useful for programmatically categorizing or filtering violations.
-    pub fn constraint(&self) -> &'a Constraint {
-        self.constraint
+    pub fn constraint(&self) -> &AnyConstraintRef {
+        &self.constraint
     }
 
     /// Returns a reference to the value that failed validation.
@@ -125,20 +125,24 @@ impl<'a> ViolationRecorder<'a> for Vec<ViolationInfo<'a>> {
 }
 
 mod tests {
-    use crate::constraint::{AllOfConstraint, Constraint};
+    use crate::model::constraints::AnyConstraintRef;
     use crate::violation_recorder::{ViolationInfo, ViolationRecorder};
-    use crate::IonSchemaElement;
+    use crate::{model, IonSchemaElement};
     use ion_rs::Element;
+    use model::constraints::{AnnotationsV2Modifier, AnnotationsV2Simple};
     use std::ops::ControlFlow;
 
     #[test]
     fn impl_violation_recorder_for_vec_violation_info() {
         let mut recorder: Vec<ViolationInfo> = vec![];
 
-        let constraint = Constraint::AllOf(AllOfConstraint::new(vec![]));
+        let constraint = AnnotationsV2Simple {
+            modifier: AnnotationsV2Modifier::Closed,
+            annotations: vec![],
+        };
         let element = Element::string("hello world");
         let vi = ViolationInfo::new(
-            &constraint,
+            AnyConstraintRef::AnnotationsV2Simple(&constraint),
             IonSchemaElement::from(&element),
             "fake violation".to_string(),
         );
@@ -156,10 +160,13 @@ mod tests {
     fn impl_violation_recorder_for_option_violation_info() {
         let mut recorder: Option<ViolationInfo> = None;
 
-        let constraint = Constraint::AllOf(AllOfConstraint::new(vec![]));
+        let constraint = AnnotationsV2Simple {
+            modifier: AnnotationsV2Modifier::Closed,
+            annotations: vec![],
+        };
         let element = Element::string("hello world");
         let mut vi = ViolationInfo::new(
-            &constraint,
+            AnyConstraintRef::AnnotationsV2Simple(&constraint),
             IonSchemaElement::from(&element),
             "fake violation".to_string(),
         );

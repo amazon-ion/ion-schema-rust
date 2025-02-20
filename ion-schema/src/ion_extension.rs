@@ -1,4 +1,4 @@
-use ion_rs::Decimal;
+use ion_rs::{Decimal, IonResult, Symbol};
 use ion_rs::{Element, Value};
 use num_traits::ToPrimitive;
 
@@ -34,6 +34,21 @@ impl ElementExtensions for Element {
             Value::Float(f) => (*f).try_into().ok(),
             Value::Decimal(d) => Some(*d),
             _ => None,
+        }
+    }
+}
+
+pub(crate) trait SymbolExtensions: Sized {
+    /// Returns Err if the symbol has unknown text, otherwise returns Ok(self).
+    fn expect_known_symbol(self) -> IonResult<Self>;
+}
+
+impl SymbolExtensions for Symbol {
+    fn expect_known_symbol(self) -> IonResult<Self> {
+        let result = (&self).expect_text();
+        match result {
+            Ok(_) => Ok(self),
+            Err(e) => Err(e),
         }
     }
 }
