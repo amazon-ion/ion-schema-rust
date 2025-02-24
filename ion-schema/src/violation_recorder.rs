@@ -124,6 +124,7 @@ impl<'a> ViolationRecorder<'a> for Vec<ViolationInfo<'a>> {
     }
 }
 
+#[cfg(test)]
 mod tests {
     use crate::model::constraints::AnyConstraintRef;
     use crate::violation_recorder::{ViolationInfo, ViolationRecorder};

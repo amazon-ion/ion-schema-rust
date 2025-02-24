@@ -5,10 +5,10 @@
 //       instead of being clobbered together.
 
 use crate::result::IonSchemaResult;
+use crate::type_reference::TypeReference;
 use crate::{IonSchemaElement, IslVersion, ViolationRecorder};
 use ion_rs::{Element, ValueWriter};
 use std::ops::ControlFlow;
-use std::sync::Arc;
 
 /// For internal implementation of validation.
 ///
@@ -25,14 +25,24 @@ pub(crate) trait ValidateInternal {
     ) -> ControlFlow<()>
     where
         R: ViolationRecorder<'a>;
+}
 
-    /// Resolve any type references in preparation for validation.
-    fn resolve(&self, schema_store: &Arc<InvisibleSchemaStore>) -> IonSchemaResult<()>;
+/// Trait for visiting all the type references of things that could have type references.
+///
+/// This can be implemented for things with no type references, and if done so, the implementations
+/// of each function should be a no-op.
+trait HasTypeReferences {
+    /// Recursively visit each [TypeReference] held by self or by members of self.
+    ///
+    /// Used for:
+    ///   - Identifying references to other schemas that may need to be loaded
+    ///   - Ensuring that all references are resolvable
+    fn visit_type_references<F: FnMut(&TypeReference)>(&self, visitor: F);
 
-    /// Un-resolve all type references.
-    /// This is not strictly required, but if type reference resolution were to fail,
-    /// we should undo any changes before returning ownership to the user.
-    fn unresolve(&self);
+    /// Recursively visit each [TypeReference] held by self or by members of self.
+    ///
+    /// Used for resolving the type references.
+    fn visit_mut_type_references<F: FnMut(&mut TypeReference)>(&mut self, visitor: F);
 }
 
 // TODO: fields/functions to support
@@ -41,7 +51,7 @@ pub(crate) trait ValidateInternal {
 //  - "validate" configuration options
 pub(crate) struct ValidationContext {}
 
-pub(crate) struct InvisibleSchemaStore {
+pub(crate) struct SchemaStore {
     // TODO: This is a placeholder
 }
 

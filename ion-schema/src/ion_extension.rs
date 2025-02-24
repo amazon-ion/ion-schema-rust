@@ -45,7 +45,7 @@ pub(crate) trait SymbolExtensions: Sized {
 
 impl SymbolExtensions for Symbol {
     fn expect_known_symbol(self) -> IonResult<Self> {
-        let result = (&self).expect_text();
+        let result = self.expect_text();
         match result {
             Ok(_) => Ok(self),
             Err(e) => Err(e),

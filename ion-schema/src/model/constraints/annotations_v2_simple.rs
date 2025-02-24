@@ -9,7 +9,6 @@ use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaRes
 use crate::{IonSchemaElement, ViolationInfo, ViolationRecorder, ISL_2_0};
 use ion_rs::{Element, Symbol, ValueWriter};
 use std::ops::ControlFlow;
-use std::sync::Arc;
 
 /// Modifier for the simple syntax of Ion Schema 2.0 `annotations` constraint.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -91,7 +90,7 @@ impl ValidateInternal for AnnotationsV2Simple {
             ));
         };
 
-        let mut actual_annotations: Vec<&Symbol> = element.annotations().iter().collect();
+        let actual_annotations: Vec<&Symbol> = element.annotations().iter().collect();
 
         if self.modifier.is_closed() {
             let mut extra_anns = vec![];
@@ -125,27 +124,16 @@ impl ValidateInternal for AnnotationsV2Simple {
         }
         ControlFlow::Continue(())
     }
-
-    fn resolve(&self, schema_store: &Arc<InvisibleSchemaStore>) -> IonSchemaResult<()> {
-        Ok(())
-    }
-
-    fn unresolve(&self) { /* no-op */
-    }
 }
 
 impl WriteAsIsl<ISL_2_0> for AnnotationsV2Simple {
     fn write_as_isl<W: ValueWriter>(&self, writer: W) -> IonSchemaResult<()> {
-        let mut modifiers = vec![];
-        if self.modifier.is_closed() {
-            modifiers.push("closed")
-        }
-        if self.modifier.is_required() {
-            modifiers.push("required")
-        }
-        writer
-            .with_annotations(modifiers)?
-            .write_list(&self.annotations)?;
+        let writer = match self.modifier {
+            Closed => writer.with_annotations(["closed"]),
+            Required => writer.with_annotations(["required"]),
+            ClosedAndRequired => writer.with_annotations(["closed", "required"]),
+        }?;
+        writer.write_list(&self.annotations)?;
         Ok(())
     }
 }
@@ -185,7 +173,7 @@ impl ReadFromIsl<ISL_2_0> for AnnotationsV2Simple {
             .iter()
             .map(|el| {
                 el.expect_symbol()
-                    .map(|it| it.clone())
+                    .cloned()
                     .and_then(|symbol| symbol.expect_known_symbol())
             })
             .collect::<Result<Vec<Symbol>, _>>()?;
@@ -203,7 +191,7 @@ mod tests {
     use super::AnnotationsV2Simple;
     use crate::internal_traits::{LoaderContext, ReadFromIsl, WriteAsIsl};
     use ion_rs::v1_0::Text;
-    use ion_rs::{v1_0, Element, SequenceWriter, TextFormat, WriteConfig, Writer};
+    use ion_rs::{Element, SequenceWriter, Writer};
     use rstest::rstest;
 
     // TODO: Tests for TypeDefinitionBuilder function impl, once TypeDefinitionBuilder is further developed
@@ -219,7 +207,7 @@ mod tests {
         #[case] expected_ion: &str,
         #[case] constraint: AnnotationsV2Simple,
     ) {
-        let mut buffer = Vec::new();
+        let buffer = Vec::new();
         let mut writer = Writer::new(Text, buffer).unwrap();
         constraint.write_as_isl(writer.value_writer()).unwrap();
         let output = writer.close().unwrap();
