@@ -4,6 +4,7 @@
 // TODO: This file is a placeholder. These things will eventually be moved to more sensible locations
 //       instead of being clobbered together.
 
+use std::fmt::Debug;
 use crate::result::{invalid_schema_error, IonSchemaResult};
 use crate::type_reference::TypeReference;
 use crate::{IonSchemaElement, IslVersion, ViolationRecorder};
@@ -59,7 +60,8 @@ pub(crate) struct SchemaStore {
 /// For internal implementation of serialization.
 ///
 /// Implementations of `WriteAsIon` may delegate to this when possible.
-pub(crate) trait WriteAsIsl<V: IslVersion> {
+pub(crate) trait WriteAsIsl<V: IslVersion> : Debug
+{
     fn write_as_isl<W: ValueWriter>(
         &self,
         writer: W,
@@ -67,7 +69,7 @@ pub(crate) trait WriteAsIsl<V: IslVersion> {
     ) -> IonSchemaResult<()> {
         let (major, minor) = V::MAJOR_MINOR;
         invalid_schema_error(format!(
-            "Cannot write to Ion Schema Language {major}.{minor}"
+            "{self:?} is not supported in Ion Schema Language {major}.{minor}"
         ))
     }
 }
@@ -81,7 +83,7 @@ pub(crate) trait WriteAsIsl<V: IslVersion> {
 pub(crate) struct WriteContext<V> {
     version: PhantomData<V>,
 }
-impl<V> WriteContext<V> {
+impl<V: IslVersion> WriteContext<V> {
     pub fn new() -> Self {
         WriteContext {
             version: PhantomData::<V>,
@@ -101,7 +103,7 @@ pub(crate) trait ReadFromIsl<V: IslVersion>: Sized {
 pub(crate) struct LoaderContext<V> {
     version: PhantomData<V>,
 }
-impl<V> LoaderContext<V> {
+impl<V: IslVersion> LoaderContext<V> {
     pub fn new() -> Self {
         LoaderContext {
             version: PhantomData::<V>,
