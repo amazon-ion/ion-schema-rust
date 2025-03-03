@@ -4,11 +4,11 @@
 // TODO: This file is a placeholder. These things will eventually be moved to more sensible locations
 //       instead of being clobbered together.
 
-use std::fmt::Debug;
 use crate::result::{invalid_schema_error, IonSchemaResult};
 use crate::type_reference::TypeReference;
 use crate::{IonSchemaElement, IslVersion, ViolationRecorder};
 use ion_rs::{Element, ValueWriter};
+use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::ControlFlow;
 
@@ -60,8 +60,7 @@ pub(crate) struct SchemaStore {
 /// For internal implementation of serialization.
 ///
 /// Implementations of `WriteAsIon` may delegate to this when possible.
-pub(crate) trait WriteAsIsl<V: IslVersion> : Debug
-{
+pub(crate) trait WriteAsIsl<V: IslVersion>: Debug {
     fn write_as_isl<W: ValueWriter>(
         &self,
         writer: W,
