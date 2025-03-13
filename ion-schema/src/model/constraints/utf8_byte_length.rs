@@ -4,7 +4,7 @@
 use crate::internal_traits::{
     LoaderContext, ReadFromIsl, ValidateInternal, ValidationContext, WriteAsIsl, WriteContext,
 };
-use crate::model::constraints::ConstraintName;
+use crate::model::constraints::{ConstraintName, ReadConstraint};
 use crate::model::ranges::IonSchemaRange;
 use crate::model::TypeDefinitionBuilder;
 use crate::result::IonSchemaResult;
@@ -38,10 +38,9 @@ impl ConstraintName for Utf8ByteLength {
 }
 
 impl<V: IslVersion> TypeDefinitionBuilder<V> {
-    pub fn utf8_byte_length<T: Into<IonSchemaRange<usize>>>(mut self, range: T) -> Self {
+    pub fn utf8_byte_length<T: Into<IonSchemaRange<usize>>>(self, range: T) -> Self {
         let constraint = Utf8ByteLength::new(range.into());
-        self.constraints.push(constraint.into());
-        self
+        self.with_constraint(constraint.into())
     }
 }
 
@@ -90,10 +89,10 @@ impl<V: IslVersion> WriteAsIsl<V> for Utf8ByteLength {
     }
 }
 
-impl<V: IslVersion> ReadFromIsl<V> for Utf8ByteLength {
-    fn try_read(ion: &Element, ctx: &LoaderContext<V>) -> IonSchemaResult<Self> {
+impl<V: IslVersion> ReadConstraint<V> for Utf8ByteLength {
+    fn read_constraint(ion: &Element, ctx: &LoaderContext<V>) -> IonSchemaResult<Option<Self>> {
         let range = IonSchemaRange::try_read(ion, ctx)?;
-        Ok(Utf8ByteLength { range })
+        Ok(Some(Utf8ByteLength { range }))
     }
 }
 

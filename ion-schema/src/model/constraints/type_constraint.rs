@@ -4,9 +4,10 @@
 use crate::internal_traits::{
     LoaderContext, ReadFromIsl, ValidateInternal, ValidationContext, WriteAsIsl, WriteContext,
 };
-use crate::model::constraints::ConstraintName;
-use crate::model::type_argument::{TypeArgument, TypeArgumentBuilder};
-use crate::model::TypeDefinitionBuilder;
+use crate::ion_schema_version::Versioned;
+use crate::model::constraints::{ConstraintName, ReadConstraint};
+use crate::model::type_argument::TypeArgument;
+use crate::model::{TypeDefinition, TypeDefinitionBuilder, VersionedTypeArgument};
 use crate::result::IonSchemaResult;
 use crate::{IonSchemaElement, IslVersion, ViolationRecorder};
 use ion_rs::{Element, ValueWriter};
@@ -42,10 +43,11 @@ impl ConstraintName for TypeConstraint {
 }
 
 impl<V: IslVersion> TypeDefinitionBuilder<V> {
-    pub fn type_constraint(mut self, type_argument: TypeArgument) -> Self {
-        let constraint = TypeConstraint { type_argument };
-        self.constraints.push(constraint.into());
-        self
+    pub fn type_constraint(self, type_argument: VersionedTypeArgument<V>) -> Self {
+        let constraint = TypeConstraint {
+            type_argument: Versioned::into_inner(type_argument),
+        };
+        self.with_constraint(constraint.into())
     }
 }
 
@@ -76,14 +78,14 @@ where
     }
 }
 
-impl<V: IslVersion> ReadFromIsl<V> for TypeConstraint
+impl<V: IslVersion> ReadConstraint<V> for TypeConstraint
 where
-    TypeArgumentBuilder<V>: ReadFromIsl<V>,
+    TypeDefinition: ReadFromIsl<V>,
 {
-    fn try_read(ion: &Element, ctx: &LoaderContext<V>) -> IonSchemaResult<Self> {
-        Ok(TypeConstraint {
-            type_argument: TypeArgumentBuilder::try_read(ion, ctx)?.build(),
-        })
+    fn read_constraint(ion: &Element, ctx: &LoaderContext<V>) -> IonSchemaResult<Option<Self>> {
+        Ok(Some(TypeConstraint {
+            type_argument: TypeArgument::try_read(ion, ctx)?,
+        }))
     }
 }
 

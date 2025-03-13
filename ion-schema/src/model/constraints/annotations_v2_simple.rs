@@ -4,7 +4,7 @@
 use crate::internal_traits::*;
 use crate::ion_extension::SymbolExtensions;
 use crate::model::constraints::AnnotationsV2Modifier::{Closed, ClosedAndRequired, Required};
-use crate::model::constraints::ConstraintName;
+use crate::model::constraints::{ConstraintName, ReadConstraint};
 use crate::model::TypeDefinitionBuilder;
 use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
 use crate::{IonSchemaElement, ViolationInfo, ViolationRecorder, ISL_1_0, ISL_2_0};
@@ -72,7 +72,7 @@ impl TypeDefinitionBuilder<ISL_2_0> {
     ///
     /// For standard syntax, see [annotations_type].
     pub fn annotations<S: Into<Symbol>, T: IntoIterator<Item = S>>(
-        mut self,
+        self,
         modifier: AnnotationsV2Modifier,
         annotations: T,
     ) -> Self {
@@ -80,8 +80,7 @@ impl TypeDefinitionBuilder<ISL_2_0> {
             modifier,
             annotations: annotations.into_iter().map(Into::into).collect(),
         };
-        self.constraints.push(constraint.into());
-        self
+        self.with_constraint(constraint.into())
     }
 }
 
@@ -158,8 +157,13 @@ impl WriteAsIsl<ISL_2_0> for AnnotationsV2Simple {
     }
 }
 
-impl ReadFromIsl<ISL_2_0> for AnnotationsV2Simple {
-    fn try_read(ion: &Element, ctx: &LoaderContext<ISL_2_0>) -> IonSchemaResult<Self> {
+impl ReadConstraint<ISL_1_0> for AnnotationsV2Simple {}
+
+impl ReadConstraint<ISL_2_0> for AnnotationsV2Simple {
+    fn read_constraint(
+        ion: &Element,
+        ctx: &LoaderContext<ISL_2_0>,
+    ) -> IonSchemaResult<Option<Self>> {
         let required = ion.annotations().contains("required");
         let closed = ion.annotations().contains("closed");
         let annotations_len = ion.annotations().len();
@@ -198,18 +202,17 @@ impl ReadFromIsl<ISL_2_0> for AnnotationsV2Simple {
             })
             .collect::<Result<Vec<Symbol>, _>>()?;
 
-        Ok(AnnotationsV2Simple {
+        Ok(Some(AnnotationsV2Simple {
             modifier,
             annotations,
-        })
+        }))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::AnnotationsV2Modifier;
-    use super::AnnotationsV2Simple;
-    use crate::internal_traits::{LoaderContext, ReadFromIsl, WriteAsIsl, WriteContext};
+    use super::*;
+    use crate::internal_traits::{LoaderContext, WriteAsIsl, WriteContext};
     use crate::ISL_2_0;
     use ion_rs::v1_0::Text;
     use ion_rs::{Element, SequenceWriter, Writer};
@@ -248,9 +251,9 @@ mod tests {
     #[case::empty_annotation_list("closed::[]", AnnotationsV2Simple::new(AnnotationsV2Modifier::Closed, Vec::<String>::new()))]
     fn annotations_v2_simple_try_read_ok(#[case] ion: &str, #[case] expected: AnnotationsV2Simple) {
         let element = Element::read_one(ion).unwrap();
-        let load_ctx = LoaderContext::new();
-        let result = AnnotationsV2Simple::try_read(&element, &load_ctx);
-        assert_eq!(result, Ok(expected))
+        let load_ctx = LoaderContext::<ISL_2_0>::new();
+        let result = AnnotationsV2Simple::read_constraint(&element, &load_ctx);
+        assert_eq!(result, Ok(Some(expected)))
     }
 
     #[rstest]
@@ -264,8 +267,8 @@ mod tests {
     #[case::annotations_cannot_have_unknown_text("required::[$0]")]
     fn annotations_v2_simple_try_read_err(#[case] ion: &str) {
         let element = Element::read_one(ion).unwrap();
-        let load_ctx = LoaderContext::new();
-        let result = AnnotationsV2Simple::try_read(&element, &load_ctx);
+        let load_ctx = LoaderContext::<ISL_2_0>::new();
+        let result = AnnotationsV2Simple::read_constraint(&element, &load_ctx);
         assert!(result.is_err())
     }
 }

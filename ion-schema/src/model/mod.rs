@@ -6,6 +6,7 @@ mod ranges;
 mod type_argument;
 mod type_definition;
 mod type_reference;
+mod variable_type_argument;
 
 pub use ranges::*;
 pub use type_argument::*;

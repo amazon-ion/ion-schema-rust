@@ -2,7 +2,7 @@ use crate::internal_traits::{
     LoaderContext, ReadFromIsl, ValidateInternal, ValidationContext, WriteAsIsl, WriteContext,
 };
 use crate::ion_extension::ElementExtensions;
-use crate::model::constraints::ConstraintName;
+use crate::model::constraints::{ConstraintName, ReadConstraint};
 use crate::model::ranges::IonSchemaRange;
 use crate::model::TypeDefinitionBuilder;
 use crate::result::{invalid_schema_error, IonSchemaResult};
@@ -35,13 +35,12 @@ impl ValidValues {
 impl<V: IslVersion> TypeDefinitionBuilder<V> {
     /// Adds a `valid_values` constraint to this type definition.
     pub fn valid_values<T: Into<ValidValuesArgument>, I: IntoIterator<Item = T>>(
-        mut self,
+        self,
         values: I,
     ) -> Self {
         let values = values.into_iter().map(|it| it.into()).collect();
         let constraint = ValidValues { values };
-        self.constraints.push(constraint.into());
-        self
+        self.with_constraint(constraint.into())
     }
 
     /// Adds a `valid_values` constraint with a single range argument to this type definition.
@@ -111,8 +110,8 @@ impl<V: IslVersion> WriteAsIsl<V> for ValidValues {
     }
 }
 
-impl<V: IslVersion> ReadFromIsl<V> for ValidValues {
-    fn try_read(ion: &Element, ctx: &LoaderContext<V>) -> IonSchemaResult<Self> {
+impl<V: IslVersion> ReadConstraint<V> for ValidValues {
+    fn read_constraint(ion: &Element, ctx: &LoaderContext<V>) -> IonSchemaResult<Option<Self>> {
         // It can be a single range, or a list of arguments. Either way, it must be a list.
         // First, we'll try reading it as a range.
         let values = if (ion.one_optional_annotation()?).is_some() {
@@ -125,7 +124,7 @@ impl<V: IslVersion> ReadFromIsl<V> for ValidValues {
                 .collect();
             c?
         };
-        Ok(ValidValues { values })
+        Ok(Some(ValidValues { values }))
     }
 }
 
@@ -218,7 +217,7 @@ impl<V: IslVersion> ReadFromIsl<V> for NumberRangeValue {
 mod tests {
     use super::*;
 
-    use crate::model::constraints::valid_values::ValidValues;
+    use crate::model::constraints::test_read_constraint;
     use crate::model::{IonSchemaRange, TypeDefinitionBuilder};
     use crate::test_harness::*;
     use crate::{ISL_1_0, ISL_2_0};
@@ -314,50 +313,50 @@ mod tests {
     );
 
     test_harness!(
-        use read_from_isl;
+        use test_read_constraint;
         ISL_1_0, ISL_2_0 {
-            #[case::empty("[]", Ok(ValidValues { values: vec![] }))]
-            #[case::empty_list_annotated_with_range("range::[]", err::<ValidValues>())]
-            #[case::annotated_value_in_list("[foo::1]", err::<ValidValues>())]
+            #[case::empty("[]", Ok(Some(ValidValues { values: vec![] })))]
+            #[case::empty_list_annotated_with_range("range::[]", err::<Option<ValidValues>>())]
+            #[case::annotated_value_in_list("[foo::1]", err::<Option<ValidValues>>())]
             #[case::single_int_value(
                 "[1]",
-                Ok(ValidValues { values: vec![ValidValuesArgument::from(1)] })
+                Ok(Some(ValidValues { values: vec![ValidValuesArgument::from(1)] }))
             )]
             #[case::single_string_value(
                 "[\"abc\"]",
-                Ok(ValidValues { values: vec![ValidValuesArgument::from("abc")] })
+                Ok(Some(ValidValues { values: vec![ValidValuesArgument::from("abc")] }))
             )]
             #[case::multiple_values(
                 "[\"abc\", 1, null]",
-                Ok(ValidValues { values: vec![ValidValuesArgument::from("abc"), ValidValuesArgument::from(1), ValidValuesArgument::from(IonType::Null)] })
+                Ok(Some(ValidValues { values: vec![ValidValuesArgument::from("abc"), ValidValuesArgument::from(1), ValidValuesArgument::from(IonType::Null)] }))
             )]
             #[case::multiple_values_with_range(
                 "[\"abc\", 1, range::[1., 2.]]",
-                Ok(ValidValues { values: vec![
+                Ok(Some(ValidValues { values: vec![
                     ValidValuesArgument::from("abc"),
                     ValidValuesArgument::from(1),
                     ValidValuesArgument::NumericRange((Decimal::from(1)..=Decimal::from(2)).into())
-                ]})
+                ]}))
             )]
             #[case::single_number_range_in_a_list(
                 "[range::[1., 2.]]",
-                Ok(ValidValues { values: vec![ValidValuesArgument::NumericRange((Decimal::from(1)..=Decimal::from(2)).into())] })
+                Ok(Some(ValidValues { values: vec![ValidValuesArgument::NumericRange((Decimal::from(1)..=Decimal::from(2)).into())] }))
             )]
             #[case::single_number_range_not_in_a_list(
                 "range::[1., 2.]",
-                Ok(ValidValues { values: vec![ValidValuesArgument::NumericRange((Decimal::from(1)..=Decimal::from(2)).into())] })
+                Ok(Some(ValidValues { values: vec![ValidValuesArgument::NumericRange((Decimal::from(1)..=Decimal::from(2)).into())] }))
             )]
             #[case::single_number_range_with_ints(
                 "range::[1, 2]",
-                Ok(ValidValues { values: vec![ValidValuesArgument::NumericRange((Decimal::from(1)..=Decimal::from(2)).into())] })
+                Ok(Some(ValidValues { values: vec![ValidValuesArgument::NumericRange((Decimal::from(1)..=Decimal::from(2)).into())] }))
             )]
             #[case::single_number_range_with_floats(
                 "range::[1e0, 2e0]",
-                Ok(ValidValues { values: vec![ValidValuesArgument::NumericRange((Decimal::from(1)..=Decimal::from(2)).into())] })
+                Ok(Some(ValidValues { values: vec![ValidValuesArgument::NumericRange((Decimal::from(1)..=Decimal::from(2)).into())] }))
             )]
             #[case::single_timestamp_range(
                 "range::[2024T, 2025T]",
-                Ok(ValidValues { values: vec![ValidValuesArgument::TimestampRange((Timestamp::with_year(2024).build().unwrap()..=Timestamp::with_year(2025).build().unwrap()).into())] })
+                Ok(Some(ValidValues { values: vec![ValidValuesArgument::TimestampRange((Timestamp::with_year(2024).build().unwrap()..=Timestamp::with_year(2025).build().unwrap()).into())] }))
             )]
         }
     );

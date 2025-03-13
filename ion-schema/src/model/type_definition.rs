@@ -4,12 +4,15 @@
 use crate::internal_traits::{
     LoaderContext, ReadFromIsl, ValidateInternal, ValidationContext, WriteAsIsl, WriteContext,
 };
-use crate::model::constraints::{AnnotationsV2Simple, AnyConstraint, TypeConstraint};
+use crate::ion_schema_version::Versioned;
+use crate::model::constraints::*;
 use crate::result::IonSchemaResult;
 use crate::{IonSchemaElement, IslVersion, ViolationRecorder, ISL_1_0, ISL_2_0};
-use ion_rs::{Element, IonData, IonType, StructWriter, Symbol, ValueWriter};
+use ion_rs::{Element, IonData, StructWriter, Symbol, ValueWriter};
 use std::marker::PhantomData;
 use std::ops::ControlFlow;
+
+pub type VersionedTypeDefinition<V> = Versioned<TypeDefinition, V>;
 
 /// A TypeDefinition is a set of constraints and (optionally) additional user content.
 #[derive(Debug, Clone, PartialEq)]
@@ -46,7 +49,8 @@ impl TypeDefinition {
 /// A version-safe builder for Ion Schema type definitions.
 #[derive(Debug, Clone)]
 pub struct TypeDefinitionBuilder<V: IslVersion> {
-    pub(crate) constraints: Vec<AnyConstraint>,
+    constraints: Vec<AnyConstraint>,
+    // FIXME: Should probably be (String, IonData<Element>)
     open_content: Vec<(Symbol, IonData<Element>)>,
     isl_version: PhantomData<V>,
 }
@@ -60,11 +64,17 @@ impl<V: IslVersion> TypeDefinitionBuilder<V> {
         }
     }
 
-    // This is intentionally pub(crate) because we don't want people to build an ISL 1.0 type and
-    // inline it into an ISL 2.0 type. Constraints that have type arguments should accept a
-    // TypeDefinitionBuilder or a TypeReference.
-    pub(crate) fn build(self) -> TypeDefinition {
-        TypeDefinition::new(self.constraints, self.open_content)
+    /// Adds a constraint to this type definition.
+    ///
+    /// This is pub(crate) so that users cannot add a combination of constraints that is not
+    /// valid for any ISL version.
+    pub(crate) fn with_constraint(mut self, constraint: AnyConstraint) -> Self {
+        self.constraints.push(constraint);
+        self
+    }
+
+    pub fn build(self) -> VersionedTypeDefinition<V> {
+        Versioned::new(TypeDefinition::new(self.constraints, self.open_content))
     }
 
     pub fn with_open_content<S: Into<Symbol>, E: Into<Element>>(
@@ -119,56 +129,39 @@ where
     }
 }
 
-impl ReadFromIsl<ISL_1_0> for TypeDefinitionBuilder<ISL_1_0> {
+impl ReadFromIsl<ISL_1_0> for TypeDefinition {
     fn try_read(ion: &Element, ctx: &LoaderContext<ISL_1_0>) -> IonSchemaResult<Self> {
         let struct_ = ion.expect_struct()?;
-        let mut builder = TypeDefinitionBuilder::new();
-
+        let mut builder = TypeDefinitionBuilder::<ISL_1_0>::new();
         for (name, value) in struct_.fields() {
-            match name.expect_text()? {
-                "type" => builder
-                    .constraints
-                    .push(TypeConstraint::try_read(value, ctx)?.into()),
-                // TODO: Other constraints
-                // TODO: ignore "name" iff this is a top level type definition
-                other => builder
+            let constraint_name = name.expect_text()?;
+            match AnyConstraint::read_constraint(constraint_name, value, ctx)? {
+                Some(constraint) => builder.constraints.push(constraint),
+                None => builder
                     .open_content
                     .push((name.clone(), IonData::from(value.clone()))),
             }
         }
-        Ok(builder)
+        Ok(Versioned::into_inner(builder.build()))
     }
 }
 
-impl ReadFromIsl<ISL_2_0> for TypeDefinitionBuilder<ISL_2_0> {
+impl ReadFromIsl<ISL_2_0> for TypeDefinition {
     fn try_read(ion: &Element, ctx: &LoaderContext<ISL_2_0>) -> IonSchemaResult<Self> {
         let struct_ = ion.expect_struct()?;
-        let mut builder = TypeDefinitionBuilder::new();
-
+        let mut builder = TypeDefinitionBuilder::<ISL_2_0>::new();
         for (name, value) in struct_.fields() {
-            match name.expect_text()? {
-                "annotations" => {
-                    if value.ion_type() == IonType::List {
-                        builder
-                            .constraints
-                            .push(AnnotationsV2Simple::try_read(value, ctx)?.into())
-                    } else {
-                        todo!("standard syntax")
-                    }
-                }
-                "type" => builder
-                    .constraints
-                    .push(TypeConstraint::try_read(value, ctx)?.into()),
-                // TODO: Other constraints
-                // TODO: ignore "name" iff this is a top level type definition
-                other => {
-                    // TODO: Check to make sure that this is valid open content before adding.
+            let constraint_name = name.expect_text()?;
+            match AnyConstraint::read_constraint(constraint_name, value, ctx)? {
+                Some(constraint) => builder.constraints.push(constraint),
+                None => {
+                    // TODO: Check if this particular open content is legal
                     builder
                         .open_content
                         .push((name.clone(), IonData::from(value.clone())))
                 }
             }
         }
-        Ok(builder)
+        Ok(Versioned::into_inner(builder.build()))
     }
 }

@@ -13,7 +13,7 @@ pub trait IslVersion: private::IslVersion + Clone {
 }
 
 /// Ion Schema Language 1.0
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 #[allow(non_camel_case_types)]
 pub enum ISL_1_0 {}
 
@@ -24,7 +24,7 @@ impl IslVersion for ISL_1_0 {
 }
 
 /// Ion Schema Language 2.0
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 #[allow(non_camel_case_types)]
 pub enum ISL_2_0 {}
 
@@ -44,3 +44,40 @@ pub(crate) trait SinceISL_2_0: IslVersion { }
 impl SinceISL_2_0 for ISL_2_0 {}
 
  */
+
+use std::marker::PhantomData;
+use std::ops::Deref;
+
+/// Wrapper for data that needs to be passed around with an ISL version—for example, builder methods
+/// for some constraints can accept `Versioned<TypeArgument>`s.
+///
+/// Technically, this is a smart pointer that (rather than managing the ownership or memory of the
+/// wrapped value) encodes Ion Schema version information along with the wrapped value.
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub struct Versioned<T, V: IslVersion>(T, PhantomData<V>);
+impl<T, V: IslVersion> Versioned<T, V> {
+    /// Creates a new [`Versioned`] instance, wrapping the given value.
+    pub(crate) fn new(value: T) -> Self {
+        Self(value, PhantomData)
+    }
+
+    /// Maps the value contained by this [`Versioned`] instance.
+    pub(crate) fn map<U, F: FnOnce(T) -> U>(
+        this: Versioned<T, V>,
+        transform: F,
+    ) -> Versioned<U, V> {
+        Versioned(transform(this.0), this.1)
+    }
+
+    /// Consumes this [`Versioned`] instance, return the value contained within.
+    pub(crate) fn into_inner(this: Versioned<T, V>) -> T {
+        this.0
+    }
+}
+impl<T, V: IslVersion> Deref for Versioned<T, V> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}

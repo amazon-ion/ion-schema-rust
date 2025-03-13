@@ -5,7 +5,7 @@ use crate::internal_traits::{
     LoaderContext, ReadFromIsl, ValidateInternal, ValidationContext, WriteAsIsl, WriteContext,
 };
 use crate::ion_extension::ElementExtensions;
-use crate::model::constraints::ConstraintName;
+use crate::model::constraints::{ConstraintName, ReadConstraint};
 use crate::model::ranges::IonSchemaRange;
 use crate::model::TypeDefinitionBuilder;
 use crate::result::{invalid_schema_error, IonSchemaResult};
@@ -138,12 +138,11 @@ impl ConstraintName for TimestampPrecision {
 
 impl<V: IslVersion> TypeDefinitionBuilder<V> {
     pub fn timestamp_precision<T: Into<IonSchemaRange<TimestampPrecisionValue>>>(
-        mut self,
+        self,
         range: T,
     ) -> Self {
         let constraint = TimestampPrecision::new(range);
-        self.constraints.push(constraint.into());
-        self
+        self.with_constraint(constraint.into())
     }
 }
 
@@ -204,19 +203,19 @@ impl<V: IslVersion> WriteAsIsl<V> for TimestampPrecision {
     }
 }
 
-impl<V: IslVersion> ReadFromIsl<V> for TimestampPrecision {
-    fn try_read(ion: &Element, ctx: &LoaderContext<V>) -> IonSchemaResult<Self> {
+impl<V: IslVersion> ReadConstraint<V> for TimestampPrecision {
+    fn read_constraint(ion: &Element, ctx: &LoaderContext<V>) -> IonSchemaResult<Option<Self>> {
         let range = IonSchemaRange::try_read(ion, ctx)?;
-        Ok(TimestampPrecision::new(range))
+        Ok(Some(TimestampPrecision::new(range)))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::internal_traits::*;
+    use super::*;
+
     use crate::internal_traits::{LoaderContext, WriteContext};
-    use crate::model::constraints::TimestampPrecisionValue::*;
-    use crate::model::constraints::{AnyConstraint, TimestampPrecision};
+
     use std::collections::Bound;
 
     use crate::model::ranges::IonSchemaRange;
@@ -238,9 +237,11 @@ mod tests {
 
         assert_eq!(
             type_.constraints().cloned().collect::<Vec<_>>(),
-            vec![AnyConstraint::TimestampPrecision(TimestampPrecision::new(
-                IonSchemaRange::try_new(Bound::Included(Year), Bound::Included(Day))?
-            ))]
+            vec![TimestampPrecision::new(IonSchemaRange::try_new(
+                Bound::Included(Year),
+                Bound::Included(Day)
+            )?)
+            .into()]
         );
         Ok(())
     }
@@ -290,8 +291,8 @@ mod tests {
     fn timestamp_precision_try_read_ok(#[case] ion: &str, #[case] expected: TimestampPrecision) {
         let element = Element::read_one(ion).unwrap();
         let load_ctx = LoaderContext::<ISL_2_0>::new();
-        let result = TimestampPrecision::try_read(&element, &load_ctx);
-        assert_eq!(result, Ok(expected))
+        let result = TimestampPrecision::read_constraint(&element, &load_ctx);
+        assert_eq!(result, Ok(Some(expected)))
     }
 
     #[rstest]
@@ -311,8 +312,8 @@ mod tests {
     fn timestamp_precision_try_read_err(#[case] ion: &str) {
         let element = Element::read_one(ion).unwrap();
         let load_ctx = LoaderContext::<ISL_2_0>::new();
-        let result: IonSchemaResult<TimestampPrecision> =
-            TimestampPrecision::try_read(&element, &load_ctx);
+        let result: IonSchemaResult<Option<TimestampPrecision>> =
+            TimestampPrecision::read_constraint(&element, &load_ctx);
         assert!(result.is_err())
     }
 }
