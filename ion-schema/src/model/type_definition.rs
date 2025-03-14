@@ -50,7 +50,6 @@ impl TypeDefinition {
 #[derive(Debug, Clone)]
 pub struct TypeDefinitionBuilder<V: IslVersion> {
     constraints: Vec<AnyConstraint>,
-    // FIXME: Should probably be (String, IonData<Element>)
     open_content: Vec<(Symbol, IonData<Element>)>,
     isl_version: PhantomData<V>,
 }

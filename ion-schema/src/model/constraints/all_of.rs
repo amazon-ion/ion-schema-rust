@@ -29,7 +29,7 @@ pub struct AllOf {
 impl AllOf {
     fn new(mut type_arguments: Vec<TypeArgument>) -> Self {
         // Sorting the vec allows us to get Bag-like equality semantics.
-        // TODO: Replace the vec with a bag or set, or come up with a less hacky way to sort the type arguments.
+        // TODO: Replace the vec with a HashBag or come up with a less hacky way to sort the type arguments.
         type_arguments.sort_by_cached_key(|item| format!("{item:?}"));
 
         Self { type_arguments }
@@ -145,6 +145,7 @@ mod tests {
 
     #[test]
     fn test_equality() {
+        // NOTE: this is checking for _bag_ equivalence.
         assert_eq!(
             TypeDefinitionBuilder::<ISL_1_0>::new()
                 .all_of(("a", "b", "c"))
