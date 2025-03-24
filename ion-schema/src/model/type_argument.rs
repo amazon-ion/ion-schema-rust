@@ -202,10 +202,10 @@ impl<const N: usize, V: IslVersion, T: Into<VersionedTypeArgument<V>>> From<[T; 
 /// https://rust-lang.github.io/rfcs/3086-macro-metavar-expr.html is stable.
 macro_rules! into_type_arg_list {
     ($($t:ident $i:tt),+) => {
-        impl<V: IslVersion, $($t),+> From<( $($t),+ )> for VersionedTypeArgumentList<V>
+        impl<V: IslVersion, $($t),+> From<( $($t,)+ )> for VersionedTypeArgumentList<V>
         where $($t: Into<VersionedTypeArgument<V>>,)+
         {
-            fn from(value: ( $($t),+ )) -> Self {
+            fn from(value: ( $($t,)+ )) -> Self {
                 Versioned::new(vec![
                     $(Versioned::into_inner(value.$i.into()),)+
                 ])
@@ -214,6 +214,7 @@ macro_rules! into_type_arg_list {
     };
 }
 
+into_type_arg_list!(A 0);
 into_type_arg_list!(A 0, B 1);
 into_type_arg_list!(A 0, B 1, C 2);
 into_type_arg_list!(A 0, B 1, C 2, D 3);

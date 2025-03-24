@@ -109,6 +109,7 @@ impl<V: IslVersion> IonSchemaRegexSource<V> for IonSchemaRegexBuilder<V> {
 
 impl<V: IslVersion> From<Versioned<Regex, V>> for IonSchemaRegexBuilder<V> {
     fn from(value: Versioned<Regex, V>) -> Self {
+        let value = value.into_inner();
         IonSchemaRegexBuilder {
             _version: Default::default(),
             case_insensitive: value.case_insensitive,

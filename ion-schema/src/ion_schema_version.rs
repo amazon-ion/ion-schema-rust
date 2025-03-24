@@ -46,7 +46,6 @@ impl SinceISL_2_0 for ISL_2_0 {}
  */
 
 use std::marker::PhantomData;
-use std::ops::Deref;
 
 /// Wrapper for data that needs to be passed around with an ISL version—for example, builder methods
 /// for some constraints can accept `Versioned<TypeArgument>`s.
@@ -70,10 +69,15 @@ impl<T, V: IslVersion> Versioned<T, V> {
     }
 
     /// Consumes this [`Versioned`] instance, return the value contained within.
-    pub(crate) fn into_inner(this: Versioned<T, V>) -> T {
-        this.0
+    pub(crate) fn into_inner(self) -> T {
+        self.0
     }
 }
+
+// For testing-convenience only, we make this wrapper non-opaque.
+#[cfg(test)]
+use std::ops::Deref;
+#[cfg(test)]
 impl<T, V: IslVersion> Deref for Versioned<T, V> {
     type Target = T;
 
