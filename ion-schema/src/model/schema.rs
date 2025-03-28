@@ -3,6 +3,7 @@
 
 use crate::model::schema::schema_doc_builder_state::{BeforeHeader, HasFooter, Types};
 use crate::model::{SchemaHeader, TypeDefinition, VersionedTypeDefinition};
+use crate::resolver::*;
 use crate::{IslVersion, Versioned};
 use ion_rs::Element;
 use std::collections::HashMap;
@@ -31,6 +32,14 @@ impl From<Element> for SchemaItem {
     }
 }
 
+impl TypeRefWalker for SchemaItem {
+    fn walk<V: TypeRefVisitor>(&self, visitor: &mut V) {
+        if let SchemaItem::Type(_, t) = self {
+            t.walk(visitor)
+        }
+    }
+}
+
 /// Represents an Ion Schema document.
 ///
 /// A schema is a collection of types that can be used to constrain the Ion data model.
@@ -41,6 +50,7 @@ pub struct SchemaDocument {
     items: Vec<SchemaItem>,
     types_by_name: HashMap<String, usize>,
 }
+impl_type_ref_walker!(SchemaDocument, items);
 
 impl SchemaDocument {
     pub fn builder<V: IslVersion>() -> SchemaDocumentBuilder<V, BeforeHeader> {
@@ -129,9 +139,9 @@ impl<V: IslVersion> SchemaDocumentBuilder<V, BeforeHeader> {
         self.change_state()
     }
 
-    pub fn type_definition(
+    pub fn type_definition<S: Into<String>>(
         self,
-        name: String,
+        name: S,
         type_def: VersionedTypeDefinition<V>,
     ) -> SchemaDocumentBuilder<V, Types> {
         self.change_state::<Types>().type_definition(name, type_def)

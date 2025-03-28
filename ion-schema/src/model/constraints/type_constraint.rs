@@ -8,6 +8,7 @@ use crate::ion_schema_version::Versioned;
 use crate::model::constraints::{ConstraintName, ReadConstraint};
 use crate::model::type_argument::TypeArgument;
 use crate::model::{TypeDefinition, TypeDefinitionBuilder, VersionedTypeArgument};
+use crate::resolver::*;
 use crate::result::IonSchemaResult;
 use crate::{IonSchemaElement, IslVersion, ViolationRecorder};
 use ion_rs::{Element, ValueWriter};
@@ -25,6 +26,7 @@ use std::ops::ControlFlow;
 pub struct TypeConstraint {
     type_argument: TypeArgument,
 }
+impl_type_ref_walker!(TypeConstraint, type_argument);
 
 impl TypeConstraint {
     pub(crate) fn new<T: Into<TypeArgument>>(type_argument: T) -> Self {
@@ -43,9 +45,9 @@ impl ConstraintName for TypeConstraint {
 }
 
 impl<V: IslVersion> TypeDefinitionBuilder<V> {
-    pub fn type_constraint(self, type_argument: VersionedTypeArgument<V>) -> Self {
+    pub fn type_constraint<T: Into<VersionedTypeArgument<V>>>(self, type_argument: T) -> Self {
         let constraint = TypeConstraint {
-            type_argument: Versioned::into_inner(type_argument),
+            type_argument: Versioned::into_inner(type_argument.into()),
         };
         self.with_constraint(constraint.into())
     }

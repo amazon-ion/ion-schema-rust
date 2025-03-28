@@ -11,7 +11,7 @@ mod type_definition;
 mod type_reference;
 mod variable_type_argument;
 
-use bag::*;
+pub(crate) use bag::*;
 pub use ranges::*;
 pub use schema::*;
 pub use schema_header::*;

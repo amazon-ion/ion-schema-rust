@@ -6,6 +6,7 @@ use crate::internal_traits::{
 };
 use crate::model::constraints::{ConstraintName, ReadConstraint};
 use crate::model::{IonSchemaRange, TypeDefinitionBuilder};
+use crate::resolver::*;
 use crate::result::IonSchemaResult;
 use crate::{IonSchemaElement, IslVersion, ViolationRecorder};
 use ion_rs::{Element, ValueWriter};
@@ -23,6 +24,7 @@ impl ConstraintName for CodepointLength {
 pub struct CodepointLength {
     range: IonSchemaRange<usize>,
 }
+impl_type_ref_walker!(CodepointLength);
 
 impl CodepointLength {
     pub(crate) fn new<T: Into<IonSchemaRange<usize>>>(range: T) -> Self {

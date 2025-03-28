@@ -6,6 +6,7 @@ use crate::internal_traits::{
 };
 use crate::model::constraints::{ConstraintName, ReadConstraint};
 use crate::model::{IonSchemaRange, TypeDefinitionBuilder};
+use crate::resolver::*;
 use crate::result::IonSchemaResult;
 use crate::{IonSchemaElement, ViolationRecorder, ISL_1_0, ISL_2_0};
 use ion_rs::{Element, ValueWriter};
@@ -22,6 +23,7 @@ impl ConstraintName for Scale {
 pub struct Scale {
     range: IonSchemaRange<isize>,
 }
+impl_type_ref_walker!(Scale);
 
 impl Scale {
     pub(crate) fn new<T: Into<IonSchemaRange<isize>>>(range: T) -> Self {

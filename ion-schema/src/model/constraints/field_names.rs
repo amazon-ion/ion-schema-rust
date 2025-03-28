@@ -6,6 +6,7 @@ use crate::ion_schema_version::Versioned;
 use crate::model::constraints::{ConstraintName, ReadConstraint};
 use crate::model::type_argument::TypeArgument;
 use crate::model::{TypeDefinitionBuilder, VersionedTypeArgument};
+use crate::resolver::*;
 use crate::result::IonSchemaResult;
 use crate::{IonSchemaElement, ViolationRecorder, ISL_1_0, ISL_2_0};
 use ion_rs::{Element, ValueWriter};
@@ -23,6 +24,7 @@ pub struct FieldNames {
     type_argument: TypeArgument,
     distinct: bool,
 }
+impl_type_ref_walker!(FieldNames, type_argument);
 
 impl FieldNames {
     pub(crate) fn new<T: Into<TypeArgument>>(distinct: bool, type_argument: T) -> Self {
@@ -42,22 +44,22 @@ impl FieldNames {
 }
 
 impl TypeDefinitionBuilder<ISL_2_0> {
-    pub fn field_names(self, type_argument: VersionedTypeArgument<ISL_2_0>) -> Self {
+    pub fn field_names<T: Into<VersionedTypeArgument<ISL_2_0>>>(self, type_argument: T) -> Self {
         let constraint = FieldNames {
             distinct: false,
-            type_argument: Versioned::into_inner(type_argument),
+            type_argument: Versioned::into_inner(type_argument.into()),
         };
         self.with_constraint(constraint.into())
     }
 
-    pub fn field_names_distinct(
+    pub fn field_names_distinct<T: Into<VersionedTypeArgument<ISL_2_0>>>(
         self,
         distinct: bool,
-        type_argument: VersionedTypeArgument<ISL_2_0>,
+        type_argument: T,
     ) -> Self {
         let constraint = FieldNames {
             distinct,
-            type_argument: Versioned::into_inner(type_argument),
+            type_argument: Versioned::into_inner(type_argument.into()),
         };
         self.with_constraint(constraint.into())
     }

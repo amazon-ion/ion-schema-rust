@@ -1,9 +1,12 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::internal_traits::{ValidateInternal, ValidationContext, WriteAsIsl, WriteContext};
+use crate::internal_traits::{
+    LoaderContext, ValidateInternal, ValidationContext, WriteAsIsl, WriteContext,
+};
 use crate::model::constraints::valid_values::ValidValues;
 use crate::model::constraints::*;
+use crate::resolver::*;
 use crate::result::IonSchemaResult;
 use crate::{IonSchemaElement, IslVersion, ViolationRecorder, ISL_1_0, ISL_2_0};
 use ion_rs::ValueWriter;
@@ -34,6 +37,15 @@ macro_rules! any_constraint {
             fn from(value: $name) -> Self { AnyConstraint::$name(value) }
         }
         )+
+
+        impl TypeRefWalker for AnyConstraint {
+            fn walk<V: TypeRefVisitor>(&self, visitor: &mut V) {
+                match self {
+                    $(AnyConstraint::$name(constraint) => constraint.walk(visitor),
+                    )+
+                }
+            }
+        }
 
         // Any traits that should be implemented by delegating to the enum variants can be added here.
         impl ValidateInternal for AnyConstraint {

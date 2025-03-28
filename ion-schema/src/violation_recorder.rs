@@ -14,7 +14,7 @@ use std::ops::ControlFlow;
 /// The `accept` method returns [`ControlFlow`] to allow implementations to determine whether
 /// validation should continue after each violation.
 ///
-/// This crate provides implementations for [Option<ViolationInfo>] and [Vec<ViolationInfo>].
+/// This crate provides implementations for [`Option<ViolationInfo>`] and [`Vec<ViolationInfo>`].
 ///
 /// # Example
 ///

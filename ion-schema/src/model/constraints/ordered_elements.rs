@@ -11,6 +11,7 @@ use crate::model::variable_type_argument::{
     VariablyOccurringTypeArgument, VersionedVariablyOccurringTypeArgumentList,
 };
 use crate::model::TypeDefinitionBuilder;
+use crate::resolver::*;
 use crate::result::IonSchemaResult;
 use crate::{IonSchemaElement, IslVersion, ViolationRecorder};
 use ion_rs::{Element, ValueWriter};
@@ -28,6 +29,7 @@ impl ConstraintName for OrderedElements {
 pub struct OrderedElements {
     type_arguments: Vec<VariablyOccurringTypeArgument>,
 }
+impl_type_ref_walker!(OrderedElements, type_arguments);
 
 impl OrderedElements {
     pub fn elements(&self) -> impl Iterator<Item = &VariablyOccurringTypeArgument> {

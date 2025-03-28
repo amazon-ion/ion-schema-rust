@@ -6,6 +6,7 @@ use crate::ion_schema_version::Versioned;
 use crate::model::constraints::{ConstraintName, ReadConstraint};
 use crate::model::type_argument::TypeArgument;
 use crate::model::{TypeDefinitionBuilder, VersionedTypeArgument};
+use crate::resolver::*;
 use crate::result::{invalid_schema_error, IonSchemaResult};
 use crate::{IonSchemaElement, IslVersion, ViolationRecorder, ISL_1_0, ISL_2_0};
 use ion_rs::{Element, ValueWriter};
@@ -26,6 +27,7 @@ pub struct ElementType {
     type_argument: TypeArgument,
     distinct: bool,
 }
+impl_type_ref_walker!(ElementType, type_argument);
 
 impl ElementType {
     pub(crate) fn new<T: Into<TypeArgument>>(distinct: bool, type_argument: T) -> Self {
@@ -45,24 +47,24 @@ impl ElementType {
 }
 
 impl<V: IslVersion> TypeDefinitionBuilder<V> {
-    pub fn element(self, type_argument: VersionedTypeArgument<V>) -> Self {
+    pub fn element<T: Into<VersionedTypeArgument<V>>>(self, type_argument: T) -> Self {
         let constraint = ElementType {
             distinct: false,
-            type_argument: Versioned::into_inner(type_argument),
+            type_argument: Versioned::into_inner(type_argument.into()),
         };
         self.with_constraint(constraint.into())
     }
 }
 
 impl TypeDefinitionBuilder<ISL_2_0> {
-    pub fn element_distinct(
+    pub fn element_distinct<T: Into<VersionedTypeArgument<ISL_2_0>>>(
         self,
         distinct: bool,
-        type_argument: VersionedTypeArgument<ISL_2_0>,
+        type_argument: T,
     ) -> Self {
         let constraint = ElementType {
             distinct,
-            type_argument: Versioned::into_inner(type_argument),
+            type_argument: Versioned::into_inner(type_argument.into()),
         };
         self.with_constraint(constraint.into())
     }

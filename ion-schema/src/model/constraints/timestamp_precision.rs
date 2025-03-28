@@ -8,6 +8,7 @@ use crate::ion_extension::ElementExtensions;
 use crate::model::constraints::{ConstraintName, ReadConstraint};
 use crate::model::ranges::IonSchemaRange;
 use crate::model::TypeDefinitionBuilder;
+use crate::resolver::*;
 use crate::result::{invalid_schema_error, IonSchemaResult};
 use crate::{IonSchemaElement, IslVersion, ViolationInfo, ViolationRecorder};
 use ion_rs::{Element, IonResult, TimestampPrecision as TSPrecision, ValueWriter, WriteAsIon};
@@ -108,6 +109,7 @@ impl WriteAsIon for TimestampPrecisionValue {
 pub struct TimestampPrecision {
     range: IonSchemaRange<i64>,
 }
+impl_type_ref_walker!(TimestampPrecision);
 
 impl TimestampPrecision {
     pub(crate) fn new<T: Into<IonSchemaRange<TimestampPrecisionValue>>>(range: T) -> Self {

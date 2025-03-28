@@ -9,6 +9,7 @@ use crate::model::bag::Bag;
 use crate::model::constraints::{ConstraintName, ReadConstraint};
 use crate::model::type_argument::TypeArgument;
 use crate::model::{TypeDefinitionBuilder, VersionedTypeArgumentList};
+use crate::resolver::*;
 use crate::result::IonSchemaResult;
 use crate::{IonSchemaElement, IslVersion, ViolationRecorder};
 use ion_rs::{Element, ValueWriter};
@@ -26,6 +27,7 @@ impl ConstraintName for AnyOf {
 pub struct AnyOf {
     type_arguments: Bag<TypeArgument>,
 }
+impl_type_ref_walker!(AnyOf, type_arguments);
 
 impl AnyOf {
     fn new<T: Into<Bag<TypeArgument>>>(type_arguments: T) -> Self {

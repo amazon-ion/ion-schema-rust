@@ -5,6 +5,7 @@ use crate::internal_traits::*;
 use crate::model::constraints::annotations::AnnotationsVariant;
 use crate::model::constraints::{Annotations, ReadConstraint};
 use crate::model::{TypeArgument, TypeDefinitionBuilder, VersionedTypeArgument};
+use crate::resolver::*;
 use crate::result::IonSchemaResult;
 use crate::{IonSchemaElement, Versioned, ViolationRecorder, ISL_1_0, ISL_2_0};
 use ion_rs::{Element, ValueWriter};
@@ -17,6 +18,7 @@ use std::ops::ControlFlow;
 pub struct AnnotationsV2Standard {
     annotations_type: TypeArgument,
 }
+impl_type_ref_walker!(AnnotationsV2Standard, annotations_type);
 
 impl AnnotationsV2Standard {
     pub fn annotations_type(&self) -> &TypeArgument {
@@ -38,9 +40,12 @@ impl AnnotationsV2Standard {
 
 impl TypeDefinitionBuilder<ISL_2_0> {
     /// Adds an Ion Schema 2.0 `annotations` constraint using the standard syntax.
-    pub fn annotations_type(self, annotations_type: VersionedTypeArgument<ISL_2_0>) -> Self {
+    pub fn annotations_type<T: Into<VersionedTypeArgument<ISL_2_0>>>(
+        self,
+        annotations_type: T,
+    ) -> Self {
         let constraint = AnnotationsV2Standard {
-            annotations_type: Versioned::into_inner(annotations_type),
+            annotations_type: Versioned::into_inner(annotations_type.into()),
         };
         self.with_constraint(
             Annotations {

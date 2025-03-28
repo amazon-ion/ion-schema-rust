@@ -6,6 +6,7 @@ use crate::internal_traits::{
 };
 use crate::model::constraints::{ConstraintName, ReadConstraint};
 use crate::model::TypeDefinitionBuilder;
+use crate::resolver::*;
 use crate::result::{invalid_schema_error, IonSchemaError, IonSchemaResult};
 use crate::{IonSchemaElement, IslVersion, ViolationRecorder};
 use ion_rs::{Element, ValueWriter};
@@ -24,6 +25,7 @@ impl ConstraintName for TimestampOffset {
 pub struct TimestampOffset {
     values: HashSet<TimestampOffsetValue>,
 }
+impl_type_ref_walker!(TimestampOffset);
 
 impl TimestampOffset {
     fn new(values: Vec<TimestampOffsetValue>) -> Self {

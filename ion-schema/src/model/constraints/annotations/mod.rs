@@ -14,6 +14,7 @@ use crate::internal_traits::{
 };
 use crate::model::constraints::{ConstraintName, ReadConstraint};
 use crate::model::type_argument::TypeArgument;
+use crate::resolver::*;
 use crate::result::IonSchemaResult;
 use crate::{IonSchemaElement, IslVersion, ViolationInfo, ViolationRecorder, ISL_1_0, ISL_2_0};
 use ion_rs::{Element, IonType, ValueWriter};
@@ -30,6 +31,31 @@ impl ConstraintName for Annotations {
 #[derive(Debug, PartialEq, Clone)]
 pub struct Annotations {
     variant: AnnotationsVariant,
+}
+impl_type_ref_walker!(Annotations, as_annotations_v2_standard());
+
+impl Annotations {
+    pub fn as_annotations_v1(&self) -> Option<&AnnotationsV1> {
+        if let AnnotationsVariant::V1(variant) = &self.variant {
+            Some(variant)
+        } else {
+            None
+        }
+    }
+    pub fn as_annotations_v2_simple(&self) -> Option<&AnnotationsV2Simple> {
+        if let AnnotationsVariant::V2Simple(variant) = &self.variant {
+            Some(variant)
+        } else {
+            None
+        }
+    }
+    pub fn as_annotations_v2_standard(&self) -> Option<&AnnotationsV2Standard> {
+        if let AnnotationsVariant::V2Standard(variant) = &self.variant {
+            Some(variant)
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]

@@ -7,6 +7,7 @@ use crate::internal_traits::{
 use crate::ion_schema_version::Versioned;
 use crate::model::bag::Bag;
 use crate::model::constraints::*;
+use crate::resolver::impl_type_ref_walker;
 use crate::result::IonSchemaResult;
 use crate::{IonSchemaElement, IslVersion, ViolationRecorder, ISL_1_0, ISL_2_0};
 use ion_rs::{Element, IonData, StructWriter, Symbol, ValueWriter};
@@ -57,6 +58,7 @@ pub struct TypeDefinitionBuilder<V: IslVersion> {
     open_content: Vec<(Symbol, IonData<Element>)>,
     isl_version: PhantomData<V>,
 }
+impl_type_ref_walker!(TypeDefinition, constraints);
 
 impl<V: IslVersion> TypeDefinitionBuilder<V> {
     pub(crate) fn new() -> Self {

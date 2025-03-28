@@ -7,6 +7,7 @@ use crate::isl::isl_type_reference::NullabilityModifier;
 use crate::model::type_definition::TypeDefinition;
 use crate::model::type_reference::TypeReference;
 use crate::model::VersionedTypeDefinition;
+use crate::resolver::*;
 use crate::result::{invalid_schema_error, IonSchemaResult};
 use crate::{IslVersion, ISL_1_0, ISL_2_0};
 use ion_rs::{Element, Value, ValueWriter};
@@ -48,6 +49,15 @@ impl TypeArgument {
 enum TypeArgumentKind {
     TypeReference(TypeReference),
     InlineType(TypeDefinition),
+}
+
+impl TypeRefWalker for TypeArgument {
+    fn walk<V: TypeRefVisitor>(&self, visitor: &mut V) {
+        match &self.kind {
+            TypeArgumentKind::TypeReference(ref type_ref) => visitor.visit(type_ref),
+            TypeArgumentKind::InlineType(type_def) => type_def.walk(visitor),
+        }
+    }
 }
 
 impl<V: IslVersion> WriteAsIsl<V> for TypeArgument

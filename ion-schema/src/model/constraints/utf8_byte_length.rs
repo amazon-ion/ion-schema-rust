@@ -7,6 +7,7 @@ use crate::internal_traits::{
 use crate::model::constraints::{ConstraintName, ReadConstraint};
 use crate::model::ranges::IonSchemaRange;
 use crate::model::TypeDefinitionBuilder;
+use crate::resolver::*;
 use crate::result::IonSchemaResult;
 use crate::{IonSchemaElement, IslVersion, ViolationInfo, ViolationRecorder};
 use ion_rs::{Element, ValueWriter};
@@ -20,6 +21,7 @@ use std::ops::ControlFlow;
 pub struct Utf8ByteLength {
     range: IonSchemaRange<usize>,
 }
+impl_type_ref_walker!(Utf8ByteLength);
 
 impl Utf8ByteLength {
     pub(crate) fn new<T: Into<IonSchemaRange<usize>>>(range: T) -> Self {

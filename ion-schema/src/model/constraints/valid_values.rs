@@ -6,6 +6,7 @@ use crate::model::bag::{bag, Bag};
 use crate::model::constraints::{ConstraintName, ReadConstraint};
 use crate::model::ranges::IonSchemaRange;
 use crate::model::TypeDefinitionBuilder;
+use crate::resolver::*;
 use crate::result::{invalid_schema_error, IonSchemaResult};
 use crate::{IonSchemaElement, IslVersion, ViolationRecorder};
 use ion_rs::{Decimal, Element, SequenceWriter, Timestamp, ValueWriter};
@@ -26,6 +27,7 @@ pub struct ValidValues {
     // TODO: Use a Set once Timestamp and Decimal implement Hash
     values: Bag<ValidValuesArgument>,
 }
+impl_type_ref_walker!(ValidValues);
 
 impl ValidValues {
     pub fn values(&self) -> impl Iterator<Item = &ValidValuesArgument> {

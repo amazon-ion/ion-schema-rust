@@ -8,6 +8,7 @@ use crate::ion_schema_version::Versioned;
 use crate::model::constraints::{ConstraintName, ReadConstraint};
 use crate::model::type_argument::TypeArgument;
 use crate::model::{TypeDefinitionBuilder, VersionedTypeArgument};
+use crate::resolver::*;
 use crate::result::IonSchemaResult;
 use crate::{IonSchemaElement, IslVersion, ViolationRecorder};
 use ion_rs::{Element, ValueWriter};
@@ -25,6 +26,7 @@ impl ConstraintName for Not {
 pub struct Not {
     type_argument: TypeArgument,
 }
+impl_type_ref_walker!(Not, type_argument);
 
 impl Not {
     pub(crate) fn new<T: Into<TypeArgument>>(type_argument: T) -> Self {
@@ -39,9 +41,9 @@ impl Not {
 }
 
 impl<V: IslVersion> TypeDefinitionBuilder<V> {
-    pub fn not(self, type_argument: VersionedTypeArgument<V>) -> Self {
+    pub fn not<T: Into<VersionedTypeArgument<V>>>(self, type_argument: T) -> Self {
         let constraint = Not {
-            type_argument: Versioned::into_inner(type_argument),
+            type_argument: Versioned::into_inner(type_argument.into()),
         };
         self.with_constraint(constraint.into())
     }

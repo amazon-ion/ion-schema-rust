@@ -5,6 +5,7 @@ use crate::internal_traits::{WriteAsIsl, WriteContext};
 use crate::ion_schema_version::Versioned;
 use crate::model::type_definition::TypeDefinition;
 use crate::model::{IonSchemaRange, TypeArgument, VersionedTypeArgument};
+use crate::resolver::*;
 use crate::result::IonSchemaResult;
 use crate::IslVersion;
 use ion_rs::ValueWriter;
@@ -15,6 +16,7 @@ pub struct VariablyOccurringTypeArgument {
     occurs: IonSchemaRange<usize>,
     type_argument: TypeArgument,
 }
+impl_type_ref_walker!(VariablyOccurringTypeArgument, type_argument);
 
 impl VariablyOccurringTypeArgument {
     pub fn occurs<R: Into<IonSchemaRange<usize>>>(

@@ -6,6 +6,7 @@ use crate::internal_traits::{
 };
 use crate::model::constraints::{ConstraintName, ReadConstraint};
 use crate::model::TypeDefinitionBuilder;
+use crate::resolver::*;
 use crate::result::{invalid_schema_error, IonSchemaError, IonSchemaResult};
 use crate::{IonSchemaElement, IslVersion, ViolationRecorder, ISL_1_0, ISL_2_0};
 use ion_rs::{Element, Value, ValueWriter};
@@ -22,6 +23,7 @@ impl ConstraintName for Ieee754Float {
 pub struct Ieee754Float {
     value: FloatingPointNumberFormat,
 }
+impl_type_ref_walker!(Ieee754Float);
 
 impl Ieee754Float {
     pub fn value(&self) -> FloatingPointNumberFormat {

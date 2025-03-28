@@ -11,6 +11,7 @@ use crate::model::variable_type_argument::{
     VariablyOccurringTypeArgument, VersionedVariablyOccurringTypeArgument,
 };
 use crate::model::TypeDefinitionBuilder;
+use crate::resolver::*;
 use crate::result::IonSchemaResult;
 use crate::{IonSchemaElement, IslVersion, ViolationRecorder, ISL_1_0, ISL_2_0};
 use ion_rs::{Element, ValueWriter};
@@ -30,6 +31,7 @@ pub struct Fields {
     fields: HashMap<String, VariablyOccurringTypeArgument>,
     is_closed: bool,
 }
+impl_type_ref_walker!(Fields, fields);
 
 impl Fields {
     pub fn fields(&self) -> impl Iterator<Item = (&str, &VariablyOccurringTypeArgument)> {

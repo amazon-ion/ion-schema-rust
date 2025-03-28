@@ -8,6 +8,7 @@ use crate::internal_traits::{
 use crate::model::constraints::{ConstraintName, ReadConstraint};
 use crate::model::type_argument::TypeArgument;
 use crate::model::TypeDefinitionBuilder;
+use crate::resolver::*;
 use crate::result::{invalid_schema_error_raw, IonSchemaResult};
 use crate::{IonSchemaElement, IslVersion, Versioned, ViolationRecorder};
 use ion_rs::{Element, ValueWriter};
@@ -135,6 +136,7 @@ pub struct Regex {
     multiline: bool,
     case_insensitive: bool,
 }
+impl_type_ref_walker!(Regex);
 
 impl PartialEq for Regex {
     fn eq(&self, other: &Self) -> bool {

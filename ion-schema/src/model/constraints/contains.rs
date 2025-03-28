@@ -6,6 +6,7 @@ use crate::internal_traits::{
 };
 use crate::model::constraints::{ConstraintName, ReadConstraint};
 use crate::model::TypeDefinitionBuilder;
+use crate::resolver::*;
 use crate::result::IonSchemaResult;
 use crate::{IonSchemaElement, IslVersion, ViolationRecorder};
 use ion_rs::{Element, IonData, ValueWriter};
@@ -24,6 +25,7 @@ impl ConstraintName for Contains {
 pub struct Contains {
     values: HashSet<IonData<Element>>,
 }
+impl_type_ref_walker!(Contains);
 
 impl Contains {
     pub(crate) fn new<T: IntoIterator<Item = Element>>(values: T) -> Self {
