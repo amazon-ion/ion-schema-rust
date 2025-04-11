@@ -1,8 +1,7 @@
 use crate::ion_extension::ElementExtensions;
 use crate::isl::ranges::{NumberRange, TimestampRange};
 use crate::isl::IslVersion;
-use crate::isl_require;
-use crate::result::{invalid_schema_error, IonSchemaError, IonSchemaResult};
+use crate::result::{invalid_schema, isl_require, IonSchemaError, IonSchemaResult};
 use ion_rs::TimestampPrecision as Precision;
 use ion_rs::{Element, IonResult, Value, ValueWriter, WriteAsIon};
 use ion_rs::{IonType, Timestamp};
@@ -152,11 +151,7 @@ impl TryFrom<&str> for TimestampPrecision {
             "millisecond" => TimestampPrecision::Millisecond,
             "microsecond" => TimestampPrecision::Microsecond,
             "nanosecond" => TimestampPrecision::Nanosecond,
-            _ => {
-                return invalid_schema_error(format!(
-                    "Invalid timestamp precision specified {value}"
-                ))
-            }
+            _ => return invalid_schema!("Invalid timestamp precision specified {value}"),
         })
     }
 }
@@ -293,7 +288,7 @@ impl TryFrom<&str> for TimestampOffset {
             Ok(TimestampOffset::Unknown)
         } else {
             if string_value.len() != 6 || string_value.chars().nth(3).unwrap() != ':' {
-                return invalid_schema_error(
+                return invalid_schema!(
                     "`timestamp_offset` values must be of the form \"[+|-]hh:mm\"",
                 );
             }
@@ -304,10 +299,10 @@ impl TryFrom<&str> for TimestampOffset {
                 "-" => -1,
                 "+" => 1,
                 _ => {
-                    return invalid_schema_error(format!(
+                    return invalid_schema!(
                         "unrecognized `timestamp_offset` sign '{}'",
                         &string_value[..1]
-                    ))
+                    )
                 }
             };
             match (h.parse::<i32>(), m.parse::<i32>()) {
@@ -316,7 +311,7 @@ impl TryFrom<&str> for TimestampOffset {
                 {
                     Ok(TimestampOffset::Known(sign * (hours * 60 + minutes)))
                 }
-                _ => invalid_schema_error(format!("invalid timestamp offset {string_value}")),
+                _ => invalid_schema!("invalid timestamp offset {string_value}"),
             }
         }
     }
@@ -376,10 +371,7 @@ impl TryFrom<&str> for Ieee754InterchangeFormat {
             "binary16" => Ok(Binary16),
             "binary32" => Ok(Binary32),
             "binary64" => Ok(Binary64),
-            _ => invalid_schema_error(format!(
-                "unrecognized `ieee754_float` value {}",
-                &string_value
-            )),
+            _ => invalid_schema!("unrecognized `ieee754_float` value {}", &string_value),
         }
     }
 }

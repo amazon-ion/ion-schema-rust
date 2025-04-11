@@ -7,7 +7,7 @@ use crate::internal_traits::{
 use crate::model::constraints::{ConstraintName, ReadConstraint};
 use crate::model::TypeDefinitionBuilder;
 use crate::resolver::*;
-use crate::result::{invalid_schema_error, IonSchemaError, IonSchemaResult};
+use crate::result::{invalid_schema, IonSchemaError, IonSchemaResult};
 use crate::{IonSchemaElement, IslVersion, ViolationRecorder, ISL_1_0, ISL_2_0};
 use ion_rs::{Element, Value, ValueWriter};
 use std::ops::ControlFlow;
@@ -96,7 +96,7 @@ impl TryFrom<&Element> for FloatingPointNumberFormat {
             Some("binary16") => Ok(Binary16),
             Some("binary32") => Ok(Binary32),
             Some("binary64") => Ok(Binary64),
-            _ => invalid_schema_error(format!("Not a valid IEEE754 format symbol: {value}")),
+            _ => invalid_schema!("Not a valid IEEE754 format symbol: {value}"),
         }
     }
 }

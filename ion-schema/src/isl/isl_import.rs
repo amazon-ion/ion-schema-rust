@@ -1,4 +1,4 @@
-use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
+use crate::result::{invalid_schema, IonSchemaResult};
 use ion_rs::{Element, IonResult, StructWriter, Symbol, ValueWriter, WriteAsIon};
 
 /// Represents an [import] in an ISL schema.
@@ -25,11 +25,7 @@ impl IslImport {
         let import = try_to!(value.as_struct());
         let id = match import.get("id") {
             Some(import_id) => try_to!(import_id.as_text()),
-            None => {
-                return Err(invalid_schema_error_raw(
-                    "import must have an id field in its definition",
-                ))
-            }
+            None => return invalid_schema!("import must have an id field in its definition",),
         };
 
         let type_name = match import.get("type") {

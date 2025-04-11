@@ -7,7 +7,7 @@ use crate::model::constraints::{ConstraintName, ReadConstraint};
 use crate::model::ranges::IonSchemaRange;
 use crate::model::TypeDefinitionBuilder;
 use crate::resolver::*;
-use crate::result::{invalid_schema_error, IonSchemaResult};
+use crate::result::{invalid_schema, IonSchemaResult};
 use crate::{IonSchemaElement, IslVersion, ViolationRecorder};
 use ion_rs::{Decimal, Element, SequenceWriter, Timestamp, ValueWriter};
 use ion_rs::{Value as IonValue, Value};
@@ -209,7 +209,7 @@ impl<V: IslVersion> ReadFromIsl<V> for NumberRangeValue {
             Value::Int(i) => NumberRangeValue(Decimal::from(*i)),
             Value::Float(f) if f.is_finite() => NumberRangeValue(Decimal::try_from(*f)?),
             Value::Decimal(d) => NumberRangeValue(*d),
-            other => invalid_schema_error(format!("Not a valid number range boundary: {other}"))?,
+            other => invalid_schema!("Not a valid number range boundary: {other}")?,
         };
         Ok(value)
     }

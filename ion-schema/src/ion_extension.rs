@@ -1,7 +1,7 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::result::{invalid_schema_error, IonSchemaResult};
+use crate::result::{invalid_schema, IonSchemaResult};
 use ion_rs::{Decimal, IonResult, Struct, Symbol};
 use ion_rs::{Element, Value};
 use num_traits::ToPrimitive;
@@ -54,7 +54,7 @@ impl ElementExtensions for Element {
         let text = symbol.expect_text()?;
         match annotations.next() {
             None => Ok(Some(text)),
-            Some(_) => invalid_schema_error(format!("Unexpected annotations: {self}")),
+            Some(_) => invalid_schema!("Unexpected annotations: {self}"),
         }
     }
 
@@ -93,7 +93,7 @@ impl StructExtensions for Struct {
         let first = iter.next();
         let second = iter.next();
         if second.is_some() {
-            invalid_schema_error(format!("Illegal repeated field '{field_name}' in: {self}"))
+            invalid_schema!("Illegal repeated field '{field_name}' in: {self}")
         } else {
             Ok(first)
         }
@@ -103,7 +103,7 @@ impl StructExtensions for Struct {
         if let Some(element) = self.get_optional(field_name)? {
             Ok(element)
         } else {
-            invalid_schema_error(format!("Missing required field '{field_name}' in: {self}"))
+            invalid_schema!("Missing required field '{field_name}' in: {self}")
         }
     }
 }

@@ -1,4 +1,5 @@
 use crate::ion_extension::ElementExtensions;
+use crate::isl;
 use crate::isl::isl_import::IslImportType;
 use crate::isl::isl_type_reference::{IslTypeRef, IslVariablyOccurringTypeRef};
 use crate::isl::ranges::{I64Range, TimestampPrecisionRange, U64Range, UsizeRange};
@@ -6,8 +7,7 @@ use crate::isl::util::{
     Annotation, Ieee754InterchangeFormat, TimestampOffset, TimestampPrecision, ValidValue,
 };
 use crate::isl::IslVersion;
-use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
-use crate::{isl, isl_require};
+use crate::result::{invalid_schema, isl_require, IonSchemaResult};
 use ion_rs::{Element, Value};
 use ion_rs::{IonResult, SequenceWriter, StructWriter, ValueWriter, WriteAsIon};
 use ion_rs::{IonType, Symbol};
@@ -24,7 +24,7 @@ pub mod v_1_0 {
     use crate::isl::ranges::{I64Range, TimestampPrecisionRange, U64Range, UsizeRange};
     use crate::isl::util::{Annotation, TimestampOffset, ValidValue};
     use crate::isl::IslVersion;
-    use crate::result::IonSchemaResult;
+    use crate::result::*;
     use ion_rs::Element;
 
     /// Creates a `type` constraint using the [IslTypeRef] referenced inside it
@@ -216,7 +216,7 @@ pub mod v_2_0 {
     use crate::isl::ranges::{I64Range, TimestampPrecisionRange, U64Range, UsizeRange};
     use crate::isl::util::{Annotation, Ieee754InterchangeFormat, TimestampOffset, ValidValue};
     use crate::isl::IslVersion;
-    use crate::result::{invalid_schema_error, IonSchemaResult};
+    use crate::result::*;
     use ion_rs::Element;
 
     /// Creates a `type` constraint using the [IslTypeRef] referenced inside it
@@ -371,7 +371,7 @@ pub mod v_2_0 {
             .collect();
 
         if !is_required && !is_closed {
-            return invalid_schema_error(
+            return invalid_schema!(
                 "annotations constraints must either be required or closed or both.",
             );
         }
@@ -498,9 +498,7 @@ impl IslConstraintValue {
             }
             "annotations" => {
                 if value.is_null() {
-                    return invalid_schema_error(
-                        "annotations constraint was a null instead of a list",
-                    );
+                    return invalid_schema!("annotations constraint was a null instead of a list",);
                 }
 
                 if value.ion_type() == IonType::List {
@@ -517,10 +515,10 @@ impl IslConstraintValue {
                         IslAnnotationsConstraint::StandardAnnotations(type_reference),
                     ))
                 } else {
-                    return invalid_schema_error(format!(
+                    return invalid_schema!(
                         "annotations constraint was a {:?} instead of a list",
                         value.ion_type()
-                    ));
+                    );
                 }
             }
             "any_of" => {
@@ -541,20 +539,18 @@ impl IslConstraintValue {
             )),
             "contains" => {
                 if value.is_null() {
-                    return invalid_schema_error(
-                        "contains constraint was a null instead of a list",
-                    );
+                    return invalid_schema!("contains constraint was a null instead of a list",);
                 }
 
                 if value.ion_type() != IonType::List {
-                    return invalid_schema_error(format!(
+                    return invalid_schema!(
                         "contains constraint was a {:?} instead of a list",
                         value.ion_type()
-                    ));
+                    );
                 }
 
                 if !value.annotations().is_empty() {
-                    return invalid_schema_error("contains list can not have any annotations");
+                    return invalid_schema!("contains list can not have any annotations");
                 }
 
                 let values: Vec<Element> = value
@@ -567,23 +563,23 @@ impl IslConstraintValue {
             }
             "content" => {
                 if value.is_null() {
-                    return invalid_schema_error(
+                    return invalid_schema!(
                         "content constraint was a null instead of a symbol `closed`",
                     );
                 }
 
                 if value.ion_type() != IonType::Symbol {
-                    return invalid_schema_error(format!(
+                    return invalid_schema!(
                         "content constraint was a {:?} instead of a symbol `closed`",
                         value.ion_type()
-                    ));
+                    );
                 }
 
                 if let Some(closed) = value.as_text() {
                     if closed != "closed" {
-                        return invalid_schema_error(format!(
+                        return invalid_schema!(
                             "content constraint was a {closed} instead of a symbol `closed`"
-                        ));
+                        );
                     }
                 }
 
@@ -608,7 +604,7 @@ impl IslConstraintValue {
                             .iter()
                             .any(|a| a.text() != Some("distinct") && a.text() != Some("$null_or"))
                         {
-                            return invalid_schema_error(
+                            return invalid_schema!(
                                 "element constraint can only contain `distinct` annotation",
                             );
                         }
@@ -642,7 +638,7 @@ impl IslConstraintValue {
                                 .iter()
                                 .any(|a| a.text() != Some("distinct"))
                         {
-                            return invalid_schema_error(
+                            return invalid_schema!(
                                 "field_names constraint can only contain `distinct` annotation",
                             );
                         }
@@ -663,7 +659,7 @@ impl IslConstraintValue {
                     )?;
 
                 if fields.is_empty() {
-                    return invalid_schema_error("fields constraint can not be empty");
+                    return invalid_schema!("fields constraint can not be empty");
                 }
                 match isl_version {
                     IslVersion::V1_0 => Ok(IslConstraintValue::Fields(fields, false)),
@@ -674,7 +670,7 @@ impl IslConstraintValue {
                                 .iter()
                                 .any(|a| a.text() != Some("closed"))
                         {
-                            return invalid_schema_error(
+                            return invalid_schema!(
                                 "fields constraint may only be annotated with 'closed'",
                             );
                         }
@@ -687,17 +683,15 @@ impl IslConstraintValue {
             }
             "ieee754_float" => {
                 if !value.annotations().is_empty() {
-                    return invalid_schema_error(
-                        "`ieee_754_float` argument must not have annotations",
-                    );
+                    return invalid_schema!("`ieee_754_float` argument must not have annotations",);
                 }
                 let string_value =
                     value
                         .as_symbol()
                         .map(|s| s.text().unwrap())
                         .ok_or_else(|| {
-                            invalid_schema_error_raw(format!(
-                                "expected ieee754_float to be one of 'binary16', 'binary32', or 'binary64', but it was: {value}"))
+                            invalid_schema!(
+                                "expected ieee754_float to be one of 'binary16', 'binary32', or 'binary64', but it was: {value}")
                         })?;
                 Ok(IslConstraintValue::Ieee754Float(string_value.try_into()?))
             }
@@ -723,16 +717,16 @@ impl IslConstraintValue {
             }
             "ordered_elements" => {
                 if value.is_null() {
-                    return invalid_schema_error(
+                    return invalid_schema!(
                         "ordered_elements constraint was a null instead of a list",
                     );
                 }
                 isl_require!(value.annotations().is_empty() => "ordered_elements list may not be annotated")?;
                 if value.ion_type() != IonType::List {
-                    return invalid_schema_error(format!(
+                    return invalid_schema!(
                         "ordered_elements constraint was a {:?} instead of a list",
                         value.ion_type()
-                    ));
+                    );
                 }
 
                 let types: Vec<IslVariablyOccurringTypeRef> = value
@@ -763,22 +757,20 @@ impl IslConstraintValue {
                     .iter()
                     .any(|a| a.text().unwrap() != "i" && a.text().unwrap() != "m")
                 {
-                    return invalid_schema_error(
+                    return invalid_schema!(
                         "regex constraint must only contain 'i' or 'm' annotation",
                     );
                 }
 
                 let expression = value.as_string().ok_or_else(|| {
-                    invalid_schema_error_raw(format!(
+                    invalid_schema!(
                         "expected regex to contain a string expression but found: {}",
                         value.ion_type()
-                    ))
+                    )
                 })?;
 
                 if expression.is_empty() {
-                    return invalid_schema_error(
-                        "regex constraint must contain a non empty expression",
-                    );
+                    return invalid_schema!("regex constraint must contain a non empty expression",);
                 }
 
                 Ok(IslConstraintValue::Regex(IslRegexConstraint::new(
@@ -822,20 +814,20 @@ impl IslConstraintValue {
             "timestamp_offset" => {
                 use IonType::*;
                 if value.is_null() {
-                    return invalid_schema_error(
+                    return invalid_schema!(
                         "expected a list of valid offsets for an `timestamp_offset` constraint, found null",
                     );
                 }
 
                 if !value.annotations().is_empty() {
-                    return invalid_schema_error("`timestamp_offset` list may not be annotated");
+                    return invalid_schema!("`timestamp_offset` list may not be annotated");
                 }
 
                 let valid_offsets: Vec<TimestampOffset> = match value.ion_type() {
                     List => {
                         let list_values = value.as_sequence().unwrap();
                         if list_values.is_empty() {
-                            return invalid_schema_error(
+                            return invalid_schema!(
                                 "`timestamp_offset` constraint must contain at least one offset",
                             );
                         }
@@ -843,21 +835,21 @@ impl IslConstraintValue {
                             .elements()
                             .map(|e| {
                                 if e.is_null() {
-                                    return invalid_schema_error(
+                                    return invalid_schema!(
                                         "`timestamp_offset` values must be non-null strings, found null",
                                     );
                                 }
 
                                 if e.ion_type() != IonType::String {
-                                    return invalid_schema_error(format!(
+                                    return invalid_schema!(
                                         "`timestamp_offset` values must be non-null strings, found {e}"
-                                    ));
+                                    );
                                 }
 
                                 if !e.annotations().is_empty() {
-                                    return invalid_schema_error(format!(
+                                    return invalid_schema!(
                                         "`timestamp_offset` values may not be annotated, found {e}"
-                                    ));
+                                    );
                                 }
 
                                 // unwrap here will not panic as we have already verified the ion type to be a string
@@ -870,9 +862,9 @@ impl IslConstraintValue {
                         list_vec?
                     }
                     _ => {
-                        return invalid_schema_error(format!(
+                        return invalid_schema!(
                         "`timestamp_offset` requires a list of offset strings, but found: {value}"
-                    ))
+                    )
                     }
                 };
                 Ok(IslConstraintValue::TimestampOffset(
@@ -901,16 +893,14 @@ impl IslConstraintValue {
     ) -> IonSchemaResult<Vec<IslTypeRef>> {
         //TODO: create a method/macro for this ion type check which can be reused
         if value.is_null() {
-            return invalid_schema_error(format!(
-                "{constraint_name} constraint was a null instead of a list"
-            ));
+            return invalid_schema!("{constraint_name} constraint was a null instead of a list");
         }
         if value.ion_type() != IonType::List {
-            return invalid_schema_error(format!(
+            return invalid_schema!(
                 "{} constraint was a {:?} instead of a list",
                 constraint_name,
                 value.ion_type()
-            ));
+            );
         }
         value
             .as_sequence()
@@ -927,14 +917,14 @@ impl IslConstraintValue {
         inline_imported_types: &mut Vec<IslImportType>,
     ) -> IonSchemaResult<HashMap<String, IslVariablyOccurringTypeRef>> {
         if value.is_null() {
-            return invalid_schema_error("fields constraint was a null instead of a struct");
+            return invalid_schema!("fields constraint was a null instead of a struct");
         }
 
         if value.ion_type() != IonType::Struct {
-            return invalid_schema_error(format!(
+            return invalid_schema!(
                 "fields constraint was a {:?} instead of a struct",
                 value.ion_type()
-            ));
+            );
         }
 
         let fields_map = value
@@ -954,7 +944,7 @@ impl IslConstraintValue {
 
         // verify the map length with struct length to check for duplicates
         if fields_map.len() < value.as_struct().unwrap().len() {
-            return invalid_schema_error("fields must be a struct with no repeated field names");
+            return invalid_schema!("fields must be a struct with no repeated field names");
         }
 
         Ok(fields_map)
@@ -1113,7 +1103,7 @@ impl IslSimpleAnnotationsConstraint {
             || annotation_modifiers.is_empty())
             && isl_version == IslVersion::V2_0
         {
-            return invalid_schema_error(
+            return invalid_schema!(
                 "annotations constraint must only be annotated with 'required' or 'closed' annotation",
             );
         }
@@ -1124,7 +1114,7 @@ impl IslSimpleAnnotationsConstraint {
             .elements()
             .map(|e| {
                 if !e.annotations().is_empty() && isl_version == IslVersion::V2_0 {
-                    return invalid_schema_error(
+                    return invalid_schema!(
                         "annotations constraint must only contain symbols without any annotations",
                     );
                 }
@@ -1139,9 +1129,9 @@ impl IslSimpleAnnotationsConstraint {
                             isl_version,
                         )
                     })
-                    .ok_or(invalid_schema_error_raw(
-                        "annotations constraint must only contain symbols",
-                    ))
+                    .ok_or(
+                        invalid_schema!("annotations constraint must only contain symbols",).into(),
+                    )
             })
             .collect::<IonSchemaResult<Vec<Annotation>>>()?;
 

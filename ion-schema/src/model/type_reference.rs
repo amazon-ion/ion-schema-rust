@@ -4,17 +4,23 @@
 use crate::internal_traits::{LoaderContext, ReadFromIsl, WriteAsIsl, WriteContext};
 use crate::ion_extension::StructExtensions;
 use crate::resolver::TypeCoordinates;
-use crate::result::{invalid_schema_error, IonSchemaResult};
+use crate::result::{invalid_schema, HasIslSourceLocation, IonSchemaResult, IslSourceLocation};
 use crate::IslVersion;
 use ion_rs::{Element, StructWriter, Value, ValueWriter};
 
 /// References another type, by name, in Ion Schema.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct TypeReference {
     schema_id: Option<String>,
     type_name: String,
+    source_location: IslSourceLocation,
     // Not exposed in public API. Initially `None`, but changed to `Some(_)` when resolving the schemas
     resolved_type_coordinates: Option<TypeCoordinates>,
+}
+impl PartialEq for TypeReference {
+    fn eq(&self, other: &Self) -> bool {
+        self.schema_id == other.schema_id && self.type_name == other.type_name
+    }
 }
 
 impl TypeReference {
@@ -24,6 +30,7 @@ impl TypeReference {
         TypeReference {
             schema_id: None,
             type_name: type_name.into(),
+            source_location: IslSourceLocation::new(None),
             resolved_type_coordinates: None,
         }
     }
@@ -33,6 +40,7 @@ impl TypeReference {
         TypeReference {
             schema_id: Some(schema_id.into()),
             type_name: type_name.into(),
+            source_location: IslSourceLocation::new(None),
             resolved_type_coordinates: None,
         }
     }
@@ -84,21 +92,27 @@ impl<V: IslVersion> WriteAsIsl<V> for TypeReference {
 impl<V: IslVersion> ReadFromIsl<V> for TypeReference {
     fn try_read(ion: &Element, ctx: &LoaderContext<V>) -> IonSchemaResult<Self> {
         match ion.value() {
-            Value::Symbol(s) => Ok(s.expect_text()?.into()),
+            Value::Symbol(s) => {
+                let mut tr: TypeReference = s.expect_text()?.into();
+                tr.source_location = ion.isl_source_location();
+                Ok(tr)
+            }
             Value::Struct(s) => {
                 if s.fields().count() != 2 {
-                    return invalid_schema_error(format!(
-                        "Unexpected extra field(s) in inline import: {ion}"
-                    ));
+                    return invalid_schema!("Unexpected extra field(s) in inline import: {ion}");
                 }
                 let schema_id = s.get_required("id")?.expect_text()?;
                 let type_name = s.get_required("type")?.expect_text()?;
                 Ok(TypeReference::imported(schema_id, type_name))
             }
-            other => invalid_schema_error(format!(
-                "TypeReference must be a symbol or struct; was: {ion}"
-            )),
+            other => invalid_schema!("TypeReference must be a symbol or struct; was: {ion}"),
         }
+    }
+}
+
+impl HasIslSourceLocation for TypeReference {
+    fn isl_source_location(&self) -> IslSourceLocation {
+        self.source_location
     }
 }
 
@@ -107,6 +121,7 @@ mod tests {
     use crate::internal_traits::{LoaderContext, ReadFromIsl};
     use crate::model::type_reference::TypeReference;
 
+    use crate::result::IslSourceLocation;
     use crate::{ISL_1_0, ISL_2_0};
     use ion_rs::Element;
     use rstest::rstest;
@@ -124,6 +139,7 @@ mod tests {
         let expected = TypeReference {
             schema_id: Some("foo".to_string()),
             type_name: "bar".to_string(),
+            source_location: IslSourceLocation::new(None),
             resolved_type_coordinates: None,
         };
         assert_eq!(expected, actual)

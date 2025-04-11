@@ -18,7 +18,7 @@
 use crate::isl::ranges::base::RangeValidation;
 use crate::isl::util::TimestampPrecision;
 use crate::IonSchemaResult;
-use crate::{invalid_schema_error, invalid_schema_error_raw, isl_require};
+use crate::{isl_require, result::invalid_schema};
 use ion_rs::Decimal;
 use ion_rs::{Element, IonResult, ValueWriter, WriteAsIon};
 use ion_rs::{IonType, Timestamp};
@@ -289,7 +289,7 @@ mod base {
                 if let Some(value) = value {
                     Ok(Self::new_single_value(value))
                 } else {
-                    invalid_schema_error(format!("invalid value for range: {element}"))
+                    invalid_schema!("invalid value for range: {element}")
                 }
             }
         }
@@ -313,9 +313,7 @@ mod base {
                 }
                 _ => {
                     let limit_value: T = value_fn(boundary_element).ok_or_else(|| {
-                        invalid_schema_error_raw(format!(
-                            "invalid value for range boundary: {element}"
-                        ))
+                        invalid_schema!("invalid value for range boundary: {element}")
                     })?;
                     if is_exclusive {
                         Ok(Limit::Exclusive(limit_value))

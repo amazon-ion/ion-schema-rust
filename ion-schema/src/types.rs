@@ -4,7 +4,7 @@ use crate::ion_schema_element::IonSchemaElementType;
 use crate::isl::isl_constraint::IslConstraintValue;
 use crate::isl::isl_type::IslType;
 use crate::isl::IslVersion;
-use crate::result::{invalid_schema_error, IonSchemaResult, ValidationResult};
+use crate::result::{invalid_schema, IonSchemaResult, ValidationResult};
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::violation::{Violation, ViolationCode};
 use crate::IonSchemaElement;
@@ -432,10 +432,10 @@ impl TypeDefinitionImpl {
         if let Some(type_name) = type_name {
             if let Some(type_def) = type_store.get_type_def_by_name(type_name) {
                 if isl_version == IslVersion::V2_0 && !type_def.is_deferred_type_def() {
-                    return invalid_schema_error(format!(
+                    return invalid_schema!(
                         "The schema document can not have two type definitions with same name: {}",
                         type_name
-                    ));
+                    );
                 }
             }
             // add parent information for named type

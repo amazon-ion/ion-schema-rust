@@ -7,7 +7,7 @@ use crate::model::constraints::annotations::AnnotationsVariant;
 use crate::model::constraints::AnnotationsV2Modifier::{Closed, ClosedAndRequired, Required};
 use crate::model::constraints::{Annotations, ReadConstraint};
 use crate::model::TypeDefinitionBuilder;
-use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
+use crate::result::{invalid_schema, IonSchemaResult};
 use crate::{IonSchemaElement, ISL_1_0, ISL_2_0};
 use ion_rs::{Element, Symbol, ValueWriter};
 use std::ops::ControlFlow;
@@ -176,10 +176,10 @@ impl ReadConstraint<ISL_2_0> for AnnotationsV2Simple {
         let annotations_len = ion.annotations().len();
 
         if annotations_len != (required as usize + closed as usize) {
-            return invalid_schema_error(format!(
+            return invalid_schema!(
                 "unexpected annotations on annotations constraint argument: {}",
                 ion
-            ));
+            );
         }
 
         let modifier = match (closed, required) {
@@ -187,19 +187,16 @@ impl ReadConstraint<ISL_2_0> for AnnotationsV2Simple {
             (true, false) => Closed,
             (false, true) => Required,
             (false, false) => {
-                return invalid_schema_error(format!(
-                    "annotations must be closed, required, or both: {}",
-                    ion
-                ))
+                return invalid_schema!("annotations must be closed, required, or both: {}", ion)
             }
         };
         let annotations = ion
             .as_list()
             .ok_or_else(|| {
-                invalid_schema_error_raw(format!(
+                invalid_schema!(
                     "annotations constraint requires a list of annotations, found: {}",
                     ion
-                ))
+                )
             })?
             .iter()
             .map(|el| {

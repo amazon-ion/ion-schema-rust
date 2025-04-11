@@ -3,10 +3,8 @@
 
 use crate::internal_traits::{LoaderContext, ReadFromIsl, WriteAsIsl, WriteContext};
 use crate::ion_extension::ElementExtensions;
-use crate::result::{
-    invalid_schema_error, invalid_schema_error_raw, IonSchemaError, IonSchemaResult,
-};
-use crate::{isl_require, IslVersion};
+use crate::result::{invalid_schema, isl_require, IonSchemaError, IonSchemaResult};
+use crate::IslVersion;
 use hidden::RangeBoundType;
 use ion_rs::{Annotatable, Element, SequenceWriter, ValueWriter, WriteAsIon};
 use std::fmt::Debug;
@@ -44,7 +42,7 @@ impl<T: RangeBoundType> IonSchemaRange<T> {
             (Included(x), Included(y)) if x > y => Err(()),
             _ => Ok(()),
         }
-        .map_err(|_| invalid_schema_error_raw(format!("Invalid range: {min:?} to {max:?}")))
+        .map_err(|_| invalid_schema!("Invalid range: {min:?} to {max:?}").into())
         .map(|_| IonSchemaRange { min, max })
     }
 
@@ -128,7 +126,7 @@ impl<V: IslVersion, T: RangeBoundType + ReadFromIsl<V>> ReadFromIsl<V> for IonSc
         let optional_annotation = ion.one_optional_annotation()?;
         if optional_annotation == Some(RANGE) {
             let Some(seq) = ion.as_list() else {
-                invalid_schema_error(format!("range must be a non-null list; found: {ion}"))?
+                invalid_schema!("range must be a non-null list; found: {ion}")?
             };
 
             isl_require!(seq.len() == 2 => "range must have a lower and upper bound; found: {ion}")?;
@@ -137,25 +135,25 @@ impl<V: IslVersion, T: RangeBoundType + ReadFromIsl<V>> ReadFromIsl<V> for IonSc
             let upper = seq.get(1).unwrap();
 
             let lower = match (lower.as_symbol_text(), lower.one_optional_annotation()?) {
-                (Some(MIN), Some(EXCLUSIVE)) => invalid_schema_error("'min' may not be exclusive")?,
+                (Some(MIN), Some(EXCLUSIVE)) => invalid_schema!("'min' may not be exclusive")?,
                 (Some(MIN), None) => Unbounded,
                 (_, Some(EXCLUSIVE)) => Excluded(T::try_read(lower, ctx)?),
                 (_, None) => Included(T::try_read(lower, ctx)?),
-                _ => invalid_schema_error(format!("invalid annotation on range bound: {lower}"))?,
+                _ => invalid_schema!("invalid annotation on range bound: {lower}")?,
             };
             let upper = match (upper.as_symbol_text(), upper.one_optional_annotation()?) {
-                (Some(MAX), Some(EXCLUSIVE)) => invalid_schema_error("'max' may not be exclusive")?,
+                (Some(MAX), Some(EXCLUSIVE)) => invalid_schema!("'max' may not be exclusive")?,
                 (Some(MAX), None) => Unbounded,
                 (_, Some(EXCLUSIVE)) => Excluded(T::try_read(upper, ctx)?),
                 (_, None) => Included(T::try_read(upper, ctx)?),
-                _ => invalid_schema_error(format!("invalid annotation on range bound: {upper}"))?,
+                _ => invalid_schema!("invalid annotation on range bound: {upper}")?,
             };
 
             Ok(IonSchemaRange::try_new(lower, upper)?)
         } else {
             isl_require!(optional_annotation.is_none() => "invalid annotation on range; found: {ion}")?;
-            let value: T = T::try_read(ion, ctx)
-                .map_err(|_| invalid_schema_error_raw(format!("invalid range value: {ion}")))?;
+            let value: T =
+                T::try_read(ion, ctx).map_err(|_| invalid_schema!("invalid range value: {ion}"))?;
             Ok(IonSchemaRange::from(value))
         }
     }

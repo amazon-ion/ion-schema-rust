@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::model::bag::Bag;
+use crate::result::{HasIslSourceLocation, IslSourceLocation};
 use crate::{IslVersion, Versioned, ISL_2_0};
 use ion_rs::Element;
+use std::fmt::{Display, Formatter, Write};
 use std::marker::PhantomData;
 
 /// Represents an Ion Schema document header, providing support for schema and type imports in
@@ -36,10 +38,16 @@ impl SchemaHeader {
 }
 
 /// Represents an import in a [`SchemaHeader`].
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Import {
     schema_id: String,
     type_import: Option<TypeImport>,
+    source_location: IslSourceLocation,
+}
+impl PartialEq for Import {
+    fn eq(&self, other: &Self) -> bool {
+        self.schema_id == other.schema_id && self.type_import == other.type_import
+    }
 }
 
 /// Narrows an [`Import`] to a specific type from the source schema, with an optional alias.
@@ -53,6 +61,7 @@ impl Import {
         Import {
             schema_id: schema_id.to_string(),
             type_import: None,
+            source_location: IslSourceLocation::new(None),
         }
     }
     pub fn schema_type(schema_id: &str, type_name: &str, alias: Option<&str>) -> Self {
@@ -62,6 +71,7 @@ impl Import {
                 type_name: type_name.to_string(),
                 alias: alias.map(|s| s.to_string()),
             }),
+            source_location: IslSourceLocation::new(None),
         }
     }
 
@@ -82,6 +92,11 @@ impl Import {
         self.type_import
             .as_ref()
             .and_then(|type_import| type_import.alias.as_deref())
+    }
+}
+impl HasIslSourceLocation for Import {
+    fn isl_source_location(&self) -> IslSourceLocation {
+        self.source_location
     }
 }
 

@@ -25,8 +25,8 @@ use crate::isl::isl_import::{IslImport, IslImportType};
 use crate::isl::isl_type::IslType;
 use crate::isl::{IslSchema, IslVersion};
 use crate::result::{
-    invalid_schema_error, invalid_schema_error_raw, unresolvable_schema_error,
-    unresolvable_schema_error_raw, IonSchemaError, IonSchemaResult,
+    invalid_schema, unresolvable_schema_error, unresolvable_schema_error_raw, IonSchemaError,
+    IonSchemaResult,
 };
 use crate::schema::Schema;
 use crate::types::{BuiltInTypeDefinition, Nullability, TypeDefinitionImpl, TypeDefinitionKind};
@@ -754,7 +754,7 @@ impl Resolver {
                         .any(|c| c.version != isl_version);
 
                     if has_other_isl_constraints {
-                        return invalid_schema_error(format!("ISL type: {isl_type_name} contains constraints from another ISL version. Only use {isl_version} constraints for this method."));
+                        return invalid_schema!("ISL type: {isl_type_name} contains constraints from another ISL version. Only use {isl_version} constraints for this method.");
                     }
 
                     TypeDefinitionImpl::parse_from_isl_type_and_update_pending_types(
@@ -766,7 +766,7 @@ impl Resolver {
                 }
                 None => {
                     // top level schema types can not be anonymous
-                    return invalid_schema_error("Top level types must be named type definitions");
+                    return invalid_schema!("Top level types must be named type definitions");
                 }
             };
         }
@@ -808,28 +808,24 @@ impl Resolver {
                     "$ion_schema_1_0" => IslVersion::V1_0,
                     "$ion_schema_2_0" => IslVersion::V2_0,
                     _ => {
-                        return invalid_schema_error(format!(
-                            "Unsupported Ion Schema Language version: {value}"
-                        ));
+                        return invalid_schema!("Unsupported Ion Schema Language version: {value}");
                     }
                 };
                 found_isl_version_marker = true;
             } else if annotations.contains("schema_header") {
                 if isl_version == IslVersion::V2_0 {
                     if found_type_definition {
-                        return invalid_schema_error(
+                        return invalid_schema!(
                             "The schema header must come before top level type definitions",
                         );
                     }
 
                     if found_header {
-                        return invalid_schema_error(
-                            "Schema must only contain a single schema header",
-                        );
+                        return invalid_schema!("Schema must only contain a single schema header",);
                     }
 
                     if annotations.len() > 1 {
-                        return invalid_schema_error(
+                        return invalid_schema!(
                             "schema header must not have any other annotations then `schema_header`",
                         );
                     }
@@ -856,13 +852,13 @@ impl Resolver {
                         schema_header.get("user_reserved_fields")
                     {
                         if !user_reserved_fields_element.annotations().is_empty() {
-                            return invalid_schema_error(
+                            return invalid_schema!(
                                 "User reserved field must be an unannotated struct",
-                            )?;
+                            );
                         }
                         let user_reserved_fields_struct = user_reserved_fields_element
                             .as_struct()
-                            .ok_or(invalid_schema_error_raw(
+                            .ok_or(invalid_schema!(
                                 "User reserved field must be a non-null struct",
                             ))?;
 
@@ -877,7 +873,7 @@ impl Resolver {
                 found_type_definition = true;
 
                 if isl_version == IslVersion::V2_0 && annotations.len() > 1 {
-                    return invalid_schema_error(
+                    return invalid_schema!(
                         "Top level types definitions must not have any other annotations then `type`",
                     );
                 }
@@ -892,7 +888,7 @@ impl Resolver {
                     IslType::from_owned_element(isl_version, &value, &mut isl_inline_imports)?;
                 if isl_type.name().is_none() {
                     // if a top level type definition doesn't contain `name` field return an error
-                    return invalid_schema_error(
+                    return invalid_schema!(
                         "Top level types must contain field `name` in their definition",
                     );
                 }
@@ -903,7 +899,7 @@ impl Resolver {
 
                 // top level named type definition can not contain `occurs` field as per ISL specification
                 if value.as_struct().unwrap().get("occurs").is_some() {
-                    return invalid_schema_error(
+                    return invalid_schema!(
                         "Top level types must not contain `occurs` field in their definition",
                     );
                 }
@@ -915,7 +911,7 @@ impl Resolver {
                 found_footer = true;
                 if isl_version == IslVersion::V2_0 {
                     if annotations.len() > 1 {
-                        return invalid_schema_error(
+                        return invalid_schema!(
                             "schema footer must not have any other annotations then `schema_footer`",
                         );
                     }
@@ -928,7 +924,7 @@ impl Resolver {
                     && !value.is_null()
                     && is_isl_version_marker(value.as_text().unwrap())
                 {
-                    return invalid_schema_error(
+                    return invalid_schema!(
                         "top level open content can not be an Ion Schema version marker",
                     );
                 }
@@ -939,7 +935,7 @@ impl Resolver {
                         .iter()
                         .any(|a| is_reserved_word(a.text().unwrap()))
                 {
-                    return invalid_schema_error(
+                    return invalid_schema!(
                         "top level open content may not be annotated with any reserved keyword",
                     );
                 }
@@ -950,7 +946,7 @@ impl Resolver {
         }
 
         if found_footer ^ found_header {
-            return invalid_schema_error("For any schema while a header and footer are both optional, a footer is required if a header is present (and vice-versa).");
+            return invalid_schema!("For any schema while a header and footer are both optional, a footer is required if a header is present (and vice-versa).");
         }
 
         match isl_version {
@@ -986,10 +982,7 @@ impl Resolver {
         let mut added_imported_type_to_type_store = false;
 
         if isl_version != isl.version() {
-            return invalid_schema_error(format!(
-                "Expected {isl_version} schema but found {}",
-                isl.version()
-            ));
+            return invalid_schema!("Expected {isl_version} schema but found {}", isl.version());
         }
 
         let isl_types = isl.types();
@@ -1028,7 +1021,7 @@ impl Resolver {
                     .any(|c| c.version != isl_version);
 
                 if has_other_isl_constraints {
-                    return invalid_schema_error(format!("ISL type: {isl_type_name} contains constraints from other ISL version. Only use {isl_version} constraints for this method."));
+                    return invalid_schema!("ISL type: {isl_type_name} contains constraints from other ISL version. Only use {isl_version} constraints for this method.");
                 }
 
                 // convert IslType to TypeDefinitionKind
@@ -1098,9 +1091,9 @@ impl Resolver {
         for authority in &self.authorities {
             return match authority.elements(id) {
                 Err(error) => match error {
-                    IonSchemaError::IoError { source } => match source.kind() {
+                    IonSchemaError::IoError(source) => match source.as_ref().kind() {
                         ErrorKind::NotFound => continue,
-                        _ => Err(IonSchemaError::IoError { source }),
+                        _ => Err(IonSchemaError::IoError(source)),
                     },
                     _ => Err(error),
                 },
@@ -1129,7 +1122,7 @@ impl Resolver {
         for authority in &self.authorities {
             return match authority.elements(id) {
                 Ok(schema_content) => self.isl_schema_from_elements(schema_content.into_iter(), id),
-                Err(IonSchemaError::IoError { source: e }) if e.kind() == ErrorKind::NotFound => {
+                Err(IonSchemaError::IoError(e)) if e.as_ref().kind() == ErrorKind::NotFound => {
                     continue;
                 }
                 Err(error) => Err(error),

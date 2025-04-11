@@ -4,9 +4,7 @@ use crate::isl::isl_type::IslType;
 use crate::isl::ranges::{Limit, UsizeRange};
 use crate::isl::IslVersion;
 use crate::isl_require;
-use crate::result::{
-    invalid_schema_error, invalid_schema_error_raw, unresolvable_schema_error, IonSchemaResult,
-};
+use crate::result::{invalid_schema, unresolvable_schema_error, IonSchemaResult};
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::type_reference::{TypeReference, VariablyOccurringTypeRef};
 use crate::types::TypeDefinitionImpl;
@@ -148,17 +146,13 @@ impl IslTypeRef {
             if isl_version == IslVersion::V1_0 {
                 Nullable
             } else {
-                return invalid_schema_error(
-                    "`nullable::` modifier is not supported since ISL 2.0",
-                );
+                return invalid_schema!("`nullable::` modifier is not supported since ISL 2.0",);
             }
         } else if value.annotations().contains("$null_or") {
             if isl_version != IslVersion::V1_0 {
                 NullOr
             } else {
-                return invalid_schema_error(
-                    "`$null_or::` modifier is not supported before ISL 2.0",
-                );
+                return invalid_schema!("`$null_or::` modifier is not supported before ISL 2.0",);
             }
         } else {
             Nothing
@@ -166,7 +160,7 @@ impl IslTypeRef {
         match value.ion_type() {
             IonType::Symbol => {
                 if value.is_null() {
-                    return invalid_schema_error(
+                    return invalid_schema!(
                         "a base or alias type reference can not be null.symbol",
                     )
                 }
@@ -174,7 +168,7 @@ impl IslTypeRef {
                 let type_name = value.as_symbol().unwrap()
                     .text()
                     .ok_or_else(|| {
-                        invalid_schema_error_raw(
+                        invalid_schema!(
                             "a base or alias type reference symbol doesn't have text",
                         )
                     })?;
@@ -188,7 +182,7 @@ impl IslTypeRef {
                             Ok(IslTypeRef::Named(type_name.to_owned(), Nullable))
                         }
                         _ => {
-                            invalid_schema_error(
+                            invalid_schema!(
                                 "`nullable::` modifier is only supported for built in types",
                             )
                         }
@@ -199,7 +193,7 @@ impl IslTypeRef {
             }
             IonType::Struct => {
                 if value.is_null() {
-                    return invalid_schema_error(
+                    return invalid_schema!(
                         "a base or alias type reference can not be null.struct",
                     )
                 }
@@ -207,7 +201,7 @@ impl IslTypeRef {
                 // check for nullable type reference
                 if nullability == Nullable {
                     // TODO: currently it only allows for built in types (other than `document`) to be defined with `nullable` annotation. For `document` and all other type references it returns an error.
-                    return invalid_schema_error(
+                    return invalid_schema!(
                         "`nullable` modifier is only supported for built-in types",
                     )
                 }
@@ -218,14 +212,14 @@ impl IslTypeRef {
                     let type_def= IslType::from_owned_element(isl_version, value, inline_imported_types)?;
                     // if type reference contains `occurs` field and has modifier `$null_or` then return an error
                     if nullability == NullOr && value_struct.get("occurs").is_some() {
-                        return invalid_schema_error(
+                        return invalid_schema!(
                             "`$null_or` annotation is not supported for a type reference with an explicit `occurs` field",
                         )
                     }
 
                     if let Some(occurs_field) = value_struct.get("occurs") {
                         if !allow_occurs_field && isl_version == IslVersion::V2_0 {
-                            return invalid_schema_error(
+                            return invalid_schema!(
                             "A type reference with an explicit `occurs` field can only be used for `fields` and `ordered_elements` constraint",
                             )
                         } else {
@@ -240,11 +234,11 @@ impl IslTypeRef {
                 // if it is an inline import type store it as import type reference
                 let isl_import_type = match IslImport::from_ion_element(value)? {
                     IslImport::Schema(_) => {
-                        return invalid_schema_error("an inline import type reference does not have `type` field specified")
+                        return invalid_schema!("an inline import type reference does not have `type` field specified")
                     }
                     IslImport::Type(isl_import_type) => { isl_import_type }
                     IslImport::TypeAlias(_) if isl_version == IslVersion::V2_0 => {
-                        return invalid_schema_error("an inline import type reference can not have `alias` field specified")
+                        return invalid_schema!("an inline import type reference can not have `alias` field specified")
                     }
                     IslImport::TypeAlias(isl_import_type) => {
                         // consider the type alias as open content for ISL 1.0
@@ -256,9 +250,9 @@ impl IslTypeRef {
                 inline_imported_types.push(isl_import_type.to_owned());
                 Ok(IslTypeRef::TypeImport(isl_import_type, nullability))
             },
-            _ => Err(invalid_schema_error_raw(
+            _ => invalid_schema!(
                 "type reference can either be a symbol(For base/alias type reference) or a struct (for anonymous type reference)",
-            )),
+            ),
         }
     }
 
@@ -449,7 +443,7 @@ impl IslVariablyOccurringTypeRef {
 
     fn occurs_from_ion_element(value: &Element) -> IonSchemaResult<UsizeRange> {
         if value.is_null() {
-            return invalid_schema_error(
+            return invalid_schema!(
                 "expected an integer or integer range for an `occurs` constraint, found null",
             );
         }
@@ -459,7 +453,7 @@ impl IslVariablyOccurringTypeRef {
             Value::List(_) | Value::Int(_) => {
                 UsizeRange::from_ion_element(value, Element::as_usize)
             }
-            _ => invalid_schema_error(format!("Invalid occurs value: {value}")),
+            _ => invalid_schema!("Invalid occurs value: {value}"),
         }
     }
 

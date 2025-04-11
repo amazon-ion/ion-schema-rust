@@ -7,7 +7,7 @@ use crate::internal_traits::{
 use crate::model::constraints::{ConstraintName, ReadConstraint};
 use crate::model::TypeDefinitionBuilder;
 use crate::resolver::*;
-use crate::result::{invalid_schema_error, IonSchemaError, IonSchemaResult};
+use crate::result::{invalid_schema, IonSchemaError, IonSchemaResult};
 use crate::{IonSchemaElement, IslVersion, ViolationRecorder};
 use ion_rs::{Element, ValueWriter};
 use std::collections::HashSet;
@@ -118,9 +118,9 @@ impl TryFrom<Option<i16>> for TimestampOffsetValue {
     fn try_from(value: Option<i16>) -> Result<Self, Self::Error> {
         match value {
             Some(invalid_minutes) if !(-1439..1440).contains(&invalid_minutes) => {
-                invalid_schema_error(format!("timestamp offset minutes must be in the range -1439..1440; was {invalid_minutes}"))
+                invalid_schema!("timestamp offset minutes must be in the range -1439..1440; was {invalid_minutes}")
             }
-            minutes => Ok(TimestampOffsetValue{minutes}),
+            minutes => Ok(TimestampOffsetValue { minutes }),
         }
     }
 }

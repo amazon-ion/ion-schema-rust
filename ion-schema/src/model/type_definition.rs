@@ -8,7 +8,7 @@ use crate::ion_schema_version::Versioned;
 use crate::model::bag::Bag;
 use crate::model::constraints::*;
 use crate::resolver::impl_type_ref_walker;
-use crate::result::IonSchemaResult;
+use crate::result::{HasIslSourceLocation, IonSchemaResult, IslSourceLocation};
 use crate::{IonSchemaElement, IslVersion, ViolationRecorder, ISL_1_0, ISL_2_0};
 use ion_rs::{Element, IonData, StructWriter, Symbol, ValueWriter};
 use std::marker::PhantomData;
@@ -17,10 +17,16 @@ use std::ops::ControlFlow;
 pub type VersionedTypeDefinition<V> = Versioned<TypeDefinition, V>;
 
 /// A TypeDefinition is a set of constraints and (optionally) additional user content.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct TypeDefinition {
     constraints: Bag<AnyConstraint>,
     open_content: Bag<(Symbol, IonData<Element>)>,
+    source_location: IslSourceLocation,
+}
+impl PartialEq for TypeDefinition {
+    fn eq(&self, other: &Self) -> bool {
+        self.constraints == other.constraints && self.open_content == other.open_content
+    }
 }
 
 impl TypeDefinition {
@@ -35,6 +41,7 @@ impl TypeDefinition {
         Self {
             constraints,
             open_content,
+            source_location: IslSourceLocation::new(None),
         }
     }
 
@@ -83,6 +90,17 @@ impl<V: IslVersion> TypeDefinitionBuilder<V> {
             self.constraints.into(),
             self.open_content.into(),
         ))
+    }
+
+    fn build_with_source_location(
+        self,
+        source_location: IslSourceLocation,
+    ) -> VersionedTypeDefinition<V> {
+        Versioned::new(TypeDefinition {
+            constraints: self.constraints.into(),
+            open_content: self.open_content.into(),
+            source_location,
+        })
     }
 
     pub fn with_open_content<S: Into<Symbol>, E: Into<Element>>(
@@ -150,7 +168,9 @@ impl ReadFromIsl<ISL_1_0> for TypeDefinition {
                     .push((name.clone(), IonData::from(value.clone()))),
             }
         }
-        Ok(Versioned::into_inner(builder.build()))
+        Ok(Versioned::into_inner(
+            builder.build_with_source_location(ion.isl_source_location()),
+        ))
     }
 }
 
@@ -170,6 +190,14 @@ impl ReadFromIsl<ISL_2_0> for TypeDefinition {
                 }
             }
         }
-        Ok(Versioned::into_inner(builder.build()))
+        Ok(Versioned::into_inner(
+            builder.build_with_source_location(ion.isl_source_location()),
+        ))
+    }
+}
+
+impl HasIslSourceLocation for TypeDefinition {
+    fn isl_source_location(&self) -> IslSourceLocation {
+        self.source_location
     }
 }

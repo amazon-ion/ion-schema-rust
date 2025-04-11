@@ -8,7 +8,7 @@ use crate::model::type_definition::TypeDefinition;
 use crate::model::type_reference::TypeReference;
 use crate::model::VersionedTypeDefinition;
 use crate::resolver::*;
-use crate::result::{invalid_schema_error, IonSchemaResult};
+use crate::result::{invalid_schema, IonSchemaResult};
 use crate::{IslVersion, ISL_1_0, ISL_2_0};
 use ion_rs::{Element, Value, ValueWriter};
 
@@ -74,7 +74,7 @@ where
             (NullabilityModifier::NullOr, (1, _)) => todo!("Implement down-conversion to ISL 1.0 by wrapping in `type: $any, any_of: [$null,  T]`"),
             (NullabilityModifier::NullOr, (2, _)) => writer.with_annotations(["$null_or"]),
             (NullabilityModifier::Nullable, (1, _)) => writer.with_annotations(["nullable"]),
-            (NullabilityModifier::Nullable, (2, _)) => return invalid_schema_error("'nullable::' is not valid for Ion Schema 2.0 and higher"),
+            (NullabilityModifier::Nullable, (2, _)) => return invalid_schema!("'nullable::' is not valid for Ion Schema 2.0 and higher"),
             _ => unreachable!(),
         }?;
 
@@ -93,7 +93,7 @@ where
     fn try_read(ion: &Element, ctx: &LoaderContext<V>) -> IonSchemaResult<Self> {
         let nullability_modifier = ReadFromIsl::try_read(ion, ctx)?;
         let kind = match ion.value() {
-            Value::Symbol(s) => TypeArgumentKind::TypeReference(s.expect_text()?.into()),
+            Value::Symbol(s) => TypeArgumentKind::TypeReference(TypeReference::try_read(ion, ctx)?),
             Value::Struct(s) => {
                 if let Some(id) = s.get("id") {
                     TypeArgumentKind::TypeReference(TypeReference::try_read(ion, ctx)?)
@@ -102,7 +102,7 @@ where
                     TypeArgumentKind::InlineType(ty)
                 }
             }
-            other => invalid_schema_error(format!("not a type argument: {other}"))?,
+            other => invalid_schema!("not a type argument: {other}")?,
         };
         Ok(TypeArgument {
             nullability_modifier,

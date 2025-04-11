@@ -11,11 +11,8 @@ use crate::isl::util::{
     Annotation, Ieee754InterchangeFormat, TimestampOffset, TimestampPrecision, ValidValue,
 };
 use crate::isl::IslVersion;
-use crate::isl_require;
 use crate::ordered_elements_nfa::OrderedElementsNfa;
-use crate::result::{
-    invalid_schema_error, invalid_schema_error_raw, IonSchemaResult, ValidationResult,
-};
+use crate::result::{invalid_schema, isl_require, IonSchemaResult, ValidationResult};
 use crate::system::{PendingTypes, TypeId, TypeStore};
 use crate::type_reference::{TypeReference, VariablyOccurringTypeRef};
 use crate::types::TypeValidator;
@@ -1916,9 +1913,7 @@ impl RegexConstraint {
             .case_insensitive(isl_regex.case_insensitive())
             .multi_line(isl_regex.multi_line())
             .build()
-            .map_err(|e| {
-                invalid_schema_error_raw(format!("Invalid regex {}", isl_regex.expression()))
-            })?;
+            .map_err(|e| invalid_schema!("Invalid regex {}", isl_regex.expression()))?;
 
         Ok(RegexConstraint::new(
             regex,
@@ -1948,7 +1943,7 @@ impl RegexConstraint {
                     sb.push(ch);
                     if let Some(ch) = si.next() {
                         if ch == '?' {
-                            return invalid_schema_error(format!("invalid character {ch}"));
+                            return invalid_schema!("invalid character {ch}");
                         }
                         sb.push(ch)
                     }
@@ -1965,11 +1960,7 @@ impl RegexConstraint {
                             }
                             's' => sb.push_str("[ \\f\\n\\r\\t]"),
                             'S' => sb.push_str("[^ \\f\\n\\r\\t]"),
-                            _ => {
-                                return invalid_schema_error(format!(
-                                    "invalid escape character {ch}",
-                                ))
-                            }
+                            _ => return invalid_schema!("invalid escape character {ch}",),
                         }
                     }
                 }
@@ -1993,10 +1984,10 @@ impl RegexConstraint {
             match ch {
                 '&' => {
                     if si.peek() == Some(&'&') {
-                        return invalid_schema_error("'&&' is not supported in a character class");
+                        return invalid_schema!("'&&' is not supported in a character class");
                     }
                 }
-                '[' => return invalid_schema_error("'[' must be escaped within a character class"),
+                '[' => return invalid_schema!("'[' must be escaped within a character class"),
                 '\\' => {
                     if let Some(ch2) = si.next() {
                         match ch2 {
@@ -2006,10 +1997,10 @@ impl RegexConstraint {
                                 match isl_version {
                                     IslVersion::V1_0 => {
                                         // returns an error for ISL 1.0 as it does not support pre-defined char classes (i.e., \d, \s, \w)
-                                        return invalid_schema_error(format!(
+                                        return invalid_schema!(
                                             "invalid sequence '{:?}' in character class",
                                             si
-                                        ));
+                                        );
                                     }
                                     IslVersion::V2_0 => {
                                         // Change \w and \W to be [a-zA-Z0-9_] and [^a-zA-Z0-9_] respectively
@@ -2028,9 +2019,9 @@ impl RegexConstraint {
                                 }
                             }
                             _ => {
-                                return invalid_schema_error(format!(
+                                return invalid_schema!(
                                     "invalid sequence '\\{ch2}' in character class"
-                                ))
+                                )
                             }
                         }
                     }
@@ -2040,7 +2031,7 @@ impl RegexConstraint {
             }
         }
 
-        invalid_schema_error("character class missing ']'")
+        invalid_schema!("character class missing ']'")
     }
 
     fn parse_quantifier(sb: &mut String, si: &mut Peekable<Chars<'_>>) -> IonSchemaResult<()> {
@@ -2069,12 +2060,12 @@ impl RegexConstraint {
                                 complete = true;
                                 break;
                             }
-                            _ => return invalid_schema_error(format!("invalid character {ch}")),
+                            _ => return invalid_schema!("invalid character {ch}"),
                         }
                     }
 
                     if !complete {
-                        return invalid_schema_error("range quantifier missing '}'");
+                        return invalid_schema!("range quantifier missing '}}'");
                     }
                 }
                 _ => {}
@@ -2082,9 +2073,9 @@ impl RegexConstraint {
             if sb.len() > initial_length {
                 if let Some(ch) = si.peek().cloned() {
                     match ch {
-                        '?' => return invalid_schema_error(format!("invalid character {ch}")),
+                        '?' => return invalid_schema!("invalid character {ch}"),
 
-                        '+' => return invalid_schema_error(format!("invalid character {ch}")),
+                        '+' => return invalid_schema!("invalid character {ch}"),
                         _ => {}
                     }
                 }

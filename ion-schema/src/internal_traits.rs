@@ -4,7 +4,7 @@
 // TODO: This file is a placeholder. These things will eventually be moved to more sensible locations
 //       instead of being clobbered together.
 
-use crate::result::{invalid_schema_error, IonSchemaResult};
+use crate::result::{invalid_schema, IonSchemaResult};
 use crate::{IonSchemaElement, IslVersion, ViolationRecorder};
 use ion_rs::{Element, ValueWriter};
 use std::fmt::Debug;
@@ -44,9 +44,7 @@ pub(crate) trait WriteAsIsl<V: IslVersion>: Debug {
         ctx: &WriteContext<V>,
     ) -> IonSchemaResult<()> {
         let (major, minor) = V::MAJOR_MINOR;
-        invalid_schema_error(format!(
-            "{self:?} is not supported in Ion Schema Language {major}.{minor}"
-        ))
+        invalid_schema!("{self:?} is not supported in Ion Schema Language {major}.{minor}")
     }
 }
 

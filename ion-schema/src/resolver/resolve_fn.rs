@@ -3,9 +3,7 @@
 
 pub(crate) use super::*;
 use crate::model::{SchemaDocument, TypeReference};
-use crate::result::{
-    invalid_schema_error, invalid_schema_error_raw, unresolvable_schema_error_raw, IonSchemaResult,
-};
+use crate::result::{invalid_schema, IonSchemaResult};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -56,15 +54,15 @@ fn build_locally_available_coordinates(
             let tc = global_coordinates
                 .get(&imported_schema_name)
                 .ok_or_else(|| {
-                    unresolvable_schema_error_raw(format!(
+                    invalid_schema!(
                         "Cannot resolve schema '{imported_schema_name}'. Was it loaded?",
-                    ))
+                    )
                 })?
                 .get(&type_name.to_string())
                 .ok_or_else(|| {
-                    invalid_schema_error_raw(format!(
+                    invalid_schema!(
                         "Type '{type_name}' in '{imported_schema_name}' does not exist."
-                    ))
+                    )
                 })?;
             let local_name = if let Some(alias) = import.type_alias() {
                 alias
@@ -72,7 +70,7 @@ fn build_locally_available_coordinates(
                 type_name
             };
             if coordinates.insert(local_name.to_string(), *tc).is_some() {
-                invalid_schema_error(format!("name conflict for type '{local_name}' imported from '{imported_schema_name}' in schema '{schema_name}'"))?;
+                invalid_schema!("name conflict for type '{local_name}' imported from '{imported_schema_name}' in schema '{schema_name}'")?;
             }
         } else {
             let imported_types = global_coordinates
@@ -80,15 +78,15 @@ fn build_locally_available_coordinates(
                 // This can only happen if people are manually constructing schemas because the
                 // loader ensures that all imported schemas are present.
                 .ok_or_else(|| {
-                    unresolvable_schema_error_raw(format!(
+                    invalid_schema!(
                         "Cannot resolve schema '{imported_schema_name}'. Was it loaded?"
-                    ))
+                    )
                 })?;
 
             for (local_name, tc) in imported_types.iter() {
                 if let Some(name_conflict) = coordinates.insert(local_name.to_string(), *tc) {
                     let (conflict_schema_name, _) = &schemas[name_conflict.0];
-                    invalid_schema_error(format!("name conflict in schema '{schema_name}' for type '{local_name}' declared in '{imported_schema_name}' and '{conflict_schema_name}'"))?;
+                    invalid_schema!("name conflict in schema '{schema_name}' for type '{local_name}' declared in '{imported_schema_name}' and '{conflict_schema_name}'")?;
                 }
             }
         }
@@ -141,15 +139,15 @@ pub fn resolve(
                 global_type_coordinates
                     .get(imported_schema_id)
                     .ok_or_else(|| {
-                        unresolvable_schema_error_raw(format!(
+                        invalid_schema!(
                             "Cannot resolve schema '{imported_schema_id}'. Was it loaded?"
-                        ))
+                        )
                     })
                     .and_then(|ok| {
                         ok.get(type_name).ok_or_else(|| {
-                            invalid_schema_error_raw(format!(
+                            invalid_schema!(
                                 "No type '{type_name}' exists in '{imported_schema_id}'."
-                            ))
+                            )
                         })
                     })
                     .copied()
@@ -157,9 +155,7 @@ pub fn resolve(
                 local_type_coordinates
                     .get(type_name)
                     .ok_or_else(|| {
-                        unresolvable_schema_error_raw(format!(
-                            "No type '{type_name}' exists in '{schema_name}'"
-                        ))
+                        invalid_schema!("No type '{type_name}' exists in '{schema_name}'")
                     })
                     .copied()
             };
@@ -172,7 +168,7 @@ pub fn resolve(
 
     if !type_resolution_errors.is_empty() {
         // TODO: Report multiple errors
-        IonSchemaResult::Err(type_resolution_errors.into_iter().next().unwrap())?;
+        return type_resolution_errors.into_iter().next().unwrap();
     }
 
     let schema_store = Arc::new(SchemaStore { schemas });

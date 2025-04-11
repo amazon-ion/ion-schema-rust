@@ -9,7 +9,7 @@ use crate::model::constraints::{ConstraintName, ReadConstraint};
 use crate::model::type_argument::TypeArgument;
 use crate::model::TypeDefinitionBuilder;
 use crate::resolver::*;
-use crate::result::{invalid_schema_error_raw, IonSchemaResult};
+use crate::result::{invalid_schema, IonSchemaResult};
 use crate::{IonSchemaElement, IslVersion, Versioned, ViolationRecorder};
 use ion_rs::{Element, ValueWriter};
 use regex::RegexBuilder;
@@ -58,7 +58,7 @@ impl<V: IslVersion> IonSchemaRegexBuilder<V> {
             .case_insensitive(self.case_insensitive)
             .multi_line(self.multiline)
             .build()
-            .map_err(|e| invalid_schema_error_raw(format!("Invalid regex: {pattern}")))?;
+            .map_err(|e| invalid_schema!("Invalid regex: {pattern}"))?;
 
         let constraint = Regex {
             regex,

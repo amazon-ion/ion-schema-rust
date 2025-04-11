@@ -49,9 +49,6 @@ use std::marker::PhantomData;
 
 /// Wrapper for data that needs to be passed around with an ISL version—for example, builder methods
 /// for some constraints can accept `Versioned<TypeArgument>`s.
-///
-/// Technically, this is a smart pointer that (rather than managing the ownership or memory of the
-/// wrapped value) encodes Ion Schema version information along with the wrapped value.
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct Versioned<T, V: IslVersion>(T, PhantomData<V>);
 impl<T, V: IslVersion> Versioned<T, V> {

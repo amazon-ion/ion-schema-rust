@@ -9,7 +9,7 @@ use crate::model::constraints::{ConstraintName, ReadConstraint};
 use crate::model::ranges::IonSchemaRange;
 use crate::model::TypeDefinitionBuilder;
 use crate::resolver::*;
-use crate::result::{invalid_schema_error, IonSchemaResult};
+use crate::result::{invalid_schema, IonSchemaResult};
 use crate::{IonSchemaElement, IslVersion, ViolationInfo, ViolationRecorder};
 use ion_rs::{Element, IonResult, TimestampPrecision as TSPrecision, ValueWriter, WriteAsIon};
 use std::fmt::{Debug, Display, Formatter};
@@ -84,7 +84,7 @@ impl<V: IslVersion> ReadFromIsl<V> for TimestampPrecisionValue {
             Some(TimestampPrecisionValue::MILLIS) => Ok(Millisecond),
             Some(TimestampPrecisionValue::MICROS) => Ok(Microsecond),
             Some(TimestampPrecisionValue::NANOS) => Ok(Nanosecond),
-            _ => invalid_schema_error(format!("not a valid timestamp precision value: {ion}")),
+            _ => invalid_schema!("not a valid timestamp precision value: {ion}"),
         }
     }
 }

@@ -1,7 +1,7 @@
 use crate::isl::isl_constraint::{IslConstraint, IslConstraintValue};
 use crate::isl::isl_import::IslImportType;
 use crate::isl::IslVersion;
-use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
+use crate::result::{invalid_schema, IonSchemaResult};
 use ion_rs::{Element, IonResult, StructWriter, ValueWriter, WriteAsIon};
 
 /// Provides public facing APIs for constructing ISL types programmatically for ISL 1.0
@@ -143,41 +143,35 @@ impl IslType {
 
         // parses the name of the type specified by schema
         if ion_struct.get_all("name").count() > 1 {
-            return Err(invalid_schema_error_raw(
+            return invalid_schema!(
                 "type definition must only contain a single field that represents name of the type",
-            ));
+            );
         }
         let type_name: Option<String> = match ion_struct.get("name") {
             Some(name_element) => match name_element.as_symbol() {
                 Some(name_symbol) => match name_symbol.text() {
                     None => {
-                        return Err(invalid_schema_error_raw(
-                            "type names must be a symbol with defined text",
-                        ))
+                        return invalid_schema!("type names must be a symbol with defined text",)
                     }
                     Some(name) => {
                         if !name_element.annotations().is_empty() {
-                            return Err(invalid_schema_error_raw(
+                            return invalid_schema!(
                                 "type names must be a non null and unannotated symbol with defined text",
-                            ));
+                            );
                         }
                         Some(name.to_owned())
                     }
                 },
-                None => {
-                    return Err(invalid_schema_error_raw(
-                        "type names must be a symbol with defined text",
-                    ))
-                }
+                None => return invalid_schema!("type names must be a symbol with defined text",),
             },
             None => None, // If there is no name field then it is an anonymous type
         };
 
         if !contains_annotations && type_name.is_some() {
             // For named types if it does not have the `type::` annotation return an error
-            return Err(invalid_schema_error_raw(
+            return invalid_schema!(
                 "Top level types must have `type::` annotation in their definition",
-            ));
+            );
         }
 
         // set the isl type name for any error that is returned while parsing its constraints
@@ -193,9 +187,7 @@ impl IslType {
                 Some("occurs") => continue, // if the field_name is "occurs" then skip it as it is handled elsewhere
                 Some(name) => name,
                 None => {
-                    return Err(invalid_schema_error_raw(
-                        "A type name symbol token does not have any text",
-                    ))
+                    return invalid_schema!("A type name symbol token does not have any text",);
                 }
             };
 

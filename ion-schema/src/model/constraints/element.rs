@@ -7,7 +7,7 @@ use crate::model::constraints::{ConstraintName, ReadConstraint};
 use crate::model::type_argument::TypeArgument;
 use crate::model::{TypeDefinitionBuilder, VersionedTypeArgument};
 use crate::resolver::*;
-use crate::result::{invalid_schema_error, IonSchemaResult};
+use crate::result::{invalid_schema, IonSchemaResult};
 use crate::{IonSchemaElement, IslVersion, ViolationRecorder, ISL_1_0, ISL_2_0};
 use ion_rs::{Element, ValueWriter};
 use std::ops::ControlFlow;
@@ -91,7 +91,7 @@ impl WriteAsIsl<ISL_1_0> for ElementType {
         ctx: &WriteContext<ISL_1_0>,
     ) -> IonSchemaResult<()> {
         if self.distinct {
-            invalid_schema_error("'element: distinct:: ...' is not available in Ion Schema 1.0")
+            invalid_schema!("'element: distinct:: ...' is not available in Ion Schema 1.0")
         } else {
             TypeArgument::write_as_isl(self.type_argument(), writer, ctx)
         }

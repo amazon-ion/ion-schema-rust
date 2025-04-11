@@ -3,7 +3,8 @@
 
 use crate::isl::isl_constraint::IslConstraintValue;
 use crate::isl::isl_type::IslType;
-use crate::result::{invalid_schema_error, invalid_schema_error_raw, IonSchemaResult};
+use crate::result::isl_require;
+pub use crate::result::IonSchemaResult;
 use ion_rs::{Element, IonResult, Struct, StructWriter, Symbol, ValueWriter, WriteAsIon};
 use regex::Regex;
 use std::sync::OnceLock;
@@ -16,7 +17,7 @@ macro_rules! try_to {
     ($getter:expr) => {
         match $getter {
             Some(value) => value,
-            None => invalid_schema_error(format!("Missing a value: {}", stringify!($getter)))?,
+            None => crate::result::invalid_schema!("Missing a value: {}", stringify!($getter))?,
         }
     };
 }
@@ -129,7 +130,7 @@ impl UserReservedFields {
                 && f.text() != Some("schema_footer")
                 && f.text() != Some("type")
         }) {
-            return invalid_schema_error(
+            return result::invalid_schema!(
                 "User reserved fields can only have schema_header, schema_footer or type as the field names",
             );
         }
@@ -156,8 +157,8 @@ impl UserReservedFields {
         let user_reserved_elements: Vec<&Element> = user_reserved_fields
             .get(user_reserved_fields_type)
             .and_then(|it| it.as_sequence().map(|s| s.elements().collect()))
-            .ok_or(invalid_schema_error_raw(
-                "User reserved fields mut be non null",
+            .ok_or(result::invalid_schema!(
+                "User reserved fields must be non null",
             ))?;
 
         let user_reserved_fields = user_reserved_elements
@@ -168,14 +169,14 @@ impl UserReservedFields {
             .unwrap_or(vec![]);
 
         if user_reserved_fields.len() != user_reserved_elements.len() {
-            return invalid_schema_error("User reserved fields mut be unannotated");
+            return result::invalid_schema!("User reserved fields mut be unannotated");
         }
 
         if user_reserved_fields
             .iter()
             .any(|f| is_reserved_word(f) || ISL_2_0_KEYWORDS.binary_search(&f.as_str()).is_ok())
         {
-            return invalid_schema_error(
+            return result::invalid_schema!(
                 "ISl 2.0 keywords may not be declared as user reserved fields",
             );
         }
@@ -200,9 +201,9 @@ impl UserReservedFields {
 
         if !unexpected_fields.is_empty() {
             // for unexpected fields return invalid schema error
-            return invalid_schema_error(format!(
+            return result::invalid_schema!(
                 "schema header contains unexpected fields: {unexpected_fields:?}"
-            ));
+            );
         }
 
         Ok(())
@@ -224,9 +225,9 @@ impl UserReservedFields {
 
         if !unexpected_fields.is_empty() {
             // for unexpected fields return invalid schema error
-            return invalid_schema_error(format!(
+            return result::invalid_schema!(
                 "schema type contains unexpected fields: {unexpected_fields:?}"
-            ));
+            );
         }
 
         Ok(())
@@ -247,9 +248,9 @@ impl UserReservedFields {
 
         if !unexpected_fields.is_empty() {
             // for unexpected fields return invalid schema error
-            return invalid_schema_error(format!(
+            return result::invalid_schema!(
                 "schema footer contains unexpected fields: {unexpected_fields:?}"
-            ));
+            );
         }
         Ok(())
     }
