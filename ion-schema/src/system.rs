@@ -86,13 +86,13 @@ impl PendingTypes {
     /// This method is used after a schema named type/root type is loaded entirely into [`PendingTypes`]
     /// * `type_store` - The TypeStore which will be updated with the types within this PendingType
     /// * `load_isl_import` - If this argument is Some(isl_import), then we are not within an import process of schema.
-    ///                       Based on given enum variant isl_import we will add the types to type_store.
-    ///                       Otherwise we will add all the types from this PendingTypes to TypeStore.
+    ///   Based on given enum variant isl_import we will add the types to type_store.
+    ///   Otherwise we will add all the types from this PendingTypes to TypeStore.
     /// * `isl_type_names` - The isl type names defined within the schema. This will be used to determine
-    ///                      if a type definition actually exists within the schema. If a type definition from this list
-    ///                      exists in [`PendingTypes`] it would have been added as a deferred type definition.
-    ///                      This deferred type will be loaded into [`TypeStore`] as it is and will be replaced with a type definition
-    ///                      once it is resolved.
+    ///   if a type definition actually exists within the schema. If a type definition from this list
+    ///   exists in [`PendingTypes`] it would have been added as a deferred type definition.
+    ///   This deferred type will be loaded into [`TypeStore`] as it is and will be replaced with a type definition
+    ///   once it is resolved.
     ///
     /// Returns true, if this update is not for an isl import type or it is for an isl import type but it is added to the type_store
     /// Otherwise, returns false if this update is for an isl import type and it is not yet added to the type_store.

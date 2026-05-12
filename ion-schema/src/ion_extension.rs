@@ -40,9 +40,9 @@ impl ElementExtensions for Element {
     }
     fn any_number_as_decimal(&self) -> Option<Decimal> {
         match self.value() {
-            Value::Int(i) => Some((*i).into()),
+            Value::Int(i) => Some(i.clone().into()),
             Value::Float(f) => (*f).try_into().ok(),
-            Value::Decimal(d) => Some(*d),
+            Value::Decimal(d) => Some(d.clone()),
             _ => None,
         }
     }

@@ -22,9 +22,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-# TODO: Ensure `ion-rust` has released all changes and then switch this back to the latest published version on
-#       crates.io before merging this to `main`.
-ion-rs = { git = "https://github.com/amazon-ion/ion-rust.git", branch = "main", features = ["experimental-reader-writer"] }
+ion-rs = { workspace = true }
 thiserror = "1.0"
 num-traits = "0.2"
 regex = "1.5.6"

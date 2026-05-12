@@ -395,11 +395,11 @@ impl State {
                 }
             }
             State::Final(_) => {
-                if element.is_some() {
+                if let Some(el) = element {
                     Err(Violation::new(
                         "ordered_elements",
                         ViolationCode::ElementMismatched,
-                        format!("expected <END OF SEQUENCE>; found: {}", element.unwrap()),
+                        format!("expected <END OF SEQUENCE>; found: {}", el),
                         ion_path,
                     ))
                 } else {

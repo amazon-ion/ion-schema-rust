@@ -9,7 +9,7 @@ proc-macro = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ion-rs = { git = "https://github.com/amazon-ion/ion-rust.git", branch = "main", features = ["experimental-reader-writer"] }
+ion-rs = { workspace = true }
 ion-schema = { path = "../ion-schema" }
 quote = "1.0.21"
 syn = "1.0.102"

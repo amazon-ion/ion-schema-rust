@@ -52,7 +52,7 @@ impl ResolvedSchema {
     }
 
     /// Gets a [`ResolvedType`] from this schema.
-    pub fn get_type(&self, type_name: &str) -> Option<ResolvedType> {
+    pub fn get_type(&self, type_name: &str) -> Option<ResolvedType<'_>> {
         let schema = self.schema_store.get_schema(self.schema_index);
         let type_index = schema.get_type_idx_by_name(type_name)?;
         Some(ResolvedType {

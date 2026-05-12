@@ -206,9 +206,9 @@ struct NumberRangeValue(Decimal);
 impl<V: IslVersion> ReadFromIsl<V> for NumberRangeValue {
     fn try_read(ion: &Element, ctx: &LoaderContext<V>) -> IonSchemaResult<Self> {
         let value = match ion.value() {
-            Value::Int(i) => NumberRangeValue(Decimal::from(*i)),
+            Value::Int(i) => NumberRangeValue(Decimal::from(i.clone())),
             Value::Float(f) if f.is_finite() => NumberRangeValue(Decimal::try_from(*f)?),
-            Value::Decimal(d) => NumberRangeValue(*d),
+            Value::Decimal(d) => NumberRangeValue(d.clone()),
             other => invalid_schema!("Not a valid number range boundary: {other}")?,
         };
         Ok(value)

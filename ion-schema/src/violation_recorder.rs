@@ -86,7 +86,7 @@ impl<'a> ViolationInfo<'a> {
     /// Returns a reference to the constraint that was violated.
     ///
     /// This can be useful for programmatically categorizing or filtering violations.
-    pub fn constraint(&self) -> &AnyConstraintRef {
+    pub fn constraint(&self) -> &AnyConstraintRef<'_> {
         &self.constraint
     }
 

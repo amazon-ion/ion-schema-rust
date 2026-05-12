@@ -515,10 +515,10 @@ impl IslConstraintValue {
                         IslAnnotationsConstraint::StandardAnnotations(type_reference),
                     ))
                 } else {
-                    return invalid_schema!(
+                    invalid_schema!(
                         "annotations constraint was a {:?} instead of a list",
                         value.ion_type()
-                    );
+                    )
                 }
             }
             "any_of" => {
