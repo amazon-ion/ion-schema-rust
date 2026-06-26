@@ -1047,14 +1047,14 @@ impl ConstraintValidator for FieldNamesConstraint {
 /// [contains]: https://amazon-ion.github.io/ion-schema/docs/isl-1-0/spec#contains
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContainsConstraint {
-    // TODO: convert this into a HashSet once we have an implementation of Hash for Element in ion-rust
-    // Reference ion-rust issue: https://github.com/amazon-ion/ion-rust/issues/220
-    values: Vec<Element>,
+    values: HashSet<IonData<Element>>,
 }
 
 impl ContainsConstraint {
     pub fn new(values: Vec<Element>) -> Self {
-        Self { values }
+        Self {
+            values: values.into_iter().map(IonData::from).collect(),
+        }
     }
 }
 
@@ -1065,37 +1065,32 @@ impl ConstraintValidator for ContainsConstraint {
         type_store: &TypeStore,
         ion_path: &mut IonPath,
     ) -> ValidationResult {
-        let values: Vec<IonData<&Element>> = if let Some(element_iter) = value.as_sequence_iter() {
-            element_iter.map(IonData::from).collect()
-        } else if let Some(strukt) = value.as_struct() {
-            strukt.fields().map(|(k, v)| v).map(IonData::from).collect()
-        } else {
-            return Err(Violation::new(
-                "contains",
-                ViolationCode::TypeMismatched,
-                format!(
-                    "expected list/sexp/struct/document found {}",
-                    if value.is_null() {
-                        format!("{value}")
-                    } else {
-                        format!("{}", value.ion_schema_type())
-                    }
-                ),
-                ion_path,
-            ));
-        };
+        let actual: HashSet<IonData<&Element>> =
+            if let Some(element_iter) = value.as_sequence_iter() {
+                element_iter.map(IonData::from).collect()
+            } else if let Some(strukt) = value.as_struct() {
+                strukt.fields().map(|(_, v)| IonData::from(v)).collect()
+            } else {
+                return Err(Violation::new(
+                    "contains",
+                    ViolationCode::TypeMismatched,
+                    format!(
+                        "expected list/sexp/struct/document found {}",
+                        if value.is_null() {
+                            format!("{value}")
+                        } else {
+                            format!("{}", value.ion_schema_type())
+                        }
+                    ),
+                    ion_path,
+                ));
+            };
 
-        // add all the missing values found during validation
-        let mut missing_values = vec![];
-
-        // for each value in expected values if it does not exist in ion sequence
-        // then add it to missing_values to keep track of missing values
-        for expected_value in self.values.iter() {
-            let expected = expected_value.into();
-            if !values.contains(&expected) {
-                missing_values.push(expected_value);
-            }
-        }
+        let missing_values: Vec<&IonData<Element>> = self
+            .values
+            .iter()
+            .filter(|expected| !actual.contains(&IonData::from(expected.as_ref())))
+            .collect();
 
         // return Violation if there were any values added to the missing values vector
         if !missing_values.is_empty() {

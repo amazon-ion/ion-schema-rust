@@ -9,4 +9,4 @@ members = [
 resolver = "2"
 
 [workspace.dependencies]
-ion-rs = { version = "1.0.0-rc.12", features = ["experimental-reader-writer"] }
+ion-rs = { version = "1.0.0", features = ["experimental-reader-writer"] }
