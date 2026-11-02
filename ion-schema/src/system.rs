@@ -717,6 +717,8 @@ impl TypeStore {
 pub struct Resolver {
     authorities: Vec<Box<dyn DocumentAuthority>>,
     resolved_schema_cache: HashMap<String, Arc<Schema>>,
+    // ids of schemas that are currently being loaded, used to detect import cycles
+    schemas_in_progress: HashSet<String>,
 }
 
 impl Resolver {
@@ -724,6 +726,7 @@ impl Resolver {
         Self {
             authorities,
             resolved_schema_cache: HashMap::new(),
+            schemas_in_progress: HashSet::new(),
         }
     }
 
@@ -1095,6 +1098,22 @@ impl Resolver {
             return Ok(Arc::clone(schema));
         }
 
+        if !self.schemas_in_progress.insert(id.to_owned()) {
+            return unresolvable_schema_error(format!(
+                "Cyclic import detected while loading schema: {id}"
+            ));
+        }
+        let result = self.load_schema_from_authorities(id, type_store, load_isl_import);
+        self.schemas_in_progress.remove(id);
+        result
+    }
+
+    fn load_schema_from_authorities(
+        &mut self,
+        id: &str,
+        type_store: &mut TypeStore,
+        load_isl_import: Option<&IslImport>,
+    ) -> IonSchemaResult<Arc<Schema>> {
         for authority in &self.authorities {
             return match authority.elements(id) {
                 Err(error) => match error {
@@ -1823,6 +1842,68 @@ mod schema_system_tests {
         // verify if the schema loads with an error for invalid transitive type import
         let schema = schema_system.load_schema("sample.isl");
         assert!(schema.is_err());
+    }
+
+    #[test]
+    fn schema_system_map_authority_with_cyclic_imports_test() {
+        // schema_a.isl and schema_b.isl import each other and use types from each other
+        let map_authority = [
+            (
+                "schema_a.isl",
+                r#"
+                    schema_header::{
+                      imports: [
+                        { id: "schema_b.isl" },
+                      ],
+                    }
+
+                    type::{
+                      name: foo_a,
+                      valid_values: [a, b, c],
+                    }
+
+                    type::{
+                      name: bar_a,
+                      element: foo_b,
+                    }
+
+                    schema_footer::{
+                    }
+                "#,
+            ),
+            (
+                "schema_b.isl",
+                r#"
+                    schema_header::{
+                      imports: [
+                        { id: "schema_a.isl" },
+                      ],
+                    }
+
+                    type::{
+                      name: foo_b,
+                      valid_values: [d, e, f],
+                    }
+
+                    type::{
+                      name: bar_b,
+                      element: foo_a,
+                    }
+
+                    schema_footer::{
+                    }
+                "#,
+            ),
+        ];
+        let mut schema_system =
+            SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
+        // verify that the import cycle is reported as an error instead of overflowing the stack
+        let schema = schema_system.load_schema("schema_a.isl");
+        let err = schema.expect_err("cyclic imports should result in an error");
+        assert!(
+            err.to_string().contains("Cyclic import"),
+            "unexpected error: {err:?}"
+        );
     }
 
     #[test]
