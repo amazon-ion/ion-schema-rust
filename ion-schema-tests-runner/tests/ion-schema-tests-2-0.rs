@@ -3,9 +3,11 @@ use ion_schema_tests_runner::ion_schema_tests;
 ion_schema_tests!(
     root = "ion-schema-tests/ion_schema_2_0/",
     ignored(
-        // Cycle detection not fully implemented yet.
+        // Import cycles are not supported yet. See https://github.com/amazon-ion/ion-schema-rust/issues/228
         "imports::cycles.*",
-        "imports::self_import.*",
+        // The `*.invalid-isl.ion` files are invalid schemas that are only there to be imported by
+        // the test cases in `self_import.isl`, so they are not expected to load on their own.
+        "imports::self_import::.*_invalid_isl::should_be_a_valid_schema",
         // Error cases not fully validated yet.
         "imports::header_imports::Importing_a_type_with_the_same_name_or_alias_as_locally_defined_type_should_result_in_an_error.*",
         "imports::header_imports::Two_different_imported_types_with_the_same_name_or_alias_should_result_in_an_error.*",
