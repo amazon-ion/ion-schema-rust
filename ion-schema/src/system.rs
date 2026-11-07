@@ -980,6 +980,33 @@ impl Resolver {
         type_store: &mut TypeStore,
         load_isl_import: Option<&IslImport>,
     ) -> IonSchemaResult<Arc<Schema>> {
+        // Seed the import chain with this schema's id so that an import cycle back to it is
+        // detected here at the root, even if it was not loaded through an authority.
+        let mut in_progress = vec![isl.id()];
+        self.schema_from_isl_schema_impl(
+            isl_version,
+            isl,
+            type_store,
+            load_isl_import,
+            &mut in_progress,
+        )
+    }
+
+    /// Converts given ISL representation into a [`Schema`] based on given ISL version.
+    ///
+    /// `in_progress` is the chain of ids of the schemas that are currently being loaded, starting
+    /// with the schema that the top-level load was requested for. It is used to detect import
+    /// cycles. It is per-load state that is passed down the call stack (rather than a field on
+    /// [`Resolver`]) so that every top-level load starts with an empty chain, and nothing is left
+    /// behind in the [`Resolver`] if a load returns early or panics.
+    fn schema_from_isl_schema_impl(
+        &mut self,
+        isl_version: IslVersion,
+        isl: IslSchema,
+        type_store: &mut TypeStore,
+        load_isl_import: Option<&IslImport>,
+        in_progress: &mut Vec<String>,
+    ) -> IonSchemaResult<Arc<Schema>> {
         // This is used while resolving an import, it is initialized as `false` to indicate that
         // the type to be imported is not yet added to the type_store.
         // This will be changed to `true` as soon as the type to be imported is resolved and is added to the type_store
@@ -1002,13 +1029,15 @@ impl Resolver {
                 import_id,
                 type_store,
                 Some(&IslImport::Type(isl_inline_imported_type.to_owned())),
+                in_progress,
             )?;
         }
 
         // Resolve all ISL imports
         for isl_import in isl.imports() {
             let import_id = isl_import.id();
-            let imported_schema = self.load_schema(import_id, type_store, Some(isl_import))?;
+            let imported_schema =
+                self.load_schema(import_id, type_store, Some(isl_import), in_progress)?;
         }
 
         // get all isl type names that are defined within the schema
@@ -1083,11 +1112,15 @@ impl Resolver {
     // Otherwise if we are loading an import of the schema then this will be set to `Some(isl_import)`
     // to be loaded (i.e. Inside schema_from_elements while loading imports this will be set to
     // `Some(isl_import)`)
+    //
+    // `in_progress` is the chain of ids of the schemas that are currently being loaded; see
+    // `schema_from_isl_schema_impl`. A top-level load starts with an empty chain.
     fn load_schema<A: AsRef<str>>(
         &mut self,
         id: A,
         type_store: &mut TypeStore,
         load_isl_import: Option<&IslImport>,
+        in_progress: &mut Vec<String>,
     ) -> IonSchemaResult<Arc<Schema>> {
         let id: &str = id.as_ref();
 
@@ -1095,6 +1128,50 @@ impl Resolver {
             return Ok(Arc::clone(schema));
         }
 
+        // Import chains are expected to be short, so a linear search is fine here.
+        if in_progress
+            .iter()
+            .any(|in_progress_id| in_progress_id == id)
+        {
+            let import_chain = format!("{} -> {id}", in_progress.join(" -> "));
+            // A schema importing itself is invalid according to the Ion Schema specification.
+            if in_progress.last().is_some_and(|last_id| last_id == id) {
+                return invalid_schema_error(format!(
+                    "A schema must not import itself (import chain: {import_chain})"
+                ));
+            }
+            // Any other import cycle is valid according to the Ion Schema specification, but is
+            // not supported yet. See https://github.com/amazon-ion/ion-schema-rust/issues/228
+            return unresolvable_schema_error(format!(
+                "Cyclic schema imports are not yet supported (import chain: {import_chain})"
+            ));
+        }
+
+        in_progress.push(id.to_owned());
+        let result =
+            self.load_schema_from_authorities(id, type_store, load_isl_import, in_progress);
+        // Remove this schema from the chain once it has finished loading; otherwise a schema that
+        // is reached through two different paths (e.g. a diamond of type imports) would be
+        // reported as a cycle.
+        in_progress.pop();
+        result
+    }
+
+    /// Loads a [`Schema`] with the given id from the first authority that has it.
+    ///
+    /// This must only be called from [`Resolver::load_schema`], which checks the schema cache and
+    /// the import chain (`in_progress`) before calling it; calling it directly would skip both.
+    ///
+    /// It is a separate function so that every exit path (the `?` and the `return match` below)
+    /// goes back through `load_schema`, which then removes `id` from `in_progress`. If this body
+    /// were inlined into `load_schema`, an early return would skip that removal.
+    fn load_schema_from_authorities(
+        &mut self,
+        id: &str,
+        type_store: &mut TypeStore,
+        load_isl_import: Option<&IslImport>,
+        in_progress: &mut Vec<String>,
+    ) -> IonSchemaResult<Arc<Schema>> {
         for authority in &self.authorities {
             return match authority.elements(id) {
                 Err(error) => match error {
@@ -1106,7 +1183,13 @@ impl Resolver {
                 },
                 Ok(schema_content) => {
                     let isl = self.isl_schema_from_elements(schema_content.into_iter(), id)?;
-                    self.schema_from_isl_schema(isl.version(), isl, type_store, load_isl_import)
+                    self.schema_from_isl_schema_impl(
+                        isl.version(),
+                        isl,
+                        type_store,
+                        load_isl_import,
+                        in_progress,
+                    )
                 }
             };
         }
@@ -1165,7 +1248,7 @@ impl SchemaSystem {
     //  allow users to choose what variant of schema they want.
     pub fn load_schema<A: AsRef<str>>(&mut self, id: A) -> IonSchemaResult<Arc<Schema>> {
         self.resolver
-            .load_schema(id, &mut TypeStore::default(), None)
+            .load_schema(id, &mut TypeStore::default(), None, &mut vec![])
     }
 
     /// Constructs a new schema using provided ISL content.
@@ -1275,6 +1358,7 @@ mod schema_system_tests {
     use crate::isl::isl_type;
     use crate::isl::isl_type_reference;
     use crate::system::IonSchemaError::InvalidSchemaError;
+    use rstest::*;
     use std::path::Path;
 
     #[test]
@@ -1823,6 +1907,242 @@ mod schema_system_tests {
         // verify if the schema loads with an error for invalid transitive type import
         let schema = schema_system.load_schema("sample.isl");
         assert!(schema.is_err());
+    }
+
+    // TODO(#228): Import cycles between different schemas are valid according to the Ion Schema
+    //  specification. This test is a stopgap that checks that they are reported as an error
+    //  instead of overflowing the stack. Change it to expect `Ok` once cycles are supported.
+    #[rstest(
+        map_authority, expected_import_chain,
+        case::header_imports(
+            &[
+                ("schema_a.isl", r#"
+                    schema_header::{ imports: [ { id: "schema_b.isl" } ] }
+                    type::{ name: foo_a, valid_values: [a, b, c] }
+                    type::{ name: bar_a, element: foo_b }
+                    schema_footer::{}
+                "#),
+                ("schema_b.isl", r#"
+                    schema_header::{ imports: [ { id: "schema_a.isl" } ] }
+                    type::{ name: foo_b, valid_values: [d, e, f] }
+                    type::{ name: bar_b, element: foo_a }
+                    schema_footer::{}
+                "#),
+            ],
+            "schema_a.isl -> schema_b.isl -> schema_a.isl"
+        ),
+        case::header_type_imports(
+            &[
+                ("schema_a.isl", r#"
+                    schema_header::{ imports: [ { id: "schema_b.isl", type: foo_b } ] }
+                    type::{ name: foo_a, valid_values: [a, b, c] }
+                    type::{ name: bar_a, element: foo_b }
+                    schema_footer::{}
+                "#),
+                ("schema_b.isl", r#"
+                    schema_header::{ imports: [ { id: "schema_a.isl", type: foo_a } ] }
+                    type::{ name: foo_b, valid_values: [d, e, f] }
+                    type::{ name: bar_b, element: foo_a }
+                    schema_footer::{}
+                "#),
+            ],
+            "schema_a.isl -> schema_b.isl -> schema_a.isl"
+        ),
+        case::inline_imports(
+            &[
+                ("schema_a.isl", r#"
+                    type::{ name: foo_a, valid_values: [a, b, c] }
+                    type::{ name: bar_a, element: { id: "schema_b.isl", type: foo_b } }
+                "#),
+                ("schema_b.isl", r#"
+                    type::{ name: foo_b, valid_values: [d, e, f] }
+                    type::{ name: bar_b, element: { id: "schema_a.isl", type: foo_a } }
+                "#),
+            ],
+            "schema_a.isl -> schema_b.isl -> schema_a.isl"
+        ),
+        case::cycle_not_including_the_root_schema(
+            &[
+                ("schema_a.isl", r#"
+                    schema_header::{ imports: [ { id: "schema_b.isl" } ] }
+                    schema_footer::{}
+                "#),
+                ("schema_b.isl", r#"
+                    schema_header::{ imports: [ { id: "schema_c.isl" } ] }
+                    type::{ name: foo_b, valid_values: [d, e, f] }
+                    schema_footer::{}
+                "#),
+                ("schema_c.isl", r#"
+                    schema_header::{ imports: [ { id: "schema_b.isl" } ] }
+                    type::{ name: foo_c, valid_values: [g, h, i] }
+                    schema_footer::{}
+                "#),
+            ],
+            "schema_a.isl -> schema_b.isl -> schema_c.isl -> schema_b.isl"
+        ),
+    )]
+    fn schema_system_map_authority_with_cyclic_imports_test(
+        map_authority: &[(&str, &str)],
+        expected_import_chain: &str,
+    ) {
+        let mut schema_system = SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(
+            map_authority.iter().copied(),
+        ))]);
+        let err = schema_system
+            .load_schema("schema_a.isl")
+            .expect_err("cyclic imports should result in an error");
+        assert!(
+            matches!(
+                &err,
+                IonSchemaError::UnresolvableSchemaError { description }
+                    if description.contains(expected_import_chain)
+            ),
+            "unexpected error: {err:?}"
+        );
+    }
+
+    // Self-imports are invalid according to the Ion Schema specification, so unlike other import
+    // cycles these must keep resulting in an error once cycles are supported (see #228).
+    #[rstest(
+        map_authority, expected_import_chain,
+        case::header_import(
+            &[("schema_a.isl", r#"
+                schema_header::{ imports: [ { id: "schema_a.isl" } ] }
+                type::{ name: foo_a, valid_values: [a, b, c] }
+                schema_footer::{}
+            "#)],
+            "schema_a.isl -> schema_a.isl"
+        ),
+        case::header_type_import(
+            &[("schema_a.isl", r#"
+                schema_header::{ imports: [ { id: "schema_a.isl", type: foo_a } ] }
+                type::{ name: foo_a, valid_values: [a, b, c] }
+                schema_footer::{}
+            "#)],
+            "schema_a.isl -> schema_a.isl"
+        ),
+        case::inline_import(
+            &[("schema_a.isl", r#"
+                type::{ name: foo_a, valid_values: [a, b, c] }
+                type::{ name: bar_a, element: { id: "schema_a.isl", type: foo_a } }
+            "#)],
+            "schema_a.isl -> schema_a.isl"
+        ),
+        case::transitive_self_import(
+            &[
+                ("schema_a.isl", r#"
+                    schema_header::{ imports: [ { id: "schema_b.isl" } ] }
+                    schema_footer::{}
+                "#),
+                ("schema_b.isl", r#"
+                    schema_header::{ imports: [ { id: "schema_b.isl" } ] }
+                    type::{ name: foo_b, valid_values: [d, e, f] }
+                    schema_footer::{}
+                "#),
+            ],
+            "schema_a.isl -> schema_b.isl -> schema_b.isl"
+        ),
+    )]
+    fn schema_system_map_authority_with_self_import_test(
+        map_authority: &[(&str, &str)],
+        expected_import_chain: &str,
+    ) {
+        let mut schema_system = SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(
+            map_authority.iter().copied(),
+        ))]);
+        let err = schema_system
+            .load_schema("schema_a.isl")
+            .expect_err("a self-import should result in an error");
+        assert!(
+            matches!(
+                &err,
+                IonSchemaError::InvalidSchemaError { description }
+                    if description.contains(expected_import_chain)
+            ),
+            "unexpected error: {err:?}"
+        );
+    }
+
+    #[test]
+    fn new_schema_with_cyclic_import_back_to_root_test() {
+        // The root schema is not loaded through an authority, but a cycle back to it is still
+        // detected at the root, rather than after loading another copy of it from the authority.
+        let map_authority = [
+            (
+                "schema_a.isl",
+                r#"
+                    schema_header::{ imports: [ { id: "schema_b.isl" } ] }
+                    schema_footer::{}
+                "#,
+            ),
+            (
+                "schema_b.isl",
+                r#"
+                    schema_header::{ imports: [ { id: "schema_a.isl" } ] }
+                    type::{ name: foo_b, valid_values: [d, e, f] }
+                    schema_footer::{}
+                "#,
+            ),
+        ];
+        let mut schema_system =
+            SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
+        let err = schema_system
+            .new_schema(map_authority[0].1.as_bytes(), "schema_a.isl")
+            .expect_err("cyclic imports should result in an error");
+        assert!(
+            matches!(
+                &err,
+                IonSchemaError::UnresolvableSchemaError { description }
+                    if description.contains("schema_a.isl -> schema_b.isl -> schema_a.isl")
+            ),
+            "unexpected error: {err:?}"
+        );
+    }
+
+    #[test]
+    fn schema_system_map_authority_with_diamond_type_imports_test() {
+        // schema_d.isl is reached through two different import paths, which is not a cycle
+        let map_authority = [
+            (
+                "schema_a.isl",
+                r#"
+                    schema_header::{
+                      imports: [
+                        { id: "schema_b.isl", type: foo_b },
+                        { id: "schema_c.isl", type: foo_c },
+                      ],
+                    }
+                    type::{ name: foo_a, one_of: [foo_b, foo_c] }
+                    schema_footer::{}
+                "#,
+            ),
+            (
+                "schema_b.isl",
+                r#"
+                    schema_header::{ imports: [ { id: "schema_d.isl", type: foo_d } ] }
+                    type::{ name: foo_b, type: foo_d }
+                    schema_footer::{}
+                "#,
+            ),
+            (
+                "schema_c.isl",
+                r#"
+                    schema_header::{ imports: [ { id: "schema_d.isl", type: foo_d } ] }
+                    type::{ name: foo_c, type: foo_d }
+                    schema_footer::{}
+                "#,
+            ),
+            (
+                "schema_d.isl",
+                r#"
+                    type::{ name: foo_d, type: string }
+                "#,
+            ),
+        ];
+        let mut schema_system =
+            SchemaSystem::new(vec![Box::new(MapDocumentAuthority::new(map_authority))]);
+        let schema = schema_system.load_schema("schema_a.isl");
+        assert!(schema.is_ok(), "unexpected error: {:?}", schema.err());
     }
 
     #[test]
